@@ -748,6 +748,7 @@ window.BG3_I18N = {
     'Spell to learn instead': 'Spell a aprender no lugar',
     '— forget none —': '— não esquecer nenhuma —',
 
+    'Click the ones this level learns; click again to take one back. What the class already knows is not listed.': 'Clique nas que este nível aprende; clique de novo para tirar. O que a classe já conhece não aparece na lista.',
     // dialogs and toasts
     'Cancel': 'Cancelar',
     'Confirm': 'Confirmar',

@@ -299,6 +299,9 @@ document.addEventListener('input', (e) => {
   const value = el.type === 'checkbox' ? el.checked : el.type === 'number' ? (el.value === '' ? '' : Number(el.value)) : el.value;
   const before = getPath(target, el.dataset.path);
   setPath(target, el.dataset.path, value);
+  // a level that changes class drops the subclass and the choices of the class it had
+  const lvl = !inParty && before !== value && /^levels\.(\d+)\.cls$/.exec(el.dataset.path);
+  if (lvl) Object.assign(target.levels[+lvl[1]], { sub: '', picks: [] });
   if (!inParty && el.dataset.path.startsWith('creation.')) creationChanged(target, el.dataset.path, before);
   save();
   if (el.classList.contains('wiki-name')) suggest(el);

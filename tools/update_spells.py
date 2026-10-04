@@ -93,10 +93,13 @@ def main():
         area_m, area_shape = field(w, "area m"), field(w, "area shape").lower()
         damage = []
         for n in ("", " 2", " 3"):
-            text = " ".join(x for x in (clean(field(w, "damage" + n)), clean(field(w, "damage" + n + " type"))) if x)
+            # "D8Cantrip" is the wiki's code for a cantrip die that grows with the character: 1d8 at first
+            dice = re.sub(r"^[dD](\d+)Cantrip$", r"1d\1", clean(field(w, "damage" + n)))
+            text = " ".join(x for x in (dice, clean(field(w, "damage" + n + " type"))) if x)
             info = clean(field(w, "damage" + n + " info"))
             if text:
-                damage.append(text + (" (" + info[0].lower() + info[1:] + ")" if info else ""))
+                # the note starts in lower case, unless it opens with an abbreviation such as DEX
+                damage.append(text + (" (" + (info if info[:2].isupper() else info[0].lower() + info[1:]) + ")" if info else ""))
         conds = conditions(w)
         # how long the effect lasts: an explicit duration, else that of the summon, the area or the first condition
         duration = turns(field(w, "duration")) or turns(field(w, "creature duration")) or turns(field(w, "area duration")) or next((c[1] for c in conds if c[1]), "")
@@ -120,7 +123,8 @@ def main():
             "cn": conds,
             "ar": " ".join(x for x in (clean(field(w, "area")), (area_m + " m " + area_shape).strip() if area_m else "", "for " + turns(field(w, "area duration")).lower() if field(w, "area duration") else "") if x),
             "sm": " ".join(x for x in (clean(field(w, "creature")), "for " + turns(field(w, "creature duration")).lower() if field(w, "creature duration") else "") if x),
-            "d": short(clean(field(w, "description")), 420),
+            # a die picture leaves its own name before the bonus ("d4 +1d4"): keep the bonus
+            "d": re.sub(r"\bd(\d+) \+(\d+)d\1\b", r"+\2d\1", short(clean(field(w, "description")), 420)),
             "xd": short(clean(field(w, "extra description")), 300),
             "hl": short(clean(field(w, "higher levels")), 260),
             "vb": "HasVerbalComponent" in flags,

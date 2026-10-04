@@ -642,11 +642,13 @@
     eq([sp.learn.spells, sp.spell, sp.lines.spell, !!sp.swap], [2, ['Enhance Leap', 'Longstrider'], [0, 1], false], 'two spells at Ranger 2; a third line stays as text');
     b.levels[1].picks.pop();
     const html = levelRows(b, 1);
-    ok(/data-slot="spell"/.test(html) && !/spell-open|pick-add|data-path="levels\.1\.picks/.test(html), 'selects only: no add buttons, no text lines');
-    ok(/<option value="Longstrider" selected>/.test(html) && !/<option value="Fireball"/.test(html), 'the Ranger list, up to the spell level it can cast');
+    ok((html.match(/data-act="spells-open"/g) || []).length === 2 && !/pick-add|data-path="levels\.1\.picks/.test(html), 'one slot per spell: no add buttons, no text lines');
+    ok(/<img class="pic small"[^>]*><b>Longstrider<\/b>/.test(html), 'the slot shows the picture and the name of the spell');
+    const lists = levelSpellLists(b, 1, levelSlots(b, 1).spells);
+    ok(lists.reach.some((x) => x.n === 'Longstrider') && lists.reach.every((x) => x.lv === 1 && x.cl.includes('Ranger')), 'the Ranger list, up to the spell level it can cast');
     writeSlot(b, 1, 'spell', ['Enhance Leap', 'Hunter\'s Mark']);
     eq(b.levels[1].picks, ['Spell: Enhance Leap', 'Spell: Hunter\'s Mark']);
-    ok(!/<option value="Enhance Leap"/.test(levelRows(b, 2).split('data-slot="swap"')[0]) && /<option value="Enhance Leap"/.test(levelRows(b, 2)), 'a spell already known is not offered again, only as the one to swap out');
+    ok(!levelSpellLists(b, 2, levelSlots(b, 2).spells).reach.some((x) => x.n === 'Enhance Leap') && /<option value="Enhance Leap"/.test(levelRows(b, 2)), 'a spell already known is not offered again, only as the one to swap out');
     sp = levelSlots(b, 2).spells;
     eq([sp.learn.spells, !!sp.swap], [1, true], 'Ranger 3 learns one and may swap one');
     writeSlot(b, 2, 'swap', ['Enhance Leap', 'Longstrider']);
@@ -664,7 +666,9 @@
     const ek = build(['Fighter', 'Fighter', 'Fighter']);
     ek.levels[2].sub = 'Eldritch Knight';
     const row = levelRows(ek, 2);
-    eq([(row.match(/data-slot="cantrip"/g) || []).length, (row.match(/data-slot="spell"/g) || []).length], [2, 3]);
+    eq([(row.match(/data-k="cantrip"/g) || []).length, (row.match(/data-k="spell"/g) || []).length], [2, 3]);
+    const ekLists = levelSpellLists(ek, 2, levelSlots(ek, 2).spells);
+    ok(ekLists.bound === 2 && ekLists.school.every((x) => ['Abjuration', 'Evocation'].includes(x.sc)) && ekLists.reach.length > ekLists.school.length);
     ok(/Abjuration \/ Evocation/.test(row) && /any school/.test(row), 'two school picks and one free pick');
     ok(/gain Proficiency/i.test(gainText('You have sworn to serve a crown. Gain Proficiency in History and Heavy Armour.')) && !/sworn/.test(gainText('You have sworn to serve a crown. Gain Proficiency in History and Heavy Armour.')), 'what an option gives, without the flavour');
     eq(gainText('A tale of the road.'), 'A tale of the road.', 'nothing concrete to pick out: the whole text');

@@ -814,3 +814,18 @@ button.chip:hover { border-color: var(--gold); color: var(--text); }
 .lslot-row { display: flex; gap: 4px; min-width: 0; }
 .lslot-row select { flex: 1; }
 .lvl-cls .fill { grid-column: 1 / -1; justify-self: start; color: var(--muted); }
+
+/* ---------- a spell of a level: picture and name on a button that opens the list ---------- */
+.spell-slot { cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; min-height: 38px; padding: 3px 10px 3px 4px; text-align: left;
+  background: var(--field); color: var(--text); border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+.spell-slot:hover, .spell-slot:focus-visible { border-color: var(--gold); }
+.spell-slot b { flex: 1; min-width: 0; font-weight: 500; padding-left: 6px; }
+.spell-slot .pic + b { padding-left: 0; }
+.spell-slot .pic.small { width: 30px; height: 30px; }
+.spell-slot i { font-style: normal; color: var(--muted); font-size: 11px; }
+.lslot.open .spell-slot { border-color: var(--gold); }
+.lslot.open .spell-slot b { color: var(--gold-hi); }
+.choose-sub { margin: 10px 0 4px; font: 700 10px var(--sans); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+/* the rows of a chooser list fill its width */
+#dlg-list > div:not(.choose-grid) { display: grid; gap: 4px; }
+#dlg-list .pick-row { width: 100%; }
