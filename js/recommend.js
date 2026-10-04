@@ -160,7 +160,9 @@ function tagFit(tag, it, p, text) {
 // worn; the reasons and the delta say what changes against what is worn now.
 function scoreItem(b, p, it, slot, act, goal, base, empty) {
   const weights = GOALS[goal];
-  const text = itemText(it);
+  // an effect made for a race or a class the build is not does nothing for it
+  // (the wiki's summary of the item describes all its effects, so it is left out when some do not apply)
+  const text = [itemFit(it, b).missing.length ? '' : it.x || '', ...liveSentences(it, b)].join(' ');
   const reasons = [];
   let score = 0;
   // a monk in armour loses Unarmoured Defence and movement, so armour is not offered
@@ -175,14 +177,11 @@ function scoreItem(b, p, it, slot, act, goal, base, empty) {
     score += worth[k] * w;
     if (delta[k] > 0) reasons.push([10 + delta[k] * w, deltaBit(k, delta[k])]);
   });
-  // then the effects the numbers do not show; an effect reserved for a race the build is not counts for little
-  const races = Object.keys(RACES).filter((r) => new RegExp('\\b' + r.replace('-', '.?') + '(?:s|es|ves)?\\b', 'i').test(text.replace(/dwarves/gi, 'dwarf').replace(/elves/gi, 'elf')));
-  const gate = races.length && !races.includes(b.creation.race) ? 0.2 : 1;
-  it.g.forEach((tag) => {
+  // then the effects the numbers do not show, read only from the part of the item that works for this build
+  ITEM_TAGS.filter(([, , re]) => re.test(text)).map(([k]) => k).concat((it.en2 || []).length ? ['synergy'] : []).forEach((tag) => {
     const w = weights[tag];
     if (!w || (TAG_NUMBER[tag] && worth[TAG_NUMBER[tag]])) return;
-    const [base_fit, why] = tagFit(tag, it, p, text);
-    const fit = base_fit * gate;
+    const [fit, why] = tagFit(tag, it, p, text);
     if (fit <= 0) return;
     score += w * fit;
     reasons.push([w * fit, t(TAG_LABEL[tag]) + (why ? ' (' + why + ')' : '')]);

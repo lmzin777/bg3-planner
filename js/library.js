@@ -24,7 +24,7 @@ function pickerItems() {
     && !(picker.slot === 'rangedOff' && it.w !== 'one')
     && (!q || norm(it.n).includes(q))
     && (!picker.type || it.t === picker.type)
-    && (!usable || canUse(it, picker.prof))
+    && (!usable || (canUse(it, picker.prof) && suits(it, curBuild())))
     && (!picker.byAct || foundBy(it, actNum)))
     .sort((a, b) => RARITY_RANK[b.r] - RARITY_RANK[a.r] || a.n.localeCompare(b.n));
 }
@@ -39,6 +39,7 @@ function pickerList() {
   const versus = (it) => (it === current ? '' : deltaText(why && why.get(it) ? why.get(it).delta : gearDelta(curBuild(), picker.act, picker.slot, it, cmp.base, cmp.p.style, cmp.p.level)));
   const rows = list.slice(0, PICKER_MAX).map((it, i) => {
     const ok = canUse(it, picker.prof);
+    const fit = itemFit(it, curBuild());
     const where = [it.a ? t('Act {n}', { n: it.a }) : t('Any act'), [it.l, it.h].filter(Boolean).join(' — ')].filter(Boolean).join(' · ');
     const effect = (it.ps || []).map((p) => p[1] || p[0]).join(' ') || it.x || '';
     const r = why && why.get(it);
@@ -47,6 +48,7 @@ function pickerList() {
     const vs = picker.versus.get(it);
     return `<button class="pick-row r-${it.r}${ok ? '' : ' no'}" data-act="picker-choose" data-n="${esc(it.n)}">
       ${pic(it.i, 'pic small')}<b>${r ? `<i class="rank">${i + 1}</i>` : ''}${esc(it.n)}</b><span>${esc([it.t, it.d].filter(Boolean).join(' · '))}${ok ? '' : ` · <em>${t('not proficient')}</em>`}${
+        !fit.missing.length ? '' : fit.ok ? ` · <em>${t('part of it works only for {x}', { x: esc(fit.missing.join(', ')) })}</em>` : ` · <em>${t('made for {x}', { x: esc(fit.missing.join(', ')) })}</em>`}${
         who ? ` · <em>${t('worn by {who}', { who: esc(who) })}</em>` : ''}</span>
       ${r ? `<small class="why">${r.reasons.map(esc).join(' · ')}</small>` : ''}
       ${it === current ? `<small class="delta">${t('in this slot now')}</small>` : vs ? `<small class="delta">${current ? t('Against {x}: {d}', { x: esc(current.n), d: esc(vs) }) : t('With it on: {d}', { d: esc(vs) })}</small>` : ''}
@@ -136,7 +138,7 @@ const LIB_TESTS = {
     rar: (it, f) => !f.rar.length || f.rar.includes(it.r),
     act: (it, f) => !f.act || String(it.a) === f.act,
     tag: (it, f) => !f.tag || (it.g || []).includes(f.tag),
-    build: (it, f, ctx) => !ctx.prof || (it.s !== 'consumable' && canUse(it, ctx.prof)),
+    build: (it, f, ctx) => !ctx.prof || (it.s !== 'consumable' && canUse(it, ctx.prof) && suits(it, ctx.b)),
     q: (it, f, ctx) => !ctx.q || norm(it.n).includes(ctx.q) || norm(it.x).includes(ctx.q) || (it.ps || []).some((p) => norm(p[0]).includes(ctx.q) || norm(p[1]).includes(ctx.q)),
   },
   spells: {
@@ -167,7 +169,7 @@ const LIB_SORTS = {
 function libList(tab, skipKey) {
   const f = libState(tab);
   const b = tab === 'items' ? buildById(f.build) : null;
-  const ctx = { q: norm(f.q), prof: b ? proficiencies(b) : null };
+  const ctx = { q: norm(f.q), prof: b ? proficiencies(b) : null, b };
   const tests = Object.entries(LIB_TESTS[tab]).filter(([k]) => k !== skipKey).map(([, fn]) => fn);
   return (tab === 'items' ? LIB_ITEMS : SPELLS).filter((x) => tests.every((fn) => fn(x, f, ctx)));
 }

@@ -93,6 +93,30 @@
     ok(!foundBy(item('Half Plate Armour +2'), 1), 'rare gear without an act is not assumed to be there');
     ok(!foundBy(item('Shield (Hope)'), 3), 'nor is an item the wiki gives no source for');
   });
+  test('an item made for someone else is not offered', () => {
+    const human = build(['Fighter'], { race: 'Human' });
+    const gith = build(['Fighter'], { race: 'Githyanki' });
+    const bard = build(['Bard'], { race: 'Human' });
+    eq([suits(item('Githyanki Greatsword (Psionic)'), human), suits(item('Githyanki Greatsword (Psionic)'), gith)], [false, true], 'its one effect is for githyanki');
+    eq([suits(item('Blazer of Benevolence'), human), suits(item('Blazer of Benevolence'), bard)], [false, true], 'Bardic Inspiration needs a Bard');
+    eq([suits(item("Reason's Grasp"), human), suits(item("Reason's Grasp"), build(['Barbarian']))], [false, true], 'Rage needs a Barbarian');
+    eq(suits(item('Greatclub (Minotaur)'), gith), false, 'not usable by humanoids');
+    const fit = itemFit(item('Soulbreaker Greatsword'), human);
+    eq([fit.ok, fit.missing], [true, ['Githyanki']], 'an item with other effects stays, and says what does not work');
+    ok(suits(item('Blightbringer'), human) && suits(item("Voss' Silver Sword"), human), 'a race named as the target is no requirement');
+    const drowHalf = build(['Rogue'], { race: 'Half-Elf', subrace: 'Drow Half-Elf' });
+    eq([suits(item('Cruel Sting'), human), suits(item('Cruel Sting'), drowHalf)], [itemSentences(item('Cruel Sting')).length > 1, true], 'a half-drow counts as Drow');
+    const branded = build(['Fighter']);
+    eq(itemFit(item("Absolute's Talisman"), branded).missing, ["the Absolute's Brand"]);
+    branded.permanent['Brand of the Absolute'] = { on: true };
+    eq(itemFit(item("Absolute's Talisman"), branded).missing, []);
+    ok(!liveSentences(item('Silver Sword of the Astral Plane'), human).length && liveSentences(item('Silver Sword of the Astral Plane'), gith).length === 2);
+    const amulets = recommend(human, 'amulet', 'act3', 'defence', ITEMS.filter((it) => it.s === 'amulet'));
+    const hunters = amulets.find((r) => r.it.n === "Aberration Hunters' Amulet");
+    ok(!hunters || !hunters.reasons.some((x) => /Saving throws/.test(x)), 'the githyanki-only saving throw is not a reason for a human');
+    human.gear.act1.slots.chest.name = 'Blazer of Benevolence';
+    ok(buildIssues(human).some((x) => /Blazer of Benevolence: its effects are for Bard/.test(x.text)), 'worn anyway, the build check says so');
+  });
   test('an item is usable only with its proficiency', () => {
     const wizard = proficiencies(build(['Wizard']));
     const ranger = proficiencies(build(['Ranger']));

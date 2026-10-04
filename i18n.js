@@ -654,6 +654,10 @@ window.BG3_I18N = {
     'What the class chooses at level 1: fighting style, cantrips, spells and the like.': 'O que a classe escolhe no nível 1: fighting style, cantrips, spells e afins.',
     'What is set and what is still open. The other 11 levels and the gear are planned in the Build Planner.': 'O que já está definido e o que falta. Os outros 11 níveis e o equipamento são planejados no Build Planner.',
 
+    'made for {x}': 'feito para {x}',
+    'part of it works only for {x}': 'parte dele só funciona para {x}',
+    '{item}: its effects are for {x}, which this build is not': '{item}: os efeitos são para {x}, o que esta build não é',
+
     // dialogs and toasts
     'Cancel': 'Cancelar',
     'Confirm': 'Confirmar',

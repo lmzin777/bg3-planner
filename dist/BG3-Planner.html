@@ -1505,6 +1505,10 @@ window.BG3_I18N = {
     'What the class chooses at level 1: fighting style, cantrips, spells and the like.': 'O que a classe escolhe no nível 1: fighting style, cantrips, spells e afins.',
     'What is set and what is still open. The other 11 levels and the gear are planned in the Build Planner.': 'O que já está definido e o que falta. Os outros 11 níveis e o equipamento são planejados no Build Planner.',
 
+    'made for {x}': 'feito para {x}',
+    'part of it works only for {x}': 'parte dele só funciona para {x}',
+    '{item}: its effects are for {x}, which this build is not': '{item}: os efeitos são para {x}, o que esta build não é',
+
     // dialogs and toasts
     'Cancel': 'Cancelar',
     'Confirm': 'Confirmar',
@@ -8805,6 +8809,80 @@ const PICK_PROF = [
   [/heavily armou?red/i, [HEAVY]],
 ];
 
+// ---------- items made for someone in particular ----------
+// Some effects only work for a race, a class feature or a mark the wearer carries: "A githyanki wearing this
+// amulet…", "When you inspire an ally using Bardic Inspiration…", "If the wearer bears the Absolute's Brand…".
+// Each rule is [what the sentence must say, who it is for, whether a build is that].
+const RACE_WORDS_NEED = { githyanki: 'Githyanki', drow: 'Drow', dwarf: 'Dwarf', dwarves: 'Dwarf', gnome: 'Gnome', gnomes: 'Gnome', halfling: 'Halfling', halflings: 'Halfling',
+  elf: 'Elf', elves: 'Elf', tiefling: 'Tiefling', tieflings: 'Tiefling', dragonborn: 'Dragonborn', human: 'Human', humans: 'Human', 'half-orc': 'Half-Orc', 'half-orcs': 'Half-Orc' };
+const RACE_NEED = Object.keys(RACE_WORDS_NEED).join('|');
+// the sentence is about the wearer, not about who is being attacked ("against githyanki", "attacking Gnomes")
+const RACE_WEARER = [
+  new RegExp('\\b(?:an? )?(' + RACE_NEED + ') (?:wearing|holding|wielding|throws|casts)\\b', 'i'),
+  new RegExp('\\b(?:wielded|worn|thrown) by an? (' + RACE_NEED + ')\\b', 'i'),
+  new RegExp('^(' + RACE_NEED + ')(?: and (' + RACE_NEED + '))? (?:also )?(?:gain|are granted)\\b', 'i'),
+  new RegExp('\\byour (' + RACE_NEED + ') breath', 'i'),
+];
+// A half-drow counts as Drow for these effects, as the game tags both.
+const isRace = (b, race) => b.creation.race === race || (race === 'Drow' && b.creation.subrace === 'Drow Half-Elf');
+const hasClass = (b, cls) => b.levels.some((l) => l.cls === cls);
+const FEATURE_NEED = [
+  [/not usable by humanoids/i, 'no playable character', () => false],
+  [/Bardic Inspiration/i, 'Bard', (b) => hasClass(b, 'Bard')],
+  [/Wild Shape/i, 'Druid', (b) => hasClass(b, 'Druid')],
+  [/\bRag(?:e|ing)\b/, 'Barbarian', (b) => hasClass(b, 'Barbarian')],
+  [/\bSneak Attack\b/i, 'Rogue', (b) => hasClass(b, 'Rogue')],
+  [/\bSorcery Points?\b|\bsrcpnt\b/i, 'Sorcerer', (b) => hasClass(b, 'Sorcerer')],
+  [/\bKi\b/, 'Monk', (b) => hasClass(b, 'Monk')],
+  [/Channel Oath|your Smites?\b|Smite spells/i, 'Paladin', (b) => hasClass(b, 'Paladin') || b.levels.some((l) => l.picks.some((p) => /smite/i.test(p)))],
+  [/bound to an Eldritch Knight or is a Warlock/i, 'Eldritch Knight or Warlock', (b) => hasClass(b, 'Warlock') || b.levels.some((l) => /eldritch knight/i.test(l.sub))],
+  [/Absolute's Brand/i, "the Absolute's Brand", (b) => !!(b.permanent || {})['Brand of the Absolute']],
+];
+// What one sentence of an item asks of its wearer: { label, met(b) }, or null when it works for anyone.
+function sentenceNeed(s) {
+  for (const re of RACE_WEARER) {
+    const m = re.exec(s);
+    if (m) { const races = [m[1], m[2]].filter(Boolean).map((x) => RACE_WORDS_NEED[x.toLowerCase()]); return { label: races.join(' / '), met: (b) => races.some((r) => isRace(b, r)) }; }
+  }
+  const rule = FEATURE_NEED.find(([re]) => re.test(s));
+  return rule ? { label: rule[1], met: rule[2] } : null;
+}
+// Every effect sentence of an item with what it asks: [{ text, need }]. Worked out once per item.
+// An effect is read as a whole: once one of its sentences names who it is for, the sentences after it
+// belong to the same condition ("…has Advantage on Intelligence Saving Throws. Aberrations also have
+// Disadvantage on Attack Rolls against them."). A line saying the item's powers "only function if" covers it all.
+function itemSentences(it) {
+  if (it.nd) return it.nd;
+  const split = (text) => String(text || '').split(/\.(?=\s|$)/).map((x) => x.trim()).filter(Boolean);
+  const effects = [...String(it.sp || '').split(';'), ...(it.ps || []).map((p) => p[1] || '')];
+  const out = [];
+  let whole = null;
+  effects.forEach((effect) => {
+    let gate = null;
+    split(effect).forEach((text) => {
+      const need = /persists while/i.test(text) ? null : sentenceNeed(text);
+      if (need) gate = need;
+      if (need && /only function/i.test(text)) whole = need;
+      out.push({ text, need: gate });
+    });
+  });
+  if (whole) out.forEach((x) => { x.need = x.need || whole; });
+  it.nd = out;
+  return out;
+}
+// How an item suits a build: `ok` is false when every effect it has is for someone the build is not (or it
+// cannot be used by a playable character at all); `missing` names who the effects that do not work are for.
+function itemFit(it, b) {
+  const list = itemSentences(it);
+  const dead = list.filter((x) => x.need && !x.need.met(b));
+  const missing = [...new Set(dead.map((x) => x.need.label))];
+  const barred = dead.some((x) => x.need.label === 'no playable character');
+  return { ok: !barred && (!dead.length || dead.length < list.length), missing };
+}
+const suits = (it, b) => itemFit(it, b).ok;
+// The effect text of an item that works for this build.
+const liveSentences = (it, b) => itemSentences(it).filter((x) => !x.need || x.need.met(b)).map((x) => x.text);
+
 const WEAPON_TYPES = [...new Set(ITEMS.filter((it) => it.s === 'melee' || it.s === 'ranged').map((it) => it.t))];
 const effectTexts = (it) => [it.sp || '', ...(it.ps || []).map((p) => p[1] || '')];
 // The item of each gear slot in an act, as {slot: item}. `swap` replaces slots to answer "what if I wore this".
@@ -8897,7 +8975,7 @@ function pickerItems() {
     && !(picker.slot === 'rangedOff' && it.w !== 'one')
     && (!q || norm(it.n).includes(q))
     && (!picker.type || it.t === picker.type)
-    && (!usable || canUse(it, picker.prof))
+    && (!usable || (canUse(it, picker.prof) && suits(it, curBuild())))
     && (!picker.byAct || foundBy(it, actNum)))
     .sort((a, b) => RARITY_RANK[b.r] - RARITY_RANK[a.r] || a.n.localeCompare(b.n));
 }
@@ -8912,6 +8990,7 @@ function pickerList() {
   const versus = (it) => (it === current ? '' : deltaText(why && why.get(it) ? why.get(it).delta : gearDelta(curBuild(), picker.act, picker.slot, it, cmp.base, cmp.p.style, cmp.p.level)));
   const rows = list.slice(0, PICKER_MAX).map((it, i) => {
     const ok = canUse(it, picker.prof);
+    const fit = itemFit(it, curBuild());
     const where = [it.a ? t('Act {n}', { n: it.a }) : t('Any act'), [it.l, it.h].filter(Boolean).join(' — ')].filter(Boolean).join(' · ');
     const effect = (it.ps || []).map((p) => p[1] || p[0]).join(' ') || it.x || '';
     const r = why && why.get(it);
@@ -8920,6 +8999,7 @@ function pickerList() {
     const vs = picker.versus.get(it);
     return `<button class="pick-row r-${it.r}${ok ? '' : ' no'}" data-act="picker-choose" data-n="${esc(it.n)}">
       ${pic(it.i, 'pic small')}<b>${r ? `<i class="rank">${i + 1}</i>` : ''}${esc(it.n)}</b><span>${esc([it.t, it.d].filter(Boolean).join(' · '))}${ok ? '' : ` · <em>${t('not proficient')}</em>`}${
+        !fit.missing.length ? '' : fit.ok ? ` · <em>${t('part of it works only for {x}', { x: esc(fit.missing.join(', ')) })}</em>` : ` · <em>${t('made for {x}', { x: esc(fit.missing.join(', ')) })}</em>`}${
         who ? ` · <em>${t('worn by {who}', { who: esc(who) })}</em>` : ''}</span>
       ${r ? `<small class="why">${r.reasons.map(esc).join(' · ')}</small>` : ''}
       ${it === current ? `<small class="delta">${t('in this slot now')}</small>` : vs ? `<small class="delta">${current ? t('Against {x}: {d}', { x: esc(current.n), d: esc(vs) }) : t('With it on: {d}', { d: esc(vs) })}</small>` : ''}
@@ -9009,7 +9089,7 @@ const LIB_TESTS = {
     rar: (it, f) => !f.rar.length || f.rar.includes(it.r),
     act: (it, f) => !f.act || String(it.a) === f.act,
     tag: (it, f) => !f.tag || (it.g || []).includes(f.tag),
-    build: (it, f, ctx) => !ctx.prof || (it.s !== 'consumable' && canUse(it, ctx.prof)),
+    build: (it, f, ctx) => !ctx.prof || (it.s !== 'consumable' && canUse(it, ctx.prof) && suits(it, ctx.b)),
     q: (it, f, ctx) => !ctx.q || norm(it.n).includes(ctx.q) || norm(it.x).includes(ctx.q) || (it.ps || []).some((p) => norm(p[0]).includes(ctx.q) || norm(p[1]).includes(ctx.q)),
   },
   spells: {
@@ -9040,7 +9120,7 @@ const LIB_SORTS = {
 function libList(tab, skipKey) {
   const f = libState(tab);
   const b = tab === 'items' ? buildById(f.build) : null;
-  const ctx = { q: norm(f.q), prof: b ? proficiencies(b) : null };
+  const ctx = { q: norm(f.q), prof: b ? proficiencies(b) : null, b };
   const tests = Object.entries(LIB_TESTS[tab]).filter(([k]) => k !== skipKey).map(([, fn]) => fn);
   return (tab === 'items' ? LIB_ITEMS : SPELLS).filter((x) => tests.every((fn) => fn(x, f, ctx)));
 }
@@ -10679,7 +10759,9 @@ function tagFit(tag, it, p, text) {
 // worn; the reasons and the delta say what changes against what is worn now.
 function scoreItem(b, p, it, slot, act, goal, base, empty) {
   const weights = GOALS[goal];
-  const text = itemText(it);
+  // an effect made for a race or a class the build is not does nothing for it
+  // (the wiki's summary of the item describes all its effects, so it is left out when some do not apply)
+  const text = [itemFit(it, b).missing.length ? '' : it.x || '', ...liveSentences(it, b)].join(' ');
   const reasons = [];
   let score = 0;
   // a monk in armour loses Unarmoured Defence and movement, so armour is not offered
@@ -10694,14 +10776,11 @@ function scoreItem(b, p, it, slot, act, goal, base, empty) {
     score += worth[k] * w;
     if (delta[k] > 0) reasons.push([10 + delta[k] * w, deltaBit(k, delta[k])]);
   });
-  // then the effects the numbers do not show; an effect reserved for a race the build is not counts for little
-  const races = Object.keys(RACES).filter((r) => new RegExp('\\b' + r.replace('-', '.?') + '(?:s|es|ves)?\\b', 'i').test(text.replace(/dwarves/gi, 'dwarf').replace(/elves/gi, 'elf')));
-  const gate = races.length && !races.includes(b.creation.race) ? 0.2 : 1;
-  it.g.forEach((tag) => {
+  // then the effects the numbers do not show, read only from the part of the item that works for this build
+  ITEM_TAGS.filter(([, , re]) => re.test(text)).map(([k]) => k).concat((it.en2 || []).length ? ['synergy'] : []).forEach((tag) => {
     const w = weights[tag];
     if (!w || (TAG_NUMBER[tag] && worth[TAG_NUMBER[tag]])) return;
-    const [base_fit, why] = tagFit(tag, it, p, text);
-    const fit = base_fit * gate;
+    const [fit, why] = tagFit(tag, it, p, text);
     if (fit <= 0) return;
     score += w * fit;
     reasons.push([w * fit, t(TAG_LABEL[tag]) + (why ? ' (' + why + ')' : '')]);
@@ -11010,7 +11089,7 @@ function ownedTexts(b, act) {
     const feat = m && FEATS.find(([name]) => norm(name) === norm(m[1]));
     if (feat) out.push([feat[0], feat[1], 'feat']);
   });
-  Object.values(wornItems(b, act)).forEach((it) => effectTexts(it).forEach((text) => { if (text) out.push([it.n, text, 'item']); }));
+  Object.values(wornItems(b, act)).forEach((it) => liveSentences(it, b).forEach((text) => out.push([it.n, text, 'item'])));
   const actNum = ACTS.findIndex(([k]) => k === act) + 1;
   PERMANENT.forEach((p) => { if ((b.permanent || {})[p.n] && p.a <= actNum) out.push([p.n, p.x, 'permanent']); });
   return out;
@@ -11411,6 +11490,8 @@ function buildIssues(b) {
       // armour without proficiency cripples the character; a weapon only loses its proficiency bonus,
       // and some are carried just for their passive effect
       else if (level && !canUse(it, prof)) add(isWeapon(it) ? 'note' : 'warn', where, t('{item}: the build is not proficient with {what}', { item: it.n, what: isWeapon(it) ? it.t : it.p }));
+      const fit = itemFit(it, b);
+      if (!fit.ok) add('note', where, t('{item}: its effects are for {x}, which this build is not', { item: it.n, x: fit.missing.join(', ') }));
       if (it.a > ai + 1) add('warn', where, t('{item} is only found in Act {n}', { item: it.n, n: it.a }));
       if (taken[norm(it.n)]) add('warn', where, t('{item} is also worn by {who}', { item: it.n, who: taken[norm(it.n)] }));
     });

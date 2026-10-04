@@ -101,6 +101,8 @@ function buildIssues(b) {
       // armour without proficiency cripples the character; a weapon only loses its proficiency bonus,
       // and some are carried just for their passive effect
       else if (level && !canUse(it, prof)) add(isWeapon(it) ? 'note' : 'warn', where, t('{item}: the build is not proficient with {what}', { item: it.n, what: isWeapon(it) ? it.t : it.p }));
+      const fit = itemFit(it, b);
+      if (!fit.ok) add('note', where, t('{item}: its effects are for {x}, which this build is not', { item: it.n, x: fit.missing.join(', ') }));
       if (it.a > ai + 1) add('warn', where, t('{item} is only found in Act {n}', { item: it.n, n: it.a }));
       if (taken[norm(it.n)]) add('warn', where, t('{item} is also worn by {who}', { item: it.n, who: taken[norm(it.n)] }));
     });

@@ -22,7 +22,7 @@ function ownedTexts(b, act) {
     const feat = m && FEATS.find(([name]) => norm(name) === norm(m[1]));
     if (feat) out.push([feat[0], feat[1], 'feat']);
   });
-  Object.values(wornItems(b, act)).forEach((it) => effectTexts(it).forEach((text) => { if (text) out.push([it.n, text, 'item']); }));
+  Object.values(wornItems(b, act)).forEach((it) => liveSentences(it, b).forEach((text) => out.push([it.n, text, 'item'])));
   const actNum = ACTS.findIndex(([k]) => k === act) + 1;
   PERMANENT.forEach((p) => { if ((b.permanent || {})[p.n] && p.a <= actNum) out.push([p.n, p.x, 'permanent']); });
   return out;
