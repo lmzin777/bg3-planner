@@ -1130,7 +1130,6 @@ window.BG3_I18N = {
     'Backup copied': 'Backup copiado',
     'Backup text (you can also select and copy it by hand)': 'Texto do backup (também dá para selecionar e copiar à mão)',
     'Bonus of each member at their final level. The best in the party is highlighted; gold means proficient.': 'Bônus de cada membro no nível final. O melhor da party fica destacado; dourado indica proficiência.',
-    'Build reset to the ready-made version': 'Build restaurada para a versão pronta',
     'Choose a file…': 'Escolher um arquivo…',
     'Choose the feat for level {n}.': 'Escolha o feat do nível {n}.',
     'Click a spell to add it to level {n}. You can add several.': 'Clique em uma spell para adicioná-la ao nível {n}. Dá para adicionar várias.',
@@ -1163,11 +1162,7 @@ window.BG3_I18N = {
     'Proficient': 'Proficiente',
     'Put this item in a slot of one of your builds': 'Colocar este item em um slot de uma das suas builds',
     'Removes your current builds and parties and loads the backup instead.': 'Remove as builds e parties atuais e carrega o backup no lugar.',
-    'Replace "{name}" with the ready-made version? Your changes to this build are lost.': 'Substituir "{name}" pela versão pronta? As suas alterações nesta build serão perdidas.',
     'Replace all your current builds and parties with the backup? This cannot be undone.': 'Substituir todas as builds e parties atuais pelo backup? Isso não pode ser desfeito.',
-    'Replaces this build with the current ready-made version': 'Substitui esta build pela versão pronta atual',
-    'Reset build': 'Restaurar build',
-    'Reset to the ready-made version': 'Restaurar para a versão pronta',
     'Save or copy a backup with every build and party': 'Salvar ou copiar um backup com todas as builds e parties',
     'Saves bg3-planner-backup.json. Load it later with Import.': 'Salva bg3-planner-backup.json. Carregue depois pelo Importar.',
     'Search by name or description…': 'Buscar por nome ou descrição…',
@@ -7871,7 +7866,6 @@ function buildEditor(b) {
       <label class="field"><span>${t('Build concept')}</span>
         <textarea data-path="summary" rows="3" placeholder="${t('How the build plays, its strengths, what it needs to work…')}">${esc(b.summary)}</textarea></label>
       ${b.credit ? `<p class="credit">${t('Based on: {x}', { x: esc(b.credit) })}</p>` : ''}
-      ${PRESETS.some((p) => p.presetId && p.presetId === b.presetId) ? `<button class="btn tiny back" data-act="preset-reset" title="${t('Replaces this build with the current ready-made version')}">${t('Reset to the ready-made version')}</button>` : ''}
     </section>
 
     ${checkCard(b)}
@@ -10682,15 +10676,6 @@ Object.assign(actions, {
     obj.name = it.n;
     if ('rarity' in obj) obj.rarity = it.r;
     if ('where' in obj) obj.where = [it.l, it.h].filter(Boolean).join(' — ');
-  },
-  async 'preset-reset'() {
-    const b = curBuild();
-    const preset = PRESETS.find((p) => p.presetId && p.presetId === b.presetId);
-    if (!preset || !(await ask(t('Replace "{name}" with the ready-made version? Your changes to this build are lost.', { name: b.name }), t('Reset build'), true))) return false;
-    takeSnapshot();
-    const fresh = Object.assign(normalizeBuild(clone(preset)), { id: b.id });
-    state.builds[state.builds.indexOf(b)] = fresh;
-    toast(t('Build reset to the ready-made version'));
   },
   'open-source'() { const b = curBuild(); if (b && /^https?:\/\//i.test(b.source.trim())) window.open(b.source.trim(), '_blank', 'noopener'); return false; },
   wiki(el) {

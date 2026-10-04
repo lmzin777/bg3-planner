@@ -92,15 +92,6 @@ Object.assign(actions, {
     if ('rarity' in obj) obj.rarity = it.r;
     if ('where' in obj) obj.where = [it.l, it.h].filter(Boolean).join(' — ');
   },
-  async 'preset-reset'() {
-    const b = curBuild();
-    const preset = PRESETS.find((p) => p.presetId && p.presetId === b.presetId);
-    if (!preset || !(await ask(t('Replace "{name}" with the ready-made version? Your changes to this build are lost.', { name: b.name }), t('Reset build'), true))) return false;
-    takeSnapshot();
-    const fresh = Object.assign(normalizeBuild(clone(preset)), { id: b.id });
-    state.builds[state.builds.indexOf(b)] = fresh;
-    toast(t('Build reset to the ready-made version'));
-  },
   'open-source'() { const b = curBuild(); if (b && /^https?:\/\//i.test(b.source.trim())) window.open(b.source.trim(), '_blank', 'noopener'); return false; },
   wiki(el) {
     const input = $('input[type="text"]', el.closest('.with-btn, .pick'));

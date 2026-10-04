@@ -54,7 +54,6 @@ function buildEditor(b) {
       <label class="field"><span>${t('Build concept')}</span>
         <textarea data-path="summary" rows="3" placeholder="${t('How the build plays, its strengths, what it needs to work…')}">${esc(b.summary)}</textarea></label>
       ${b.credit ? `<p class="credit">${t('Based on: {x}', { x: esc(b.credit) })}</p>` : ''}
-      ${PRESETS.some((p) => p.presetId && p.presetId === b.presetId) ? `<button class="btn tiny back" data-act="preset-reset" title="${t('Replaces this build with the current ready-made version')}">${t('Reset to the ready-made version')}</button>` : ''}
     </section>
 
     ${checkCard(b)}
