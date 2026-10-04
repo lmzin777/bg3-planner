@@ -86,6 +86,9 @@ function levelNumbers(info) {
 function levelRows(b) {
   const info = levelInfo(b);
   const seen = {};
+  const pending = {};  // per class: the choices still short of what the class should have made
+  Object.keys(classLevels(b)).forEach((cls) => { pending[cls] = classChoices(b, cls).filter((g) => chosenOf(b, cls, g).length < g.need).map((g) => g.name); });
+  const current = b.current && b.current < charLevel(b) ? b.current : 0;
   return b.levels.map((l, i) => {
     const x = info[i];
     const firstOfClass = l.cls && !seen[l.cls];
@@ -102,8 +105,9 @@ function levelRows(b) {
         l.sub && !subs.includes(l.sub) ? opt(l.sub, l.sub, l.sub) : ''}</select>` : '';
     // each gain opens its description; the ones the wiki describes carry it as a tooltip too
     const gain = (g) => { const text = featureText(g); return `<button class="gain${text ? '' : ' plain'}" data-act="gain-info" data-n="${esc(g)}"${text ? ` title="${esc(text)}"` : ''}>${esc(g)}</button>`; };
-    return `<div class="lvl${l.sub.trim() ? ' has-sub' : ''}">
-      <div class="lvl-n">${i + 1}</div>
+    const choices = levelChoices(x).map((c) => `<button class="btn tiny${(pending[x.cls] || []).includes(c.group.name) ? ' gold' : ''}" data-act="choice-open" data-l="${i}" data-g="${c.i}">+ ${esc(c.group.name.toLowerCase())}${c.n > 1 ? ' ×' + c.n : ''}</button>`).join('');
+    return `<div class="lvl${l.sub.trim() ? ' has-sub' : ''}${current === i + 1 ? ' cur' : ''}${current && i + 1 > current ? ' later' : ''}">
+      <div class="lvl-n">${i + 1}${current === i + 1 ? `<small>${t('now')}</small>` : ''}</div>
       <div class="lvl-cls">
         <select data-path="levels.${i}.cls" data-rerender aria-label="${t('Class for level {n}', { n: i + 1 })}">${opt('', t('— class —'), l.cls)}${CLASSES.map((c) => opt(c, c, l.cls)).join('')}</select>
         <small>${l.cls ? esc(l.cls) + ' ' + x.n : ''}</small>
@@ -116,6 +120,7 @@ function levelRows(b) {
           <div class="pick-btns">
             ${grantsFeat(x) ? `<button class="btn tiny gold" data-act="feat-open" data-l="${i}">${t('+ feat')}</button>` : ''}
             ${grantsExpertise(x) ? `<button class="btn tiny gold" data-act="expertise-open" data-l="${i}">${t('+ expertise')}</button>` : ''}
+            ${choices}
             ${l.cls && SPELLS.length ? `<button class="btn tiny" data-act="spell-open" data-l="${i}">${t('+ spell')}</button>` : ''}
             <button class="btn tiny" data-act="pick-add" data-l="${i}">${t('+ choice')}</button>
           </div>
@@ -163,17 +168,8 @@ function featList() {
     `<button class="pick-row" data-act="feat-choose" data-n="${esc(n)}"><b>${esc(n)}</b><small class="fx">${esc(d)}</small></button>`).join('')
     || `<p class="muted">${t('Nothing matches these filters.')}</p>`;
 }
-function featStep() {
-  const s = dlg.step;
-  const need = s.name === 'Ability Improvement' ? t('Pick one ability for +2, or two abilities for +1 each.') : t('Pick the ability that gets +1.');
-  const ready = s.chosen.length === 1 || (s.name === 'Ability Improvement' && s.chosen.length === 2);
-  return `<h2>${esc(s.name)}</h2><p class="muted">${need}</p>
-    <div class="lib-row">${s.options.map((ab) => `<button class="chip${s.chosen.includes(ab) ? ' on' : ''}" data-act="feat-ability" data-ab="${ab}">${ab}</button>`).join('')}</div>
-    <div class="modal-btns"><button class="btn" data-act="feat-open" data-l="${dlg.level}">${t('← Back')}</button>
-      <button class="btn primary" data-act="feat-confirm"${ready ? '' : ' disabled'}>${t('Add feat')}</button></div>`;
-}
-function addFeat(level, name, bonus) {
-  curBuild().levels[level].picks.push('Feat: ' + name + (bonus ? ' (' + bonus + ')' : ''));
+function addFeat(level, text, name) {
+  curBuild().levels[level].picks.push(text);
   closeDialog();
   toast(t('Added to level {n}: {x}', { n: level + 1, x: name }));
 }
@@ -239,26 +235,14 @@ Object.assign(actions, {
   },
   'feat-choose'(el) {
     const feat = FEATS.find(([n]) => n === el.dataset.n);
-    const options = featAbilities(feat[0], feat[1]);
-    if (options.length === 1) { addFeat(dlg.level, feat[0], '+1 ' + options[0]); return; }
-    if (!options.length) { addFeat(dlg.level, feat[0], ''); return; }
-    dlg.step = { name: feat[0], options, chosen: [] };
-    $('#dialog-box').innerHTML = featStep();
+    const level = dlg.level;
+    const parts = featParts(feat[0], feat[1], curBuild());
+    if (!parts.length) { addFeat(level, featText(feat[0], feat[1], []), feat[0]); return; }
+    openChooser(feat[0], esc(feat[1]), parts, (done) => {
+      curBuild().levels[level].picks.push(featText(feat[0], feat[1], done));
+      toast(t('Added to level {n}: {x}', { n: level + 1, x: feat[0] }));
+    });
     return false;
-  },
-  'feat-ability'(el) {
-    const s = dlg.step;
-    const max = s.name === 'Ability Improvement' ? 2 : 1;
-    const i = s.chosen.indexOf(el.dataset.ab);
-    if (i >= 0) s.chosen.splice(i, 1);
-    else { if (s.chosen.length >= max) s.chosen.shift(); s.chosen.push(el.dataset.ab); }
-    $('#dialog-box').innerHTML = featStep();
-    return false;
-  },
-  'feat-confirm'() {
-    const s = dlg.step;
-    const bonus = s.name === 'Ability Improvement' && s.chosen.length === 1 ? '+2 ' + s.chosen[0] : s.chosen.map((ab) => '+1 ' + ab).join(', ');
-    addFeat(dlg.level, s.name, bonus);
   },
   'expertise-open'(el) {
     dlg = { kind: 'expertise', level: +el.dataset.l, chosen: [] };

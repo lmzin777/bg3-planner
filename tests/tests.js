@@ -232,6 +232,151 @@
     eq(finalStats(b).skills.find((k) => k.name === 'Athletics').expert, true);
   });
 
+  // ---------- guided choices ----------
+  test('each level knows the choices it opens, with their options from the wiki', () => {
+    const fighter = build(Array.from({ length: 10 }, () => 'Fighter'));
+    fighter.levels[2].sub = 'Champion';
+    const info = levelInfo(fighter);
+    eq(levelChoices(info[0]).map((c) => [c.group.name, c.n]), [['Fighting Style', 1]]);
+    eq(levelChoices(info[9]).map((c) => c.group.name), ['Fighting Style'], 'a Champion takes a second one at level 10');
+    eq(classChoices(fighter, 'Fighter').map((g) => [g.name, g.need]), [['Fighting Style', 2]]);
+    const style = CHOICES.find((c) => c.name === 'Fighting Style' && c.owner === 'Ranger');
+    ok(style.options.some((o) => o[0] === 'Archery') && !style.options.some((o) => o[0] === 'Protection'), 'a Ranger cannot take Protection');
+    const lock = build(Array.from({ length: 5 }, () => 'Warlock'));
+    eq(classChoices(lock, 'Warlock').map((g) => [g.name, g.need]), [['Eldritch Invocation', 3], ['Pact Boon', 1]]);
+    const inv = CHOICES.find((c) => c.name === 'Eldritch Invocation');
+    ok(inv.options.find((o) => o[0] === 'Agonising Blast')[2] === 2 && inv.options.find((o) => o[0] === 'Lifedrinker')[2] === 12, 'invocations carry the level that unlocks them');
+    ok(CHOICES.every((c) => c.options.length >= 2), 'every choice has options');
+  });
+  test('choices written in the levels are counted, in the forms the builds use', () => {
+    const b = build(['Sorcerer', 'Sorcerer', 'Sorcerer']);
+    const meta = () => { const g = classChoices(b, 'Sorcerer').find((x) => x.name === 'Metamagic'); return [chosenOf(b, 'Sorcerer', g).length, g.need]; };
+    eq(meta(), [0, 3]);
+    b.levels[1].picks.push('Metamagic: Twinned Spell', 'Metamagic: Extended Spell');
+    eq(meta(), [2, 3]);
+    b.levels[2].picks.push('Quickened Spell');
+    eq(meta(), [3, 3], 'a bare option name counts too');
+    ok(!buildIssues(b).some((x) => /Metamagic/.test(x.text)), 'nothing pending once all are chosen');
+    const bm = preset('battle-master-fighter');
+    const m = classChoices(bm, 'Fighter').find((x) => x.name === 'Manoeuvre');
+    eq([chosenOf(bm, 'Fighter', m).length, m.need], [6, 7], '"Manoeuvres: your choice" counts as one');
+    ok(buildIssues(bm).some((x) => x.text === 'Fighter: Manoeuvre — 6 of 7 chosen'), 'and the check says what is missing');
+    const druid = build(Array.from({ length: 5 }, () => 'Druid'));
+    druid.levels[1].sub = 'Circle of the Land';
+    druid.levels[2].picks.push('Land: Coast');
+    druid.levels[4].picks.push('Land: Coast');
+    eq(chosenOf(druid, 'Druid', classChoices(druid, 'Druid').find((x) => x.name === 'Land')).length, 2, 'the same land may be taken again');
+  });
+  test('a chosen option grants what its text says', () => {
+    const b = build(['Ranger'], { race: 'Elf', subrace: 'Wood Elf', background: 'Soldier' });
+    ok(!proficiencies(b).has('Heavy Armour') && !pickedSkills(b).has('History'));
+    b.levels[0].picks.push('Favoured Enemy: Ranger Knight');
+    ok(proficiencies(b).has('Heavy Armour') && pickedSkills(b).has('History'), 'Ranger Knight: heavy armour and History');
+    b.levels[0].picks.push('Natural Explorer: Urban Tracker');
+    ok(finalStats(b).skills.find((k) => k.name === 'Sleight of Hand').proficient, 'Urban Tracker: Sleight of Hand');
+  });
+  test('feats ask for what is chosen inside them', () => {
+    const b = build(['Fighter', 'Fighter', 'Fighter', 'Fighter'], { race: 'Human', background: 'Soldier' });
+    const parts = (name) => featParts(name, (FEATS.find((f) => f[0] === name) || ['', ''])[1], b);
+    eq(parts('Alert').length, 0);
+    eq(parts('Ability Improvement').map((p) => [p.n, p.min]), [[2, 1]]);
+    eq(parts('Skilled').map((p) => p.n), [3]);
+    eq(parts('Weapon Master').map((p) => p.n), [1], 'a Fighter already has every weapon, so only the ability is asked');
+    const wizard = build(['Wizard', 'Wizard', 'Wizard', 'Wizard']);
+    const wm = featParts('Weapon Master', FEATS.find((f) => f[0] === 'Weapon Master')[1], wizard);
+    eq(wm.map((p) => p.n), [1, 4]);
+    ok(wm[1].options.some((o) => o[0] === 'Longbows') && !wm[1].options.some((o) => o[0] === 'Daggers'), 'only the weapon types the build lacks');
+    eq(parts('Magic Initiate: Wizard').map((p) => p.n), [2, 1]);
+    ok(parts('Magic Initiate: Wizard')[0].options.some((o) => o[0] === 'Fire Bolt'), 'wizard cantrips on offer');
+    eq(parts('Martial Adept')[0].options.length, 14);
+    eq(parts('Elemental Adept')[0].options.map((o) => o[0]), ['Acid', 'Cold', 'Fire', 'Lightning', 'Thunder']);
+    const asi = parts('Ability Improvement');
+    asi[0].chosen = ['DEX'];
+    eq(featText('Ability Improvement', '', asi), 'Feat: Ability Improvement (+2 DEX)');
+    wm[0].chosen = ['STR'];
+    wm[1].chosen = ['Longbows', 'Rapiers'];
+    eq(featText('Weapon Master', FEATS.find((f) => f[0] === 'Weapon Master')[1], wm), 'Feat: Weapon Master (+1 STR; Longbows, Rapiers)');
+    b.levels[3].picks.push('Feat: Skilled');
+    ok(buildIssues(b).some((x) => /Skilled — its options are not chosen/.test(x.text)), 'a feat left without its options is flagged');
+    b.levels[3].picks[0] = 'Feat: Skilled (Arcana, History, Insight)';
+    ok(!buildIssues(b).some((x) => /Skilled/.test(x.text)) && finalStats(b).skills.find((k) => k.name === 'Arcana').proficient, 'and counts once they are written');
+  });
+  test('High Elves choose a Wizard cantrip', () => {
+    const b = build(['Fighter'], { race: 'Elf', subrace: 'High Elf', background: 'Soldier' });
+    ok(raceCantrips(b).includes('Fire Bolt') && !raceCantrips(build(['Fighter'], { race: 'Human' })).length);
+    ok(buildIssues(b).some((x) => x.text === 'Racial cantrip not chosen'));
+    b.creation.cantrip = 'Fire Bolt';
+    ok(!buildIssues(b).some((x) => x.text === 'Racial cantrip not chosen'));
+  });
+
+  // ---------- permanent bonuses and levels ----------
+  test('permanent bonuses enter the numbers from their act on', () => {
+    const b = build(['Fighter'], { abilities: { str: 15, dex: 14, con: 13, int: 8, wis: 10, cha: 8 } });
+    const fx = (name) => permanentEffect(PERMANENT.find((p) => p.n === name));
+    eq([fx("Auntie Ethel's Hair").choice, fx('Potion of Everlasting Vigour').fixed, fx('Mirror of Loss').choice, fx('Mirror of Loss').optional, fx('Anointed in Splendour').saves],
+      [1, [{ ab: 'str', n: 2 }], 2, { ab: 'cha', n: 1 }, 2]);
+    b.permanent["Auntie Ethel's Hair"] = { on: true, ab: 'dex', got: false };
+    b.permanent['Potion of Everlasting Vigour'] = { on: true, ab: '', got: false };
+    b.permanent['Mirror of Loss'] = { on: true, ab: 'str', extra: true, got: false };
+    eq(ABILS.map(([k]) => abilityScores(b, 'act1').scores[k]), [15, 15, 13, 8, 10, 8], 'act 1: the hair');
+    eq(abilityScores(b, 'act2').scores.str, 17, 'act 2: the potion');
+    eq([abilityScores(b, 'act3').scores.str, abilityScores(b, 'act3').scores.cha], [19, 9], 'act 3: the mirror, with its optional Charisma');
+    b.permanent['Anointed in Splendour'] = { on: true };
+    eq(finalStats(b, 'act3').saves.find((k) => k.key === 'wis').bonus - finalStats(b, 'act2').saves.find((k) => k.key === 'wis').bonus, 2);
+    eq(normalizeBuild(clone(b)).permanent['Mirror of Loss'], { on: true, ab: 'str', extra: true, got: false }, 'kept when saved and loaded');
+    ok(buildIssues(Object.assign(build(['Fighter']), { permanent: { "Auntie Ethel's Hair": { on: true, ab: '' } } })).some((x) => /choose the ability/.test(x.text)));
+  });
+  test('the numbers can be read at any level', () => {
+    const b = preset('stealth-archer');
+    const at = (n) => finalStats(b, 'act1', { level: n });
+    eq([at(1).level, at(1).pb, at(4).pb, at(5).pb, at(12).level], [1, 2, 2, 3, 12]);
+    ok(at(3).hp < at(4).hp && at(4).hp < at(12).hp, 'hit points grow');
+    eq([at(1).slots, at(2).slots, at(5).slots], [[], [2], [4, 2]], 'Ranger slots arrive at level 2');
+    ok(!at(2).initiativeParts.some((p) => p[0] === 'Dread Ambusher') && at(3).initiativeParts.some((p) => p[0] === 'Dread Ambusher'), 'Gloom Stalker features start at level 3');
+    eq(splitText(atLevel(b, 6)), '5 Gloom Stalker / 1 Rogue');
+    b.current = 4;
+    ok(/Next: level 5/.test(nextLevelText(b)) && /Extra Attack/.test(nextLevelText(b)), nextLevelText(b));
+  });
+  test('monk weapons, thrown weapons and Remarkable Athlete follow the wiki', () => {
+    const monk = build(Array.from({ length: 4 }, () => 'Monk'), { abilities: { str: 10, dex: 15, con: 14, int: 8, wis: 15, cha: 8 }, plus2: 'dex' });
+    monk.gear.act1.slots.meleeMain.name = 'Quarterstaff';
+    const staff = finalStats(monk, 'act1').attacks.rows[0];
+    eq([staff.attack[0], staff.attackTotal], [['DEX', 3], 5], 'a quarterstaff uses Dexterity in a monk\'s hands');
+    monk.gear.act1.slots.meleeMain.name = 'Dagger';
+    eq(finalStats(monk, 'act1').attacks.rows[0].dice, '1d6', 'Deft Strikes: the Martial Arts die when it is higher than 1d4');
+    const thrower = build(Array.from({ length: 4 }, () => 'Barbarian'), { abilities: { str: 15, dex: 14, con: 15, int: 8, wis: 10, cha: 8 }, plus2: 'str' });
+    thrower.gear.act1.slots.meleeMain.name = 'Javelin';
+    eq(finalStats(thrower, 'act1').attacks.rows.filter((r) => r.thrown).length, 0, 'no thrown row without Tavern Brawler');
+    thrower.levels[3].picks.push('Feat: Tavern Brawler (+1 STR)');
+    const thrown = finalStats(thrower, 'act1').attacks.rows.find((r) => r.thrown);
+    eq([thrown.attackTotal, thrown.damageTotal], [10, 8], 'STR 18: +4 +2 proficiency +4 again; damage +4 +4');
+    const champ = build(Array.from({ length: 7 }, () => 'Fighter'), { race: 'Human', background: 'Soldier', abilities: { str: 15, dex: 14, con: 13, int: 8, wis: 10, cha: 8 } });
+    const before = finalStats(champ).skills.find((k) => k.name === 'Stealth').bonus;
+    champ.levels[2].sub = 'Champion';
+    const s = finalStats(champ);
+    eq([s.skills.find((k) => k.name === 'Stealth').bonus - before, s.skills.find((k) => k.name === 'Arcana').bonus], [1, -1], 'half of +3, rounded down, on physical skills only');
+  });
+  test('an item is compared by what it changes in the numbers', () => {
+    const b = build(Array.from({ length: 5 }, () => 'Fighter'), { abilities: { str: 15, dex: 10, con: 14, int: 8, wis: 12, cha: 8 }, plus2: 'str' });
+    b.gear.act1.slots.chest.name = 'Chain Mail';
+    b.gear.act1.slots.meleeMain.name = 'Longsword';
+    const { p, base } = recommendBase(b, 'act1');
+    eq(gearDelta(b, 'act1', 'chest', item('Adamantine Splint Armour'), base, p.style, 0).ac, 2, 'AC 18 against 16');
+    const sword = gearDelta(b, 'act1', 'meleeMain', item('Longsword +1'), base, p.style, 0);
+    eq([sword.attack, sword.damage], [1, 1]);
+    eq(gearDelta(b, 'act1', 'gloves', item('Gauntlets of Hill Giant Strength'), base, p.style, 0).attack, 3, 'Strength 23 instead of 17');
+    ok(/AC \+2/.test(deltaText({ ac: 2, initiative: -1 })) && /Initiative −1/.test(deltaText({ ac: 2, initiative: -1 })));
+    eq(deltaText({ saves: 12 }), 'Every saving throw +2');
+    const best = recommend(b, 'gloves', 'act1', 'damage', ITEMS.filter((it) => it.s === 'gloves' && (!it.a || it.a <= 3)))[0];
+    eq(best.it.n, 'Gauntlets of Hill Giant Strength', 'the biggest real gain comes first: ' + best.reasons.join('; '));
+  });
+  test('the party table shows each member at their level', () => {
+    const a = build(Array.from({ length: 12 }, () => 'Fighter'));
+    a.current = 3;
+    eq([memberStats(a).level, finalStats(a).level], [3, 12]);
+    ok(mainAttack(finalStats(preset('stealth-archer'), 'act3'), 'ranged').name === 'Titanstring Bow');
+  });
+
   // ---------- build check ----------
   test('the build check lists what is missing and what does not fit', () => {
     const texts = (b) => buildIssues(b).map((x) => x.text).join(' | ');
@@ -249,6 +394,7 @@
     wizard.levels[0].picks.push('Spell: Fireball');
     ok(/not proficient with Heavy Armour/.test(texts(wizard)) && /Fireball is a level 3 spell/.test(texts(wizard)), texts(wizard));
     eq(buildIssues(preset('stealth-archer')).filter((x) => x.level === 'warn').map((x) => x.text), ['Race not chosen'], 'the ready-made archer only lacks a race');
+    eq(buildIssues(preset('tempest-sorcerer')).filter((x) => x.level === 'warn' && x.where === 'Level progression').map((x) => x.text), [], 'the ready-made builds name their choices');
   });
   test('a contested item shows in the build check and drops in the recommendations', () => {
     const a = build(['Fighter']);

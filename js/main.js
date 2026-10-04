@@ -138,6 +138,8 @@ Object.assign(actions, {
   'pick-add'(el) { const l = +el.dataset.l; curBuild().levels[l].picks.push(''); return { focus: `[data-path="levels.${l}.picks.${curBuild().levels[l].picks.length - 1}"]` }; },
   'pick-del'(el) { curBuild().levels[+el.dataset.l].picks.splice(+el.dataset.i, 1); },
   act(el) { state.ui.act = el.dataset.k; },
+  // the level the numbers are shown at; the last level means "the finished build"
+  'stat-level'(el) { const b = curBuild(); const n = +el.dataset.n; b.current = n >= charLevel(b) ? 0 : n; },
   async 'gear-copy-prev'() {
     const b = curBuild();
     const idx = ACTS.findIndex(([k]) => k === state.ui.act);
@@ -276,3 +278,4 @@ document.addEventListener('change', (e) => {
 });
 
 render();
+importFromAddress();

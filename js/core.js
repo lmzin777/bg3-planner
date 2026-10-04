@@ -2,13 +2,16 @@
 // The scripts are plain (not modules) so the planner also runs from a file opened directly; they share the global scope.
 'use strict';
 
-const APP_VERSION = '1.1';
+const APP_VERSION = '1.2';
 const STORE_KEY = 'bg3planner.v1';
 const PRESETS = window.BG3_PRESETS || [];
 const I18N = window.BG3_I18N || {};
 const ITEMS = window.BG3_ITEMS || [];
 const SPELLS = window.BG3_SPELLS || [];
 const CONSUMABLES = window.BG3_CONSUMABLES || [];
+const CHOICES = window.BG3_CHOICES || [];
+const FEAT_OPTIONS = window.BG3_FEAT_OPTIONS || {};
+const PERMANENT = window.BG3_PERMANENT || [];
 const DATA = window.BG3_DATA || { races: {}, subraces: {}, backgrounds: {}, origins: {}, classes: {} };
 
 // UI text is written in English and passed through t(); other languages live in i18n.js.
@@ -132,12 +135,16 @@ function blankBuild() {
     source: '',
     credit: '',
     summary: '',
-    creation: { origin: '', race: '', subrace: '', background: '', skills: '', abilities: { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 }, plus2: '', plus1: '', extra: { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 } },
+    creation: { origin: '', race: '', subrace: '', background: '', skills: '', cantrip: '', abilities: { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 }, plus2: '', plus1: '', extra: { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 } },
     levels: Array.from({ length: 12 }, () => ({ cls: '', sub: '', picks: [] })),
     gear: Object.fromEntries(ACTS.map(([k]) => [k, blankAct()])),
     setup: [],
     consumables: [],
     elixir: '',
+    // permanent bonuses the build plans to get, as {name: { on, ab (the ability it was put on), extra, got }}
+    permanent: {},
+    // the level the character is at in the playthrough; 0 means "show the finished build"
+    current: 0,
     variants: '',
     notes: '',
   };
@@ -181,6 +188,10 @@ function normalizeBuild(src) {
   ['setup', 'consumables'].forEach((k) => {
     b[k] = Array.isArray(s[k]) ? s[k].map((x) => ({ name: x.name || '', note: x.note || '' })) : [];
   });
+  if (s.permanent && typeof s.permanent === 'object') {
+    Object.keys(s.permanent).forEach((k) => { const v = s.permanent[k]; if (v && v.on) b.permanent[k] = { on: true, ab: v.ab || '', extra: !!v.extra, got: !!v.got }; });
+  }
+  b.current = Math.max(0, Math.min(12, Number(s.current) || 0));
   // The elixir the build keeps active. Builds saved before this field existed take the strongest
   // ability elixir from their consumables list, which is what those builds were planned around.
   if (typeof s.elixir === 'string') b.elixir = s.elixir;

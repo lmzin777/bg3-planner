@@ -131,6 +131,18 @@ async function readShareCode(text) {
     return data && typeof data === 'object' ? fromLean(data) : null;
   } catch (e) { return null; }
 }
+// Once the planner is published at a web address, a share code can travel as a link: the address plus #b=CODE.
+const HOSTED = /^https?:$/.test(location.protocol) && !/^(localhost$|127\.|\[::1\]$)/.test(location.hostname);
+const shareLink = (code) => location.origin + location.pathname + '#b=' + code;
+// Opening such a link offers to add the build, and clears the code from the address.
+async function importFromAddress() {
+  const m = /^#b=(.+)$/.exec(location.hash);
+  if (!m || window.BG3_TEST) return;
+  const build = await readShareCode(decodeURIComponent(m[1]));
+  history.replaceState(null, '', location.pathname + location.search);
+  if (!build) { toast(t('That share code is incomplete or damaged')); return; }
+  if (await ask(t('Add the shared build "{name}" to your builds?', { name: normalizeBuild(build).name }), t('Add'))) importData({ type: 'bg3-build', build });
+}
 async function copyText(text, area) {
   if (area) area.select();
   try { await navigator.clipboard.writeText(text); return true; } catch (e) {
@@ -179,7 +191,13 @@ Object.assign(actions, {
       <p>${t('Send this text to a friend. They paste it into Import and get a copy of "{name}".', { name: esc(b.name) })}</p>
       <textarea id="share-text" rows="5" readonly>${esc(code)}</textarea>
       <p class="muted">${t('{n} characters', { n: code.length })}</p>
-      <div class="modal-btns"><button class="btn" data-act="dialog-close">${t('Close')}</button><button class="btn primary" data-act="share-copy">${t('Copy')}</button></div>`);
+      <div class="modal-btns"><button class="btn" data-act="dialog-close">${t('Close')}</button>
+        ${HOSTED ? `<button class="btn" data-act="share-link" title="${t('A link that opens this planner and offers to add the build')}">${t('Copy link')}</button>` : ''}
+        <button class="btn primary" data-act="share-copy">${t('Copy')}</button></div>`);
+    return false;
+  },
+  async 'share-link'() {
+    toast((await copyText(shareLink(dlg.text))) ? t('Link copied') : t('Could not copy the link'));
     return false;
   },
   async 'share-copy'() {

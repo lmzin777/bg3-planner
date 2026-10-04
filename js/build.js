@@ -66,6 +66,7 @@ function buildEditor(b) {
         ${selectField(t('Subrace'), 'creation.subrace', c.subrace, subs, subs.length ? choose : t('No subrace'), subs.length || c.subrace ? '' : 'disabled')}
         ${selectField(t('Background'), 'creation.background', c.background, Object.keys(BACKGROUNDS).map((k) => [k, k === 'Haunted One' ? t('Haunted One (Dark Urge only)') : k]), choose, 'data-rerender')}
       </div>
+      ${raceCantrips(b).length ? `<div class="grid g4">${selectField(t('Racial cantrip'), 'creation.cantrip', c.cantrip, raceCantrips(b), choose, 'data-rerender')}</div>` : ''}
       ${creationInfo(b)}
       <h3 class="group">${t('Ability scores')}</h3>
       <div class="abils">${ABILS.map(([ab, short, name]) => abilCard(b, ab, short, name)).join('')}</div>
@@ -82,6 +83,8 @@ function buildEditor(b) {
     </section>
 
     ${statsCard(b)}
+
+    ${permanentCard(b)}
 
     <section class="card">
       <h2>${t('Gear by act')}</h2>

@@ -62,7 +62,7 @@ function itemProfGrant(it) {
 const canOffHand = (it, b) => it.s === 'shield' || (it.w !== 'two' && ((it.pp || []).includes('Light') || b.levels.some((l) => l.picks.some((p) => /dual wielder/i.test(p)))));
 // Everything the build is proficient with, as a Set of armour categories, weapon categories and weapon types.
 // With an act, what the gear of that act grants is included too.
-function proficiencies(b, act) {
+function proficiencies(b, act, swap) {
   const set = new Set();
   const add = (list) => (list || []).forEach((x) => set.add(x));
   const first = (b.levels.find((l) => l.cls) || {}).cls;
@@ -82,7 +82,9 @@ function proficiencies(b, act) {
   });
   add((DATA.races[b.creation.race] || {}).prof);
   add((DATA.subraces[b.creation.subrace] || {}).prof);
-  if (act) Object.values(wornItems(b, act)).forEach((it) => add((itemProfGrant(it) || {}).types));
+  if (act) Object.values(wornItems(b, act, swap)).forEach((it) => add((itemProfGrant(it) || {}).types));
+  // options that grant armour by their own text ("Proficiency with Heavy Armour" of the Ranger Knight)
+  chosenOptions(b).forEach(([, text]) => [LIGHT, MEDIUM, HEAVY, SHIELDS].forEach((x) => { if (new RegExp('proficien[^.]*' + x, 'i').test(text)) set.add(x); }));
   return set;
 }
 const isWeapon = (it) => it.s === 'melee' || it.s === 'ranged';

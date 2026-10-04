@@ -703,6 +703,33 @@ button.chip:hover { border-color: var(--gold); color: var(--text); }
 .stat small { white-space: normal; line-height: 1.35; }
 .toast.on { pointer-events: auto; }
 .toast .btn { background: #1a130a; color: var(--gold-hi); border-color: #1a130a; }
+
+/* ---------- guided choices, permanent bonuses, level marker, item comparison ---------- */
+.pick-row.on { border-color: var(--gold); background: rgba(201, 162, 77, .12); }
+.pick-row.on b::before { content: "✓ "; color: var(--gold); }
+.choose-head { margin: 12px 0 6px; font: 700 10.5px var(--sans); text-transform: uppercase; letter-spacing: .1em; color: var(--gold); }
+.choose-head span { color: var(--muted); margin-left: 6px; }
+.choose-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(150px, 100%), 1fr)); gap: 6px; }
+.choose-grid .pick-row { margin: 0; }
+.pick-row small.delta { color: var(--ok); }
+.lvl.cur { outline: 1px solid var(--gold); outline-offset: 4px; border-radius: 8px; }
+.lvl.later { opacity: .62; }
+.lvl-n small { display: block; font: 700 9px var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--gold); }
+.acts.lvls { flex-wrap: wrap; }
+.acts.lvls button { padding: 8px 0; min-width: 34px; letter-spacing: 0; border-bottom: 0; }
+.next-lvl { margin: 0 0 12px; padding: 8px 12px; border-left: 2px solid var(--gold); background: var(--field); border-radius: 6px; font-size: 13px; color: var(--muted); }
+.next-lvl b { color: var(--gold-hi); margin-right: 6px; }
+.perms { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 8px; }
+.perm { background: var(--panel-2); border: 1px solid var(--line-soft); border-radius: 10px; padding: 9px 12px; font-size: 13px; }
+.perm.on { border-color: var(--gold); }
+.perm.got { opacity: .7; }
+.perm p { margin: 4px 0 0; color: var(--muted); font-size: 12.5px; }
+.perm-tag { font-style: normal; font-size: 10.5px; color: var(--gold); border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; margin-left: 4px; }
+.perm-opts { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: end; margin-top: 8px; }
+.perm-opts .field { min-width: 130px; }
+.chip-s { display: inline-block; font-size: 12px; margin: 2px 4px 2px 0; padding: 2px 9px; border: 1px solid var(--gold); border-radius: 999px; color: var(--gold-hi); }
+.chip-s.got { opacity: .6; text-decoration: line-through; }
+.ptable td small { display: block; color: var(--muted); font-size: 11px; font-weight: 400; }
 </style>
 </head>
 <body>
@@ -1350,6 +1377,56 @@ window.BG3_I18N = {
     'Subclass and race': 'Subclasse e raça',
     'From items': 'De itens',
     'Follow-up actions': 'Ações de continuação',
+
+    // guided choices, permanent bonuses, numbers by level, item comparison
+    'Abilities: one for +2, or two for +1 each': 'Atributos: um para +2, ou dois para +1 cada',
+    'Ability it goes to': 'Atributo que recebe',
+    'Ability that gets +1': 'Atributo que recebe +1',
+    'Add': 'Adicionar',
+    'Against {x}: {d}': 'Contra {x}: {d}',
+    'At level': 'No nível',
+    'Choose': 'Escolher',
+    'Choose {n}': 'Escolha {n}',
+    'Damage per hit': 'Dano por acerto',
+    'Each member at the level marked in their build (the last one when none is marked), with the gear of this act. The best of each row is highlighted.': 'Cada membro no nível marcado na build dele (o último, quando nenhum está marcado), com o equipamento deste ato. O melhor de cada linha fica em destaque.',
+    'Every saving throw': 'Todo saving throw',
+    'In gold: proficient; with a star: Expertise. Everything is for the level and the gear of the act chosen above. Armour Class, attacks and spell numbers follow the game formulas; bonuses that depend on the situation are listed, not added.': 'Em dourado: proficiente; com estrela: Expertise. Tudo vale para o nível e o equipamento do ato escolhidos acima. Armour Class, ataques e números de magia seguem as fórmulas do jogo; bônus que dependem da situação são listados, mas não somados.',
+    'Level {n}: {feat} — its options are not chosen': 'Nível {n}: {feat} — as opções dele não foram escolhidas',
+    'Main attack': 'Ataque principal',
+    'Manoeuvres': 'Manoeuvres',
+    'Next: level {n} · {cls} {k}': 'Próximo: nível {n} · {cls} {k}',
+    'Party numbers': 'Números da party',
+    'Permanent bonuses': 'Bônus permanentes',
+    'Racial cantrip': 'Cantrip racial',
+    'Racial cantrip not chosen': 'Cantrip racial não escolhido',
+    'Rewards that stay with the character for the whole game, such as the +1 ability from Auntie Ethel.': 'Recompensas que ficam com o personagem o jogo todo, como o +1 de atributo da Auntie Ethel.',
+    'Ritual spells': 'Spells de ritual',
+    'Tick what this build plans to get. The ones that change an ability or the saving throws enter Final numbers from their act on; the rest are a checklist. Until ticked as obtained they also show in the party route.': 'Marque o que esta build pretende pegar. Os que mudam um atributo ou os saving throws entram nos Números finais a partir do ato deles; os demais são uma lista de conferência. Enquanto não forem marcados como obtidos, também aparecem na rota da party.',
+    'Weapon types': 'Tipos de arma',
+    'With it on: {d}': 'Com ele equipado: {d}',
+    'already chosen': 'já escolhido',
+    'also +{n} {ab}': 'também +{n} {ab}',
+    'changes the numbers': 'muda os números',
+    'feat': 'feat',
+    'in this slot now': 'está neste slot agora',
+    'nothing new besides hit points': 'nada novo além de pontos de vida',
+    'now': 'atual',
+    'subclass': 'subclasse',
+    'thrown': 'arremessada',
+    'total': 'total',
+    '{cls} cantrips': 'Cantrips de {cls}',
+    '{cls} level 1 spell': 'Spell de nível 1 de {cls}',
+    '{cls} level {n} · {have} of {need} chosen so far': '{cls} nível {n} · {have} de {need} escolhidos até agora',
+    '{cls}: {name} — {have} of {need} chosen': '{cls}: {name} — {have} de {need} escolhidos',
+    '{name}: choose the ability it goes to': '{name}: escolha o atributo que recebe',
+    '{n} of {max}': '{n} de {max}',
+    'AC': 'AC',
+
+    'Add the shared build "{name}" to your builds?': 'Adicionar a build compartilhada "{name}" às suas builds?',
+    'A link that opens this planner and offers to add the build': 'Um link que abre este planner e oferece adicionar a build',
+    'Copy link': 'Copiar link',
+    'Link copied': 'Link copiado',
+    'Could not copy the link': 'Não foi possível copiar o link',
 
     // dialogs and toasts
     'Cancel': 'Cancelar',
@@ -2204,7 +2281,7 @@ window.BG3_I18N = {
       },
       "levels": [
         {"cls": "Cleric", "sub": "Tempest Cleric", "picks": ["Cantrip: Blade Ward", "Cantrip: Guidance", "Cantrip: Resistance", "Wrath of the Storm", "Prepared Spell: Create or Destroy Water"]},
-        {"cls": "Sorcerer", "sub": "Draconic Sorcerer", "picks": ["Cantrip: Friends", "Cantrip: Minor Illusion", "Cantrip: Ray of Frost", "Cantrip: Shocking Grasp", "Spell: Chromatic Orb", "Spell: Shield", "Witch Bolt (granted by the Draconic subclass)"]},
+        {"cls": "Sorcerer", "sub": "Draconic Sorcerer", "picks": ["Cantrip: Friends", "Cantrip: Minor Illusion", "Cantrip: Ray of Frost", "Cantrip: Shocking Grasp", "Spell: Chromatic Orb", "Spell: Shield", "Draconic Ancestry: Blue (Lightning)", "Witch Bolt (granted by the Blue ancestry)"]},
         {"cls": "Sorcerer", "sub": "", "picks": ["Spell: Magic Missile", "Metamagic: Extended Spell", "Metamagic: Twinned Spell"]},
         {"cls": "Cleric", "sub": "", "picks": ["Channel Divinity: Destructive Wrath", "Prepared Spell: Sanctuary"]},
         {"cls": "Sorcerer", "sub": "", "picks": ["Spell (choose): Cloud of Daggers, Enhance Ability or Misty Step", "Metamagic: Quickened Spell"]},
@@ -3874,6 +3951,76 @@ window.BG3_CONSUMABLES = [
   {"n":"Wogglims","t":"Grenade","r":"common","x":"Send a small rocket at a foe, blasting the target and inflicting Colour Spray. 3d6.","i":"thumb/6/69/Wogglims_Unfaded.png/96px-Wogglims_Unfaded.png.webp","h":"In Felogyr's Fireworks","pr":"200"},
   {"n":"Wyvern Poison","t":"Coating","r":"rare","x":"Coat your active weapon with toxin that deals an additional 3d6 Poison damage when attacking. Constitution Saving Throw: DC 15 to halve the damage.","i":"thumb/7/71/COAT_Wyvern_Poison_Unfaded.png/96px-COAT_Wyvern_Poison_Unfaded.png.webp","pr":"10"},
   {"n":"Wyvern Toxin","t":"Coating","r":"rare","x":"Coat your active weapon with Wyvern Toxin.","du":"10 turns","i":"thumb/f/f9/COAT_Wyvern_Toxin_Unfaded.png/96px-COAT_Wyvern_Toxin_Unfaded.png.webp","h":"Sold by Anna Lidwin in the House of Healing; Given to the player character by Nettie in the Emerald Grove; In a wooden crate in the Hidden Vault, accessible through Enclave Library, next to Nettie's…","pr":"65"}
+];
+</script>
+  <script>
+// The options of every choice made while levelling, the options inside feats, and the permanent bonuses.
+// Generated by tools/update_choices.py from bg3.wiki; do not edit by hand, re-run the script instead.
+// BG3_CHOICES = [{ name, owner (class or subclass), at: {class level: picks}, options: [[name, what it does, level that unlocks it]],
+//   join (when all picks go on one line), repeat (the same option may be taken again) }]
+// BG3_FEAT_OPTIONS = {feat: [options]} · BG3_PERMANENT = [{ n name, a act, x what it gives, h how to get it }]
+window.BG3_CHOICES_DATE = "2026-10-04";
+window.BG3_CHOICES = [
+  {"name":"Fighting Style","owner":"Fighter","at":{"1":1},"options":[["Archery","You gain a +2 bonus to Attack Rolls you make with ranged Weapons.",0],["Defence","You gain a +1 bonus to Armour Class while wearing Armour.",0],["Duelling","When you are wielding a melee weapon that is not Two-Handed in one hand, and no weapon in the other, you deal an additional 2 damage with that weapon.",0],["Great Weapon Fighting","When you roll a 1 or 2 on a damage die for an attack with a Two-Handed melee weapon, that die is rerolled once.",0],["Protection","When you have a Shield, impose Disadvantage on an enemy who attacks one of your allies when you are within 1.5 m. You must be able to see the enemy.",0],["Two-Weapon Fighting","When you make an offhand attack, you can add your Ability Score Modifier to the damage of the attack.",0]]},
+  {"name":"Fighting Style","owner":"Paladin","at":{"2":1},"options":[["Defence","You gain a +1 bonus to Armour Class while wearing Armour.",0],["Duelling","When you are wielding a melee weapon that is not Two-Handed in one hand, and no weapon in the other, you deal an additional 2 damage with that weapon.",0],["Great Weapon Fighting","When you roll a 1 or 2 on a damage die for an attack with a Two-Handed melee weapon, that die is rerolled once.",0],["Protection","When you have a Shield, impose Disadvantage on an enemy who attacks one of your allies when you are within 1.5 m. You must be able to see the enemy.",0]]},
+  {"name":"Fighting Style","owner":"Ranger","at":{"2":1},"options":[["Archery","You gain a +2 bonus to Attack Rolls you make with ranged Weapons.",0],["Defence","You gain a +1 bonus to Armour Class while wearing Armour.",0],["Duelling","When you are wielding a melee weapon that is not Two-Handed in one hand, and no weapon in the other, you deal an additional 2 damage with that weapon.",0],["Two-Weapon Fighting","When you make an offhand attack, you can add your Ability Score Modifier to the damage of the attack.",0]]},
+  {"name":"Fighting Style","owner":"College of Swords","at":{"3":1},"options":[["Duelling","When you are wielding a melee weapon that is not Two-Handed in one hand, and no weapon in the other, you deal an additional 2 damage with that weapon.",0],["Two-Weapon Fighting","When you make an offhand attack, you can add your Ability Score Modifier to the damage of the attack.",0]]},
+  {"name":"Fighting Style","owner":"Champion","at":{"10":1},"options":[["Archery","You gain a +2 bonus to Attack Rolls you make with ranged Weapons.",0],["Defence","You gain a +1 bonus to Armour Class while wearing Armour.",0],["Duelling","When you are wielding a melee weapon that is not Two-Handed in one hand, and no weapon in the other, you deal an additional 2 damage with that weapon.",0],["Great Weapon Fighting","When you roll a 1 or 2 on a damage die for an attack with a Two-Handed melee weapon, that die is rerolled once.",0],["Protection","When you have a Shield, impose Disadvantage on an enemy who attacks one of your allies when you are within 1.5 m. You must be able to see the enemy.",0],["Two-Weapon Fighting","When you make an offhand attack, you can add your Ability Score Modifier to the damage of the attack.",0]]},
+  {"name":"Favoured Enemy","owner":"Ranger","at":{"1":1,"6":1,"10":1},"options":[["Bounty Hunter","Gain Proficiency in Investigation. Creatures you hit with Ensnaring Strike (either ranged or melee) have Disadvantage on their Saving Throw.",0],["Keeper of the Veil","You specialize in hunting creatures from other planes of existence. You gain Proficiency in Arcana and can grant protection against aberrations, celestials, elementals, fey, fiends, and undead.",0],["Mage Breaker","You have a history of battling spellcasters. Gain Proficiency with Arcana and True Strike, which gives you Advantage on Attack Rolls against a creature.",0],["Ranger Knight","You have sworn to serve a crown or nation and seek to bring its foes to ruin. Gain Proficiency with History and Proficiency with Heavy Armour.",0],["Sanctified Stalker","You swore to hunt the enemies of a holy or druidic order. Gain Proficiency with Religion and the Sacred Flame Cantrip, which deals 1d8 Radiant damage.",0]]},
+  {"name":"Natural Explorer","owner":"Ranger","at":{"1":1,"6":1,"10":1},"options":[["Beast Tamer","You have cultivated a strong bond with animals. You can cast Find Familiar as a ritual.",0],["Urban Tracker","An expert at navigating the wild within the city, you gain Sleight of Hand Proficiency.",0],["Wasteland Wanderer: Cold","You have spent endless days surviving desolate tundras. Gain resistance to Cold damage, taking only half damage from it.",0],["Wasteland Wanderer: Fire","You have spent endless days surviving forbidding deserts. Gain resistance to Fire, taking only half damage from it.",0],["Wasteland Wanderer: Poison","You have spent endless days surviving fetid swamps. Gain resistance to Poison, taking only half damage from it.",0]]},
+  {"name":"Hunter's Prey","owner":"Hunter","at":{"3":1},"options":[["Colossus Slayer","Once per turn, your weapon attack deals an extra d8 1d8 damage if the target is below its Hit Point maximum.",0],["Giant Killer","If a Large or bigger creature attacks you, you can use your Reaction to make a melee attack.",0],["Horde Breaker","Target two creatures standing close to each other, attacking them in quick succession.",0]]},
+  {"name":"Defensive Tactics","owner":"Hunter","at":{"7":1},"options":[["Escape the Horde","Opportunity Attacks against you have Disadvantage.",0],["Steel Will","Advantage on Saving Throws against being Frightened_(Condition).",0],["Multiattack Defence","When an enemy attacks you, they suffer -4 penalty to additional Attack Rolls against you until start of their next turn.",0]]},
+  {"name":"Gathered Swarm","owner":"Swarmkeeper","at":{"3":1},"options":[["Cloud of Jellyfish","You gain a swarm of jellyfish that fights on your side. Once per round, the swarm can assist you in one of three ways after you attack an enemy: it can attack and deal additional Lightning damage, Shocked your enemy, or teleport you to a safer location.",0],["Flurry of Moths","You gain a swarm of moths that fights on your side. Once per round, the swarm can assist you in one of three ways after you attack an enemy: it can attack and deal additional Psychic damage, Blinded your enemy, or teleport you to a safer location.",0],["Legion of Bees","You gain a swarm of bees that fights on your side. Once per round, the swarm can assist you in one of three ways after you attack an enemy: it can attack and deal additional Piercing damage, push the enemy away from you, or teleport you to a safer location.",0]]},
+  {"name":"Eldritch Invocation","owner":"Warlock","at":{"2":2,"5":1,"7":1,"9":1,"12":1},"options":[["Agonising Blast","When you cast Eldritch Blast, add your Charisma modifier to the damage it deals, unless the modifier is negative.",2],["Armour of Shadows","You can cast Mage Armour on yourself at will, without expending a spell slot. Mage Armour increases your Armour Class when you are not wearing armour. It will still function with Clothing-type armours.",2],["Beast Speech","You can cast Speak with Animals on yourself at will, without expending a spell slot.",2],["Beguiling Influence","You invoke your patron's bewitching charm. You gain proficiency in the Deception and Persuasion skills.",2],["Book of Ancient Secrets","You can inscribe magical rituals in your Book of Shadows. Gain Ray of Sickness, Chromatic Orb, and Silence spells.",7],["Devil's Sight","You can see normally in darkness, both magical and non-magical, to a distance of 24 m.",2],["Dreadful Word","You can cast Confusion with a Warlock spell slot.",7],["Fiendish Vigour","You can cast False Life on yourself at will as a 1st-level spell, without expending a spell slot. False Life grants you 7 temporary hit points.",2],["Lifedrinker","Your melee attacks deal additional",12],["Mask of Many Faces","You can cast Disguise Self on yourself at will, without expending a spell slot.",2],["Minions of Chaos","You can cast Conjure Elemental with a Warlock spell slot.",9],["Mire the Mind","You can cast Slow with a Warlock spell slot.",5],["One with Shadows","When you are in an area of dim light or darkness, you can use your action to become invisible. Invisibility ends early if you move, attack, cast another spell, take an action, or take damage.",2],["Otherworldly Leap","You can cast Enhance Leap at will, without expending a spell slot.",9],["Repelling Blast","When you hit a creature with Eldritch Blast, you can push the creature up to 4.5 m away from you.",2],["Sign of Ill Omen","You can cast Bestow Curse with a Warlock spell slot.",5],["Sculptor of Flesh","You can cast Polymorph with a Warlock spell slot.",7],["Thief of Five Fates","You can cast Bane using a Warlock spell slot once per long rest. Bane targets up to 3 creatures (+1 creature per spell slot level above 1st). They receive a d4 1d4 penalty to attack rolls and Saving Throws.",2],["Whispers of the Grave","You can cast Speak with Dead at will, without expending a spell slot.",9]]},
+  {"name":"Pact Boon","owner":"Warlock","at":{"3":1},"options":[["Pact of the Blade"," You can Summon a pact weapon, or Bind the one you are wielding, making it magical. Pact weapons use the wielder's Spellcasting Ability Modifier instead of Strength or Dexterity.",0],["Pact of the Chain","Gain the service of a familiar, a fey spirit that takes a form you choose. This can be an animal, imp, or quasit.",0],["Pact of the Tome"," Your patron grants you a grimoire called 'The Book of Shadows', which allows you to cast Guidance, Vicious Mockery, and Thorn Whip.",0]]},
+  {"name":"Metamagic","owner":"Sorcerer","at":{"2":2,"3":1,"10":1},"options":[["Careful Spell","Allies automatically succeed Saving Throws against spells that require them.",2],["Distant Spell","Extends the range of a spell by 50%. Melee spells are increased to Range.",2],["Extended Spell","Double the duration of Conditions, summons, and surfaces caused by spells.",2],["Twinned Spell","Spells that only target 1 creature can target an additional creature.",2],["Heightened Spell","Targets of spells that require Saving Throws have Disadvantage on their first Saving Throw.",3],["Quickened Spell","Spells that take an Action take a Bonus Action instead.",3],["Subtle Spell","You can cast spells while Silenced.",3]]},
+  {"name":"Draconic Ancestry","owner":"Draconic Bloodline","at":{"1":1},"options":[["Red (Fire)","Fire is the damage type associated with your dragon ancestor.",0],["Black (Acid)","Acid is the damage type associated with your dragon ancestor.",0],["Blue (Lightning)","Lightning is the damage type associated with your dragon ancestor.",0],["White (Cold)","Cold is the damage type associated with your dragon ancestor.",0],["Green (Poison)","Poison is the damage type associated with your dragon ancestor.",0],["Gold (Fire)","Fire is the damage type associated with your dragon ancestor.",0],["Silver (Cold)","Cold is the damage type associated with your dragon ancestor.",0],["Bronze (Lightning)","Lightning is the damage type associated with your dragon ancestor.",0],["Copper (Acid)","Acid is the damage type associated with your dragon ancestor.",0],["Brass (Fire)","Fire is the damage type associated with your dragon ancestor.",0]]},
+  {"name":"Manoeuvre","owner":"Battle Master","at":{"3":3,"7":2,"10":2},"options":[["Commander's Strike","Expend one attack from your attack action and a bonus action to direct an ally to strike a foe. The ally uses their reaction to make a weapon attack on their turn.",0],["Disarming Attack","Spend a superiority die to make an attack that deals an additional 1d8 damage and possibly forces the target to drop the weapons they are holding.",0],["Distracting Strike","Distracted your target, giving your allies Advantage on their next Attack Roll against the target.",0],["Evasive Footwork","You can evade attacks by imposing Disadvantage on melee attacks against you for a round.",0],["Feinting Attack","Use both your action and bonus action on a turn to attack a target with Advantage and deal an additional 1d8 damage.",0],["Goading Attack","Deal an additional 1d8 and attempt to goad the target attacking you. Target receives Disadvantage on attacking any other creature.",0],["Manoeuvring Attack","Spend a superiority die to make an attack that deals an additional 1d8 damage. On a hit, select which friendly creature will gain half its movement speed. It will not provoke attacks of opportunity.",0],["Menacing Attack","Spend a superiority die to make an attack that deals an additional 1d8 damage and possibly Frightens the target.",0],["Precision Attack","Spend a Superiority Die and add its result to an Attack Roll.",0],["Pushing Attack","Spend a superiority die to make an attack that deals an additional 1d8 damage and possibly pushes the target back 4.5 m.",0],["Rally","Expend a superiority die to grant an ally 8 temporary hit points, bolstering their resolve.",0],["Riposte","When a hostile creature misses you with a melee attack, expend a superiority die to retaliate with a powerful attack that deals an additional 1d8 damage.",0],["Sweeping Attack","Swing your weapon in a rapid, sweeping arc to attack multiple enemies at once. Roll your superiority die for damage.",0],["Trip Attack","Spend a superiority die to make an attack that deals an additional 1d8 damage and possibly knocks the target Prone. The target must be Large or smaller.",0]]},
+  {"name":"Arcane Shot","owner":"Arcane Archer","at":{"3":3,"7":1,"10":1},"options":[["Banishing Arrow","Use Abjuration magic to potentially Banished your target to the Feywild.",0],["Beguiling Arrow","Use Enchantment magic to deal an additional 2d6 Psychic damage. Target must succeed a Saving Throw or become Charmed.",0],["Bursting Arrow","Use Evocation magic to make your arrow explode on impact and deal an additional 2d6 Force damage to targets within 5 m.",0],["Enfeebling Arrow","Use Necromatic magic to deal an additional 2d6 Necrotic damage. Target must succeed a Saving Throw or become Feeble.",0],["Grasping Arrow","Deal an additional 2d6 Poison damage. Affected entity's movement speed is reduced by 3 m and it will take 2d6 Slashing damage when it moves.",0],["Piercing Arrow","Use Transmutation magic to attack all those within the line of your shot. Each target must succeed a Saving Throw or be dealt an additional 1d6 Piercing damage.",0],["Seeking Arrow","Use Divination magic to make your arrow seek a target. The arrow deals an additional 1d6 Force damage and possibly applies Faerie Fire. This arrow always hits its target.",0],["Shadow Arrow","Use Illusion magic to deal an additional 2d6 Psychic damage. Target must succeed a Saving Throw or become Blinded.",0]]},
+  {"name":"Bonus Cantrip","owner":"Arcane Archer","at":{"3":1},"options":[["Guidance","The target gains d4 +1d4 bonus to Checks.",0],["Light","Infuse an object with an aura of light.",0],["True Strike","Gain Advantage on your next Attack Roll. This spell can be cast while you are Silenced.",0]]},
+  {"name":"Bestial Heart","owner":"Wildheart","at":{"3":1},"options":[["Bear Heart","While Raging, you can use Unrelenting Ferocity, and have Resistance to all damage except psychic damage.",0],["Eagle Heart","While Raging, you can use Diving Strike. Foes also have Disadvantage on Opportunity Attacks against you, and you can use Dash as a bonus action.",0],["Elk Heart","While Raging, you can use Primal Stampede, and your Movement Speed increases by 4.5 m.",0],["Tiger Heart","While Raging, you can use Tiger's Bloodlust, and your jump distance increases by 4.5 m.",0],["Wolf Heart","While Raging, you can use Inciting Howl, and your allies have Advantage on melee Attack Rolls against enemies within 2 m of you.",0]]},
+  {"name":"Animal Aspect","owner":"Wildheart","at":{"6":1,"10":1},"options":[["Bear","Your carrying capacity is doubled, and you have Advantage on Strength Checks.",0],["Chimpanzee","You gain Resistance to fall damage, and throwing Camp Supplies Blinded targets.",0],["Crocodile","Your movement speed increases by 3 m while standing in water-based surfaces. On slippery surfaces, you also have Advantage on Saving Throws against being knocked prone.",0],["Eagle","You see in the dark up to 12 m, and gain Advantage on Perception Checks.",0],["Elk","Grant yourself and nearby allies (18 m) +1.5 m permanent movement speed.",0],["Honey Badger","If you're Poisoned, Frightened or Charmed at the start of your turn, you have a 50% chance to begin Raging without expending a Rage Charge.",0],["Stallion","Dash grants you temp hp equal to twice your barbarian level.",0],["Tiger","You add an additional Strength modifier to Attack Rolls against Bleeding or Poisoned targets, and gain proficiency in Survival.",0],["Wolf","You and nearby allies (18 m) add your Dexterity modifier as a bonus to your Stealth Checks.",0],["Wolverine","When you attack a Bleeding or Poisoned target, you inflict Maimed on them.",0]]},
+  {"name":"Land","owner":"Circle of the Land","at":{"3":1,"5":1,"7":1,"9":1},"options":[["Arctic","Always prepared — level 3: Hold Person, Spike Growth; level 5: Sleet Storm, Haste; level 7: Conjure Minor Elemental, Ice Storm; level 9: Cone of Cold, Contagion",0],["Coast","Always prepared — level 3: Mirror Image, Misty Step; level 5: Sleet Storm, Call Lightning; level 7: Freedom of Movement, Confusion; level 9: Conjure Elemental, Greater Restoration",0],["Desert","Always prepared — level 3: Blur, Silence; level 5: Protection from Energy, Hypnotic Pattern; level 7: Blight, Wall of Fire; level 9: Wall of Stone, Insect Plague",0],["Forest","Always prepared — level 3: Barkskin, Hold Person; level 5: Call Lightning, Plant Growth; level 7: Conjure Minor Elemental, Grasping Vine; level 9: Mass Cure Wounds, Contagion",0],["Grassland","Always prepared — level 3: Invisibility, Pass Without Trace; level 5: Daylight, Haste; level 7: Freedom of Movement, Polymorph; level 9: Greater Restoration, Insect Plague",0],["Mountain","Always prepared — level 3: Mirror Image, Spike Growth; level 5: Lightning Bolt, Grant Flight; level 7: Stoneskin, Dominate Beast; level 9: Wall of Stone, Conjure Elemental",0],["Swamp","Always prepared — level 3: Melf's Acid Arrow, Darkness; level 5: Stinking Cloud, Vampiric Touch; level 7: Blight, Grasping Vine; level 9: Insect Plague, Cloudkill",0],["Underdark","Always prepared — level 3: Web, Misty Step; level 5: Gaseous Form, Stinking Cloud; level 7: Greater Invisibility, Dominate Beast; level 9: Contagion, Cloudkill",0]],"repeat":true},
+  {"name":"Bonus Cantrip","owner":"Circle of the Land","at":{"2":1},"options":[["Guidance","The target gains d4 +1d4 bonus to Checks.",0],["Poison Spray","Project a puff of noxious gas, dealing 1d12 Poison to a target.",0],["Produce Flame","A flame in your hand sheds a light in a 9 m radius and deals 1d8 Fire damage when thrown. Throwing the flame immediately after you conjure it does not cost an Action. Extinguishing or throwing it on subsequent turns costs an action. The throw has a range of 9 m.",0],["Resistance","Make a target more resistant to spell effects and conditions: it receives a d4 +1d4 bonus to Saving Throws.",0],["Shillelagh","Quarterstaff or Club Required. Your staff or club becomes magical: it deals d8 1d8 + Spellcasting modifier Bludgeoning damage, and uses your Spellcasting modifier for Attack Rolls.",0],["Thorn Whip","Pulls the creature 3 m closer to you.",0]]},
+  {"name":"Elemental Discipline","owner":"Way of the Four Elements","at":{"3":3,"6":1,"9":1,"11":1},"options":[["Blade of Rime","Creates an ice surface on impact",3],["Chill of the Mountain","Reduces the target's movement speed by 3 m.",3],["Fangs of the Fire Snake","Your next melee attacks this turn deal an additional 1d4 Fire damage.",3],["Fist of Four Thunders","Pushes away all creatures and objects on a failed STR Saving Throw",3],["Fist of Unbroken Air","Push the target back 6 m and knock it Prone.",3],["Rush of the Gale Spirits","Summon a strong wind that clears all clouds and pushes creatures back 5 m, forcing them Off Balance.",3],["Shaping of the Ice","Create a climbable ice cube.",3],["Sphere of Elemental Balance","Hurl a sphere of energy. It deals 3d8 Thunder damage, or 2d8 Acid, Cold, Fire, Lightning or Poison damage and creates a surface.",3],["Sweeping Cinder Strike","Expel fire from your outstretched hands and ignite anything flammable.",3],["Touch of the Storm","The target cannot use reactions.",3],["Water Whip","Possibly pulls a target range toward you or knocks it Prone.",3],["Clench of the North Wind","Hold a humanoid enemy still. They can't move, act or react. Attacks from within radius are always critical hits.",6],["Embrace of the Inferno","Expel the fire burning through your veins as 3 flaming rays. Each ray deals 2d6.",6],["Gong of the Summit","Damages all nearby creatures and objects. Creatures made of inorganic material such as stone have Disadvantage on their Saving Throw.",6],["Flames of the Phoenix","Shoot a bright flame from your fingers that explodes upon contact, torching everything in the vicinity",11],["Mist Stance","Transform into a tiny gas cloud. It can't fall, and fits through small openings. It is very hard to damage. The cloud has Advantage on Constitution, Dexterity, and Strength Saving Throws.",11],["Ride the Wind","Gain the ability to Flight.",11]]},
+  {"name":"Bonus Cantrip","owner":"Death Domain","at":{"1":1},"options":[["Bone Chill","Prevent the target from healing until your next turn. The target cannot help Downed characters. An undead target receives Disadvantage on Attack Rolls.",0],["Bursting Sinew","Explode a corpse, causing it to impale those around it.",0],["Toll the Dead","Ring the bell of impending doom. If the target is at full health, you deal 1d8 Necrotic damage instead.",0]]},
+  {"name":"Bonus Cantrip","owner":"Nature Domain","at":{"1":1},"options":[["Poison Spray","Project a puff of noxious gas, dealing 1d12 Poison to a target.",0],["Produce Flame","A flame in your hand sheds a light in a 9 m radius and deals 1d8 Fire damage when thrown. Throwing the flame immediately after you conjure it does not cost an Action. Extinguishing or throwing it on subsequent turns costs an action. The throw has a range of 9 m.",0],["Shillelagh","Quarterstaff or Club Required. Your staff or club becomes magical: it deals d8 1d8 + Spellcasting modifier Bludgeoning damage, and uses your Spellcasting modifier for Attack Rolls.",0],["Thorn Whip","Pulls the creature 3 m closer to you.",0]]},
+  {"name":"Skills","owner":"Nature Domain","at":{"1":1},"options":[["Animal Handling","Animal Handling is a Wisdom-based skill. The higher a creature's Wisdom Score, the more likely they will succeed on Animal Handling Checks.",0],["Nature","Nature is an Intelligence-based skill. The higher a creature's Intelligence Score, the more likely they will succeed on Nature Checks to recognize plants and natural creatures.",0],["Survival","Survival is a Wisdom-based skill. The higher a creature's Wisdom Score, the more likely they will succeed on Survival Checks pertaining to hunting and the wilderness.",0]],"join":", "},
+  {"name":"Expertise","owner":"Knowledge Domain","at":{"1":2},"options":[["Arcana","Arcana is an Intelligence-based skill. It represents an academic understanding of arcane magic and the Weave, but it is not required to cast spells. The higher a creature's Intelligence Score, the more likely they will succeed on Arcana Checks.",0],["History","History is an Intelligence-based skill. The higher a creature's Intelligence Score, the more likely they will succeed on History Checks to recall history on a particular topic.",0],["Nature","Nature is an Intelligence-based skill. The higher a creature's Intelligence Score, the more likely they will succeed on Nature Checks to recognize plants and natural creatures.",0],["Religion","Religion is an Intelligence-based skill. The higher a creature's Intelligence Score, the more likely they will succeed on Religion Checks to recognize religious details.",0]],"join":" + "},
+  {"name":"Skills","owner":"College of Lore","at":{"3":3},"options":[["Athletics","",0],["Acrobatics","",0],["Sleight of Hand","",0],["Stealth","",0],["Arcana","Arcana is an Intelligence-based skill. It represents an academic understanding of arcane magic and the Weave, but it is not required to cast spells. The higher a creature's Intelligence Score, the more likely they will succeed on Arcana Checks.",0],["History","History is an Intelligence-based skill. The higher a creature's Intelligence Score, the more likely they will succeed on History Checks to recall history on a particular topic.",0],["Investigation","",0],["Nature","Nature is an Intelligence-based skill. The higher a creature's Intelligence Score, the more likely they will succeed on Nature Checks to recognize plants and natural creatures.",0],["Religion","Religion is an Intelligence-based skill. The higher a creature's Intelligence Score, the more likely they will succeed on Religion Checks to recognize religious details.",0],["Animal Handling","Animal Handling is a Wisdom-based skill. The higher a creature's Wisdom Score, the more likely they will succeed on Animal Handling Checks.",0],["Insight","",0],["Medicine","",0],["Perception","",0],["Survival","Survival is a Wisdom-based skill. The higher a creature's Wisdom Score, the more likely they will succeed on Survival Checks pertaining to hunting and the wilderness.",0],["Deception","",0],["Intimidation","",0],["Performance","",0],["Persuasion","",0]],"join":", "}
+];
+window.BG3_FEAT_OPTIONS = {"Elemental Adept":["Acid","Cold","Fire","Lightning","Thunder"],"Spell Sniper":["Bone Chill","Eldritch Blast","Fire Bolt","Ray of Frost","Shocking Grasp","Thorn Whip"]};
+window.BG3_PERMANENT = [
+  {"n":"Auntie Ethel's Hair","a":1,"x":"gain +1 to an ability score of choice. Can be raised above 20. ","h":" Defeat Auntie Ethel during Save Mayrina and take the hag's deal (or force one upon her) to spare Ethel's life. "},
+  {"n":"Awakened","a":1,"x":"use all illithid powers as a bonus action. ","h":" Succeed at all three saving throws with the Zaith'isk in the infirmary of Crèche Y'llek, causing it to explode. The saves are significantly easier if the player character is in the device rather than Lae'zel. Failing any of the saving throws for the Zaith'is…"},
+  {"n":"BOOOAL's Benediction","a":1,"x":"gain advantage on attack rolls against Bleeding targets. ","h":" Sacrifice a companion to BOOOAL in The Festering Cove (hirelings cannot be sacrificed). The effect is granted to all present party members, but is removed if all Kuo-toa in the Cove are killed. Alternatively, a party member can pickpocket the Sickle of BOOOA…"},
+  {"n":"Brand of the Absolute","a":1,"x":"allows the benefits from Absolute equipment and unlocks unique dialogue options when speaking to followers of the Absolute. ","h":" Agree to let a character be branded by Gut in the Goblin Camp. Multiple characters can receive the brand after the first has been branded by Gut and then speaking to Warlock Greez. "},
+  {"n":"Find Familiar: Scratch","a":1,"x":"gain the ability to summon Scratch as a familiar while outside of camp. While summoned, Scratch is able to uncover buried treasure. ","h":" Leave Scratch with the scent of the interacting party member so he joins them at camp. Later when he offers a ball, throw it to play fetch with him. Having Scratch's Ball in a party member's inventory allows use of Find Familiar: Scratch. "},
+  {"n":"Find Familiar: Cheeky Quasit","a":1,"x":"summon Shovel (or Basket, or Fork), the Cheeky Quasit. ","h":" Find the unique Scroll of Summon Quasit in one of the coffins of the hidden area in the Apothecary's Cellar beneath the Blighted Village. Wizards can transcribe this spell, while other spellcasting classes (Sorcerer, Wizard, or Warlock) may acquire the abili…"},
+  {"n":"Instrument proficiency","a":1,"x":"know how to play a variety of musical instruments and be able to entertain a crowd with them, including for small amounts of gold. ","h":" Pass one of two Charisma (Performance) checks while helping Alfira with her song in the Emerald Grove. As Bards already have this proficiency, the meeting with Alfira provides no additional benefit to them. "},
+  {"n":"Loviatar's Love","a":1,"x":"gain a +2 bonus to attack rolls and Wisdom saving throws if the party member with this passive has 30% Hit Points or less. ","h":" Submit to Abdirak and put on a good performance for him in the Shattered Sanctum. Note: This condition is specifically coded to be lost upon character death. "},
+  {"n":"Necromancy of Thay","a":1,"x":"gain the passive feature Forbidden Knowledge, which grants a +1 to Wisdom saving throws and ability checks. The character with this bonus may also cast Speak with Dead once per long rest. ","h":" Turn all three pages while reading Necromancy of Thay, a book found in a hidden area in the Apothecary's Cellar beneath the Blighted Village. Turning just the first page grants Speak with Dead. The reader need not succeed any of the saving throws associated…"},
+  {"n":"Paid the Price","a":1,"x":"gain a +1 bonus to Intimidation checks, but also disadvantage on Perception checks. Additionally, gain disadvantage when attacking Hags. This permanently changes the appearance of the chosen's right or left eye. It cannot be reversed using the Magic Mirror, and is mutually exclusive with Volo’s Ers…","h":" Accept Auntie Ethel's deal to remove the parasite at the Riverside Teahouse. "},
+  {"n":"Survival Instinct","a":1,"x":"gain the additional illithid power Survival Instinct, which allows the user to infuse a creature with psionic force, healing them if they reach 0 hit points. ","h":" Complete the quest Help Omeluum investigate the parasite with Omeluum in the Underdark. This is a unique illithid power and cannot be obtained through regular illithid power progression. "},
+  {"n":"Volo's Ersatz Eye","a":1,"x":"gain a permanent See Invisibility effect. This permanently changes the appearance of the chosen's right eye most closely to \"Blue 3\". It cannot be reversed using the Magic Mirror and is mutually exclusive with Paid the Price. ","h":" Rescue Volo from the Goblin Camp. When the character speaks to him in the campsite afterwards, they must tell him about their Tadpole infection and complete his experimental 'surgery'. "},
+  {"n":"Arabella's Shadow Entangle","a":2,"x":"gain the ability to entangle an Undead or Shadow Creature. ","h":" Tell Arabella about her parents' fate during the quest Find Arabella's Parents. "},
+  {"n":"Improved Bardic Inspiration","a":2,"x":"gain a charge of Bardic Inspiration that is stronger than usual (1d12). Usable once per long rest, and does not consume Bardic Inspiration charges. This bonus does not strengthen existing Bardic Inspiration uses (if any) they remain at the appropriate strength for the character's Bard level. ","h":" At the end of Act Two, if Alfira is still alive, she moves to Moonrise Towers. Talking with her reveals that she wants to use music to cheer up the tiefling children in the room with her. If the active character is a Bard, they can speak with her again to ga…"},
+  {"n":"Githzerai Mind Barrier","a":2,"x":"gain advantage on Intelligence saving throws. ","h":" Insert the Waking Mind (found at 750 after the brain connect puzzle in the Mind Flayer Colony) into the nearby Mind-Archive Interface. Speak to the Slack-Skinned Head, and agree to purge or consume its mind. Note: This condition is lost upon character death…"},
+  {"n":"Consumed Shadow Weave","a":2,"x":"Gale gains an additional level three spell slot, separate from normal spell slots. Recharges per long rest. ","h":" Only available to Gale while playing his origin, not as a companion. Consume the Shadow Weave from the corpse of Gerringothe Thorm, Malus Thorm or Thisobald Thorm after slaying them in combat. Cleansing the Shadow Weave grants Mystra's Blessing until Long re…"},
+  {"n":"Potion of Everlasting Vigour","a":2,"x":"gain +2 Strength. Can be used to raise Strength above 20. This remains after respeccing the character. ","h":" Convince Astarion to bite Araj Oblodra in Moonrise Towers. "},
+  {"n":"Slayer Form","a":2,"x":"gain the ability to transform into the Slayer once per long rest. ","h":" Only available while playing the Dark Urge Origin. Kill either Isobel, their lover, or the companion with the highest approval toward them, as part of The Urge quest. Alternatively, it can be acquired alongside the one-time-use spell Power Word Kill by agree…"},
+  {"n":"Summon Us","a":2,"x":"summon Us, an intellect devourer, as a familiar. ","h":" Free Us and prevent it from dying on the Nautiloid during the Prologue, then free it from its cage in the Mind Flayer Colony towards the end of Act Two. Pacifying Us on the Nautiloid via skill checks will cause the resulting debuffs to remain with it the res…"},
+  {"n":"Anointed in Splendour","a":3,"x":"gain +2 bonus to all Saving Throws. ","h":" Offer enough gold to one of the deities in the Stormshore Tabernacle to ask for a blessing. The exact amount of gold required depends on the character's level and the difficulty settings. This can be done for every character, but an offering must be made for…"},
+  {"n":"Partial Ceremorphosis","a":3,"x":"gain access to tier 3 illithid powers, and automatically unlock all tier 1 illithid powers and the tier 3 illithid power Fly. This causes an irrevocable cosmetic change in the character. Any tadpoles used to obtain tier 1 illithid powers prior to this point are refunded if this bonus is acquired. ","h":" Consume the Astral-Touched Tadpole offered by the Emperor. "},
+  {"n":"Danse Macabre","a":3,"x":"create 4 ghouls that fight alongside the character. This passive comes with a curse which lowers the character's Constitution by 5, but can be removed with the Remove Curse spell while keeping Danse Macabre. ","h":" Read The Tharchiate Codex (found at the end of the Vault puzzle in Ramazith's Tower), then read the last page of the Necromancy of Thay (from Act 1) and pass a DC 20 Wisdom Saving Throw. "},
+  {"n":"Tasha's Hideous Laughter/Monk's Hideous Laughter","a":3,"x":"gain the ability to cast Tasha's Hideous Laughter once per long rest. ","h":" Carry the Sentient Amulet from Grymforge to a casket under the Open Hand Temple in Wyrm's Crossing and complete Help the Cursed Monk. The party member must choose to accept the curse themself. Possible wisdom loss if the character fails Constitution/Wisdom s…"},
+  {"n":"Mirror of Loss","a":3,"x":"gain +2 to a chosen ability score (and optionally +1 to Charisma). ","h":" The interacting character must successfully offer a prayer (Religion Check) to the Mirror of Loss in the House of Grief, then sacrifice one or more of their ability scores. It is possible to receive the option to choose a permanent +2 bonus to any ability, o…"},
+  {"n":"Slayer Knowledge","a":3,"x":"gain advantage against Slayer abilities. When playing as the Dark Urge with the Slayer form unlocked, it also grants the Piercing Growl skill. ","h":" Rescue Volo while he is tied up to explosives near the Steel Watch Foundry. Talk to him after the fight that ensues he then returns to camp. Back at camp, talk to him again. He then explains that he was targeted by the Lord of Murder Bhaal and his Chosen. Th…"},
+  {"n":"Sweet Stone Features","a":3,"x":"gain a +1d4 bonus to attack rolls and saving throws. ","h":" Pay Boney in the Circus of the Last Days 5000 gold for Stoney to construct a statue of the player character or another party member. The effect goes to whomever is depicted. Stony can only construct one statue for the party. The effect begins after a long re…"},
+  {"n":"The Tharchiate Codex: Blessing","a":3,"x":"gain 20 temporary hit points after a Long Rest. Remains active if The Tharchiate Codex is also used to obtain Danse Macabre. ","h":" Read The Tharchiate Codex (found at the end of the Vault puzzle in Ramazith's Tower). Only available to the first character who reads the Codex. "},
+  {"n":"Unstable Blood","a":3,"x":"the player character's blood is now highly flammable if the bleed and creating a blood surface, it explodes upon contact with fire. ","h":" Give the interacting party member's blood to Araj Oblodra in Moonrise Towers in Act 2, then meet her again east of The Blushing Mermaid in Act 3 and help her again. She then gives a potion that grants this feature after it is consumed. "},
+  {"n":"Vampire","a":3,"x":" Accepting a romanced Vampire Ascendant Astarion results in the gain of the class action Bite (Vampire Spawn) as well as access to the buff from Circle of Bones. ","h":" Only available to certain characters who accept the offer to be turned into a vampire. Allow romanced Astarion to complete the ascension ritual and comply with the request to be turned into a vampire. "},
+  {"n":"Vampire Ascendant","a":3,"x":"Astarion gains class actions Ascendant Bite and Misty Escape (Vampire Ascendant), as well as an extra Necrotic necrotic damage on his weapon and unarmed attacks. ","h":" Only available to Astarion (companion or origin). Defeat Cazador without killing any of his spawn (or at most one, in which case Cazador can take their place) while having Astarion in your party. Afterward, allow Astarion to complete the ascension ritual. "}
 ];
 </script>
   <script>
@@ -7127,7 +7274,7 @@ window.BG3_FEATURES = {
   "Cutting Words":"Use your wit to distract a creature and sap its confidence.",
   "Dampen Elements":"When you or an ally gets hit with Acid, Cold, Fire, Lightning, or Thunder damage, you can use your reaction to halve the attack's damage.",
   "Danger Sense":"You sense when things aren't as they should be. You have Advantage on Dexterity Saving Throws, such as against traps, spells, and surfaces. To gain this benefit, you can't be Blinded or Incapacitated.",
-  "Dark One's Blessing":"Whenever you reduce a hostile creature to 0 Hit Points, this gift from your patron grants you Charisma modifier + Warlock level.",
+  "Dark One's Blessing":"Whenever you reduce a hostile creature to 0 Hit Points, this gift from your patron grants you Charisma modifier + Warlock level temporary hit points.",
   "Dark One's Own Luck":"Call on your patron to change your fate and add a d101d10 to an D20.png Ability Check.",
   "Darkness":"Create a cloud of magical darkness that Heavily Obscured and inflicts Blinded to creatures within. Creatures cannot make ranged attacks into or out of it.",
   "Daylight":"Enchant an item to shine like the sun or summon a sphere of sunlight that dispels all darkness around it. Items can only be enchanted with Daylight for 20 turns.",
@@ -7189,7 +7336,7 @@ window.BG3_FEATURES = {
   "Eyes of the Dark":"You can see in the dark up to 24 m.",
   "Eyes of the Dark: Darkness":"Create a dark shroud that Heavily Obscures and Blinds creatures within. Creatures cannot make ranged attacks into or out of it. The caster can see normally in darkness, both magical and non-magical, to a distance of 25 m.",
   "Faerie Fire":"All targets within the light turn visible, and Attack Rolls against them have Advantage.",
-  "False Life":"Bolster yourself with a necromantic facsimile of life to gain 7.",
+  "False Life":"Bolster yourself with a necromantic facsimile of life to gain 7 temporary hit points.",
   "Fancy Footwork":"If you make a melee attack against a target, that target can't make Opportunity Attacks against you for the rest of your turn.",
   "Fast Hands":"You gain an extra Bonus Action, which you can use with any of your existing Bonus Actions.",
   "Fast Movement":"Your Movement Speed increases by 3 m while not wearing Heavy Armour.",
@@ -7296,7 +7443,7 @@ window.BG3_FEATURES = {
   "Manifestation of Mind":"Your hands sap the ki from your enemies' bodies. Your unarmed attacks deal an additional 1d4 + Wisdom Modifier Psychic damage. Can't be used at the same time as Manifestation of Body or Manifestation of Soul.",
   "Manifestation of Soul":"Your hands sap the ki from your enemies' bodies. Your unarmed attacks deal an additional 1d4 + Wisdom Modifier Radiant damage. Can't be used at the same time as Manifestation of Body or Manifestation of Mind.",
   "Manoeuvres":"Manoeuvres are a set of passive features available to Battle Master Fighter at Level 3 or those who have taken the Martial Adept feat. They are powerful attacks that use Superiority Die, a resource that recovers on a Short Rest or Long Rest.",
-  "Mantle of Inspiration":"Imbue 2 allies with your vigour and grant them 5. If they're hit with a melee attack, the attacker becomes Charmed.",
+  "Mantle of Inspiration":"Imbue 2 allies with your vigour and grant them 5 temporary hit points. If they're hit with a melee attack, the attacker becomes Charmed.",
   "Mantle of Majesty: Command":"Command a creature to flee, move closer, freeze, drop to the ground or drop its weapon. Targets that are Charmed automatically fail their Saving Throw.",
   "Martial Arts: Bonus Unarmed Strike":"After making an attack with a melee Monk weapon or while unarmed, you can make another unarmed attack as a bonus action.",
   "Martial Arts: Deft Strikes":"Attacks with Monk Weapons and unarmed attacks deal 1d4 Bludgeoning damage, unless their normal damage is higher.",
@@ -7419,7 +7566,7 @@ window.BG3_FEATURES = {
   "Stunning Strike (Unarmed)":"Spend a Ki Point to deal normal unarmed damage and possibly Stunned the target.",
   "Superior Darkvision":"Can see in the dark up to 24 m.",
   "Supreme Sneak":"Blend into the environment so completely that you become Invisible.",
-  "Symbiotic Entity":"Gain 4 per Druid level and deal an additional 1d6 Necrotic damage with weapon or unarmed attacks while you have them. Cast Halo of Spores with double damage.",
+  "Symbiotic Entity":"Gain 4 temporary hit points per Druid level and deal an additional 1d6 Necrotic damage with weapon or unarmed attacks while you have them. Cast Halo of Spores with double damage.",
   "Tasha's Hideous Laughter":"Leave a creature Prone with laughter, without the ability to get up.",
   "Telekinesis":"Throw a creature or object up to 18 m with a thought. Once per turn, you can use Telekinesis again without expending a Spell Slot. Heavier items deal more damage.",
   "Tempestuous Magic":"After you cast a Level 1 Spell or higher you can Tempestuous Magic: Flight as a Bonus Action up to 9 m until the end of your turn without receiving Opportunity Attacks.",
@@ -7499,13 +7646,16 @@ window.BG3_IMAGES_LOCAL = false;
 // The scripts are plain (not modules) so the planner also runs from a file opened directly; they share the global scope.
 'use strict';
 
-const APP_VERSION = '1.1';
+const APP_VERSION = '1.2';
 const STORE_KEY = 'bg3planner.v1';
 const PRESETS = window.BG3_PRESETS || [];
 const I18N = window.BG3_I18N || {};
 const ITEMS = window.BG3_ITEMS || [];
 const SPELLS = window.BG3_SPELLS || [];
 const CONSUMABLES = window.BG3_CONSUMABLES || [];
+const CHOICES = window.BG3_CHOICES || [];
+const FEAT_OPTIONS = window.BG3_FEAT_OPTIONS || {};
+const PERMANENT = window.BG3_PERMANENT || [];
 const DATA = window.BG3_DATA || { races: {}, subraces: {}, backgrounds: {}, origins: {}, classes: {} };
 
 // UI text is written in English and passed through t(); other languages live in i18n.js.
@@ -7629,12 +7779,16 @@ function blankBuild() {
     source: '',
     credit: '',
     summary: '',
-    creation: { origin: '', race: '', subrace: '', background: '', skills: '', abilities: { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 }, plus2: '', plus1: '', extra: { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 } },
+    creation: { origin: '', race: '', subrace: '', background: '', skills: '', cantrip: '', abilities: { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 }, plus2: '', plus1: '', extra: { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 } },
     levels: Array.from({ length: 12 }, () => ({ cls: '', sub: '', picks: [] })),
     gear: Object.fromEntries(ACTS.map(([k]) => [k, blankAct()])),
     setup: [],
     consumables: [],
     elixir: '',
+    // permanent bonuses the build plans to get, as {name: { on, ab (the ability it was put on), extra, got }}
+    permanent: {},
+    // the level the character is at in the playthrough; 0 means "show the finished build"
+    current: 0,
     variants: '',
     notes: '',
   };
@@ -7678,6 +7832,10 @@ function normalizeBuild(src) {
   ['setup', 'consumables'].forEach((k) => {
     b[k] = Array.isArray(s[k]) ? s[k].map((x) => ({ name: x.name || '', note: x.note || '' })) : [];
   });
+  if (s.permanent && typeof s.permanent === 'object') {
+    Object.keys(s.permanent).forEach((k) => { const v = s.permanent[k]; if (v && v.on) b.permanent[k] = { on: true, ab: v.ab || '', extra: !!v.extra, got: !!v.got }; });
+  }
+  b.current = Math.max(0, Math.min(12, Number(s.current) || 0));
   // The elixir the build keeps active. Builds saved before this field existed take the strongest
   // ability elixir from their consumables list, which is what those builds were planned around.
   if (typeof s.elixir === 'string') b.elixir = s.elixir;
@@ -7878,6 +8036,7 @@ function buildEditor(b) {
         ${selectField(t('Subrace'), 'creation.subrace', c.subrace, subs, subs.length ? choose : t('No subrace'), subs.length || c.subrace ? '' : 'disabled')}
         ${selectField(t('Background'), 'creation.background', c.background, Object.keys(BACKGROUNDS).map((k) => [k, k === 'Haunted One' ? t('Haunted One (Dark Urge only)') : k]), choose, 'data-rerender')}
       </div>
+      ${raceCantrips(b).length ? `<div class="grid g4">${selectField(t('Racial cantrip'), 'creation.cantrip', c.cantrip, raceCantrips(b), choose, 'data-rerender')}</div>` : ''}
       ${creationInfo(b)}
       <h3 class="group">${t('Ability scores')}</h3>
       <div class="abils">${ABILS.map(([ab, short, name]) => abilCard(b, ab, short, name)).join('')}</div>
@@ -7894,6 +8053,8 @@ function buildEditor(b) {
     </section>
 
     ${statsCard(b)}
+
+    ${permanentCard(b)}
 
     <section class="card">
       <h2>${t('Gear by act')}</h2>
@@ -8186,6 +8347,7 @@ function renderParty() {
       ${checklist(active, act)}
     </section>
 
+    ${partyNumbers(members)}
     ${partyRoute(members)}
     ${partySkills(members)}
   </div>`;
@@ -8416,7 +8578,7 @@ function suggest(el) {
 // ---------- PDF sheet ----------
 function sheetHtml(b) {
   const c = b.creation;
-  const meta = [[t('Origin'), c.origin], [t('Race'), raceText(c)], [t('Background'), c.background], [t('Skills'), c.skills],
+  const meta = [[t('Origin'), c.origin], [t('Race'), raceText(c)], [t('Background'), c.background], [t('Skills'), c.skills], [t('Racial cantrip'), c.cantrip || ''],
     [t('From background'), (BACKGROUNDS[c.background] || []).join(', ')], [t('Party role'), b.role]]
     .filter((x) => String(x[1]).trim())
     .map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('');
@@ -8436,6 +8598,8 @@ function sheetHtml(b) {
         ...ACTS.map(([k, l]) => [t('AC · {act}', { act: t(l) }), fin.ac[k]]), [t('Abilities'), ABILS.map(([ab, short]) => fin.scores[ab] + ' ' + short).join(' · ')],
         [t('Saving throws'), fin.saves.map((k) => k.short + ' ' + signed(k.bonus) + (k.proficient ? '●' : '')).join(' · ')],
         ...(b.elixir ? [[t('Elixir kept active'), esc(b.elixir)]] : []),
+        ...(PERMANENT.some((p) => (b.permanent || {})[p.n]) ? [[t('Permanent bonuses'), PERMANENT.filter((p) => (b.permanent || {})[p.n]).map((p) => esc(p.n)
+          + (b.permanent[p.n].ab ? ' (' + abilityShort(b.permanent[p.n].ab) + ')' : '') + (b.permanent[p.n].got ? ' ✓' : '')).join(' · ')]] : []),
         ...fin.attacks.rows.map((r) => [esc(r.name), t('Attack') + ' ' + signedParts(r.attackTotal, r.attack) + ' · ' + t('Damage') + ' ' + esc(r.dice) + (r.damageTotal ? ' ' + (r.damageTotal > 0 ? '+ ' : '− ') + Math.abs(r.damageTotal) : '') + ' ' + esc(r.type)]),
         ...fin.casting.map((c) => [esc(c.label) + ' (' + abilityShort(c.ability) + ')', t('Spell save DC') + ' ' + c.dc + ' · ' + t('Spell attack') + ' ' + signed(c.attack)]),
         ...(fin.slots.length ? [[t('Spell slots'), fin.slots.map((n, i) => t('Level {n}', { n: i + 1 }) + ' ×' + n).join(' · ')]] : []),
@@ -8578,7 +8742,7 @@ function itemProfGrant(it) {
 const canOffHand = (it, b) => it.s === 'shield' || (it.w !== 'two' && ((it.pp || []).includes('Light') || b.levels.some((l) => l.picks.some((p) => /dual wielder/i.test(p)))));
 // Everything the build is proficient with, as a Set of armour categories, weapon categories and weapon types.
 // With an act, what the gear of that act grants is included too.
-function proficiencies(b, act) {
+function proficiencies(b, act, swap) {
   const set = new Set();
   const add = (list) => (list || []).forEach((x) => set.add(x));
   const first = (b.levels.find((l) => l.cls) || {}).cls;
@@ -8598,7 +8762,9 @@ function proficiencies(b, act) {
   });
   add((DATA.races[b.creation.race] || {}).prof);
   add((DATA.subraces[b.creation.subrace] || {}).prof);
-  if (act) Object.values(wornItems(b, act)).forEach((it) => add((itemProfGrant(it) || {}).types));
+  if (act) Object.values(wornItems(b, act, swap)).forEach((it) => add((itemProfGrant(it) || {}).types));
+  // options that grant armour by their own text ("Proficiency with Heavy Armour" of the Ranger Knight)
+  chosenOptions(b).forEach(([, text]) => [LIGHT, MEDIUM, HEAVY, SHIELDS].forEach((x) => { if (new RegExp('proficien[^.]*' + x, 'i').test(text)) set.add(x); }));
   return set;
 }
 const isWeapon = (it) => it.s === 'melee' || it.s === 'ranged';
@@ -8648,16 +8814,23 @@ function pickerList() {
   const ranked = picker.mode === 'all' ? null : recommend(curBuild(), picker.slot, picker.act, picker.mode, all);
   const list = ranked ? ranked.map((r) => r.it) : all;
   const why = ranked ? new Map(ranked.map((r) => [r.it, r])) : null;
+  // every row says what the item changes against what is in the slot now
+  const cmp = recommendBase(curBuild(), picker.act);
+  const current = wornItems(curBuild(), picker.act)[picker.slot];
+  const versus = (it) => (it === current ? '' : deltaText(why && why.get(it) ? why.get(it).delta : gearDelta(curBuild(), picker.act, picker.slot, it, cmp.base, cmp.p.style, cmp.p.level)));
   const rows = list.slice(0, PICKER_MAX).map((it, i) => {
     const ok = canUse(it, picker.prof);
     const where = [it.a ? t('Act {n}', { n: it.a }) : t('Any act'), [it.l, it.h].filter(Boolean).join(' — ')].filter(Boolean).join(' · ');
     const effect = (it.ps || []).map((p) => p[1] || p[0]).join(' ') || it.x || '';
     const r = why && why.get(it);
     const who = picker.taken[norm(it.n)];
+    if (!picker.versus.has(it)) picker.versus.set(it, versus(it));
+    const vs = picker.versus.get(it);
     return `<button class="pick-row r-${it.r}${ok ? '' : ' no'}" data-act="picker-choose" data-n="${esc(it.n)}">
       ${pic(it.i, 'pic small')}<b>${r ? `<i class="rank">${i + 1}</i>` : ''}${esc(it.n)}</b><span>${esc([it.t, it.d].filter(Boolean).join(' · '))}${ok ? '' : ` · <em>${t('not proficient')}</em>`}${
         who ? ` · <em>${t('worn by {who}', { who: esc(who) })}</em>` : ''}</span>
       ${r ? `<small class="why">${r.reasons.map(esc).join(' · ')}</small>` : ''}
+      ${it === current ? `<small class="delta">${t('in this slot now')}</small>` : vs ? `<small class="delta">${current ? t('Against {x}: {d}', { x: esc(current.n), d: esc(vs) }) : t('With it on: {d}', { d: esc(vs) })}</small>` : ''}
       ${effect ? `<small class="fx">${esc(effect)}</small>` : ''}<small>${esc(where)}</small></button>`;
   }).join('');
   $('#picker-count').textContent = t('{n} items', { n: list.length }) + (list.length > PICKER_MAX ? ' · ' + t('showing the first {n}, type to narrow it down', { n: PICKER_MAX }) : '');
@@ -8666,7 +8839,7 @@ function pickerList() {
 }
 function openPicker(path, slot) {
   const b = curBuild();
-  picker = { path, slot, act: state.ui.act, q: '', type: '', usable: true, byAct: true, mode: 'all', prof: proficiencies(b, state.ui.act), taken: partyTaken(b, state.ui.act) };
+  picker = { path, slot, act: state.ui.act, q: '', type: '', usable: true, byAct: true, mode: 'all', prof: proficiencies(b, state.ui.act), taken: partyTaken(b, state.ui.act), versus: new Map() };
   const kinds = SLOT_KINDS[slot] || [];
   const types = [...new Set(ITEMS.filter((it) => kinds.includes(it.s)).map((it) => it.t))].sort();
   const actLabel = t(ACTS.find(([k]) => k === picker.act)[1]);
@@ -9315,6 +9488,9 @@ function levelNumbers(info) {
 function levelRows(b) {
   const info = levelInfo(b);
   const seen = {};
+  const pending = {};  // per class: the choices still short of what the class should have made
+  Object.keys(classLevels(b)).forEach((cls) => { pending[cls] = classChoices(b, cls).filter((g) => chosenOf(b, cls, g).length < g.need).map((g) => g.name); });
+  const current = b.current && b.current < charLevel(b) ? b.current : 0;
   return b.levels.map((l, i) => {
     const x = info[i];
     const firstOfClass = l.cls && !seen[l.cls];
@@ -9331,8 +9507,9 @@ function levelRows(b) {
         l.sub && !subs.includes(l.sub) ? opt(l.sub, l.sub, l.sub) : ''}</select>` : '';
     // each gain opens its description; the ones the wiki describes carry it as a tooltip too
     const gain = (g) => { const text = featureText(g); return `<button class="gain${text ? '' : ' plain'}" data-act="gain-info" data-n="${esc(g)}"${text ? ` title="${esc(text)}"` : ''}>${esc(g)}</button>`; };
-    return `<div class="lvl${l.sub.trim() ? ' has-sub' : ''}">
-      <div class="lvl-n">${i + 1}</div>
+    const choices = levelChoices(x).map((c) => `<button class="btn tiny${(pending[x.cls] || []).includes(c.group.name) ? ' gold' : ''}" data-act="choice-open" data-l="${i}" data-g="${c.i}">+ ${esc(c.group.name.toLowerCase())}${c.n > 1 ? ' ×' + c.n : ''}</button>`).join('');
+    return `<div class="lvl${l.sub.trim() ? ' has-sub' : ''}${current === i + 1 ? ' cur' : ''}${current && i + 1 > current ? ' later' : ''}">
+      <div class="lvl-n">${i + 1}${current === i + 1 ? `<small>${t('now')}</small>` : ''}</div>
       <div class="lvl-cls">
         <select data-path="levels.${i}.cls" data-rerender aria-label="${t('Class for level {n}', { n: i + 1 })}">${opt('', t('— class —'), l.cls)}${CLASSES.map((c) => opt(c, c, l.cls)).join('')}</select>
         <small>${l.cls ? esc(l.cls) + ' ' + x.n : ''}</small>
@@ -9345,6 +9522,7 @@ function levelRows(b) {
           <div class="pick-btns">
             ${grantsFeat(x) ? `<button class="btn tiny gold" data-act="feat-open" data-l="${i}">${t('+ feat')}</button>` : ''}
             ${grantsExpertise(x) ? `<button class="btn tiny gold" data-act="expertise-open" data-l="${i}">${t('+ expertise')}</button>` : ''}
+            ${choices}
             ${l.cls && SPELLS.length ? `<button class="btn tiny" data-act="spell-open" data-l="${i}">${t('+ spell')}</button>` : ''}
             <button class="btn tiny" data-act="pick-add" data-l="${i}">${t('+ choice')}</button>
           </div>
@@ -9392,17 +9570,8 @@ function featList() {
     `<button class="pick-row" data-act="feat-choose" data-n="${esc(n)}"><b>${esc(n)}</b><small class="fx">${esc(d)}</small></button>`).join('')
     || `<p class="muted">${t('Nothing matches these filters.')}</p>`;
 }
-function featStep() {
-  const s = dlg.step;
-  const need = s.name === 'Ability Improvement' ? t('Pick one ability for +2, or two abilities for +1 each.') : t('Pick the ability that gets +1.');
-  const ready = s.chosen.length === 1 || (s.name === 'Ability Improvement' && s.chosen.length === 2);
-  return `<h2>${esc(s.name)}</h2><p class="muted">${need}</p>
-    <div class="lib-row">${s.options.map((ab) => `<button class="chip${s.chosen.includes(ab) ? ' on' : ''}" data-act="feat-ability" data-ab="${ab}">${ab}</button>`).join('')}</div>
-    <div class="modal-btns"><button class="btn" data-act="feat-open" data-l="${dlg.level}">${t('← Back')}</button>
-      <button class="btn primary" data-act="feat-confirm"${ready ? '' : ' disabled'}>${t('Add feat')}</button></div>`;
-}
-function addFeat(level, name, bonus) {
-  curBuild().levels[level].picks.push('Feat: ' + name + (bonus ? ' (' + bonus + ')' : ''));
+function addFeat(level, text, name) {
+  curBuild().levels[level].picks.push(text);
   closeDialog();
   toast(t('Added to level {n}: {x}', { n: level + 1, x: name }));
 }
@@ -9468,26 +9637,14 @@ Object.assign(actions, {
   },
   'feat-choose'(el) {
     const feat = FEATS.find(([n]) => n === el.dataset.n);
-    const options = featAbilities(feat[0], feat[1]);
-    if (options.length === 1) { addFeat(dlg.level, feat[0], '+1 ' + options[0]); return; }
-    if (!options.length) { addFeat(dlg.level, feat[0], ''); return; }
-    dlg.step = { name: feat[0], options, chosen: [] };
-    $('#dialog-box').innerHTML = featStep();
+    const level = dlg.level;
+    const parts = featParts(feat[0], feat[1], curBuild());
+    if (!parts.length) { addFeat(level, featText(feat[0], feat[1], []), feat[0]); return; }
+    openChooser(feat[0], esc(feat[1]), parts, (done) => {
+      curBuild().levels[level].picks.push(featText(feat[0], feat[1], done));
+      toast(t('Added to level {n}: {x}', { n: level + 1, x: feat[0] }));
+    });
     return false;
-  },
-  'feat-ability'(el) {
-    const s = dlg.step;
-    const max = s.name === 'Ability Improvement' ? 2 : 1;
-    const i = s.chosen.indexOf(el.dataset.ab);
-    if (i >= 0) s.chosen.splice(i, 1);
-    else { if (s.chosen.length >= max) s.chosen.shift(); s.chosen.push(el.dataset.ab); }
-    $('#dialog-box').innerHTML = featStep();
-    return false;
-  },
-  'feat-confirm'() {
-    const s = dlg.step;
-    const bonus = s.name === 'Ability Improvement' && s.chosen.length === 1 ? '+2 ' + s.chosen[0] : s.chosen.map((ab) => '+1 ' + ab).join(', ');
-    addFeat(dlg.level, s.name, bonus);
   },
   'expertise-open'(el) {
     dlg = { kind: 'expertise', level: +el.dataset.l, chosen: [] };
@@ -9651,11 +9808,13 @@ function abilityScores(b, act, swap) {
   const feats = featBonuses(b);
   const worn = act ? wornItems(b, act, swap) : {};
   const elixir = elixirAbility(b.elixir);
+  const perm = permanentBonuses(b, act);
   const scores = {};
   const sources = {};
   ABILITY_KEYS.forEach((ab) => {
     let v = finalAbility(b, ab, feats);
     const src = [];
+    perm.abilities[ab].forEach(([n, name]) => { v += n; src.push(signed(n) + ' ' + name); });
     const effects = [...new Set(Object.values(worn))].flatMap((it) => itemAbilityEffects(it)
       .filter((e) => e.ab === ab && (!e.races || e.races.includes(b.creation.race))).map((e) => [e, it.n]));
     effects.filter(([e]) => e.kind === 'add').forEach(([e, name]) => {
@@ -9689,6 +9848,8 @@ function pickedSkills(b) {
     const m = /^(?:skills?|proficienc(?:y|ies))\s*:\s*(.+)$/i.exec(p.trim()) || /^feat\s*:\s*skilled\b(.*)$/i.exec(p.trim());
     if (m) ALL_SKILLS.forEach((k) => { if (new RegExp('\\b' + k + '\\b', 'i').test(m[1])) out.add(k); });
   });
+  // options that grant a skill by their own text: a Favoured Enemy, an Eldritch Invocation
+  chosenOptions(b).forEach(([, text]) => { if (/proficien/i.test(text)) ALL_SKILLS.forEach((k) => { if (new RegExp('\\b' + k + '\\b').test(text)) out.add(k); }); });
   return out;
 }
 
@@ -9761,6 +9922,8 @@ function armourClassInfo(b, act, mods, swap) {
 const armourClass = (b, act, mods, swap) => armourClassInfo(b, act, mods, swap).total;
 
 // ---------- attacks ----------
+// The average roll of a dice text: "2d6" is 7, a flat "1" is 1.
+const avgDice = (text) => { const m = /(\d+)d(\d+)/.exec(text || ''); return m ? Number(m[1]) * (Number(m[2]) + 1) / 2 : Number(text) || 0; };
 const WEAPON_SLOTS = ['meleeMain', 'meleeOff', 'rangedMain', 'rangedOff'];
 // "1d8 + 1 Slashing" as { dice, flat, type }; the flat part is the weapon's enchantment.
 function parseDamage(text) {
@@ -9772,10 +9935,13 @@ function parseDamage(text) {
 // Dexterity for ranged, the higher of the two for Finesse), proficiency bonus when proficient, the enchantment,
 // Archery +2 to ranged attack rolls, Duelling +2 damage, and the off hand adding its modifier only with
 // Two-Weapon Fighting. Extra damage that depends on the situation is listed apart.
-function attackRows(b, act, ab, pb) {
-  const worn = wornItems(b, act);
-  const prof = proficiencies(b, act);
+function attackRows(b, act, ab, pb, swap) {
+  const worn = wornItems(b, act, swap);
+  const prof = proficiencies(b, act, swap);
   const info = levelInfo(b);
+  const monk = info.filter((x) => x.cls === 'Monk').length;
+  const brawler = hasPick(b, /tavern brawler/i);
+  const martial = monk ? classColumn('Monk', monk, /martial arts/i) : '';
   const mods = ab.mods;
   const pact = hasPick(b, /pact of the blade/i) || info.some((x) => x.sub === 'The Hexblade');
   const twf = hasStyle(b, /two-weapon/);
@@ -9785,10 +9951,12 @@ function attackRows(b, act, ab, pb) {
     const it = worn[slot];
     if (!it || !isWeapon(it)) return;
     const off = slot === 'meleeOff' || slot === 'rangedOff';
-    let key = it.s === 'ranged' ? 'dex' : (it.pp || []).includes('Finesse') && mods.dex > mods.str ? 'dex' : 'str';
+    const proficient = canUse(it, prof) || (pact && slot === 'meleeMain');
+    // Monk weapons: any weapon the monk is proficient with that is neither Heavy nor Two-Handed. They may use Dexterity.
+    const monkWeapon = monk && it.s === 'melee' && proficient && it.w !== 'two' && !(it.pp || []).includes('Heavy');
+    let key = it.s === 'ranged' ? 'dex' : ((it.pp || []).includes('Finesse') || monkWeapon) && mods.dex > mods.str ? 'dex' : 'str';
     // a bound pact weapon attacks with Charisma
     if (pact && slot === 'meleeMain' && mods.cha > mods[key]) key = 'cha';
-    const proficient = canUse(it, prof) || (pact && slot === 'meleeMain');
     const enchant = Number(String(it.en || '').replace('+', '')) || 0;
     const attack = [[abilityShort(key), mods[key]]];
     if (proficient) attack.push([t('Proficiency'), pb]);
@@ -9798,7 +9966,9 @@ function attackRows(b, act, ab, pb) {
     // a versatile weapon with the other hand free is held in both hands
     const twoHands = it.w === 'versatile' && slot === 'meleeMain' && !worn.meleeOff && it.vd;
     const dmg = parseDamage(twoHands ? it.vd : it.d) || { dice: '', flat: 0, type: '' };
-    const type = dmg.type || (parseDamage(it.d) || {}).type || '';
+    let type = dmg.type || (parseDamage(it.d) || {}).type || '';
+    // Deft Strikes: a monk weapon rolls the Martial Arts die when that is more than its own
+    if (monkWeapon && avgDice(martial) > avgDice(dmg.dice)) { dmg.dice = martial; type = 'Bludgeoning'; }
     const damage = [];
     if (!off || twf || mods[key] < 0) damage.push([abilityShort(key), mods[key]]);
     if (dmg.flat) damage.push([t('Enchantment'), dmg.flat]);
@@ -9810,16 +9980,24 @@ function attackRows(b, act, ab, pb) {
     });
     rows.push({ slot, name: it.n, item: it, proficient, attack, attackTotal: attack.reduce((a, p) => a + p[1], 0),
       dice: dmg.dice, type, damage, damageTotal: damage.reduce((a, p) => a + p[1], 0) });
+    // thrown, for builds that throw: Strength on the attack roll, the weapon's melee damage, and Tavern Brawler
+    // adding Strength once more to both (the wiki's Attacks and Throw pages)
+    if (brawler && it.s === 'melee' && (it.pp || []).includes('Thrown')) {
+      const dkey = (it.pp || []).includes('Finesse') && mods.dex > mods.str ? 'dex' : 'str';
+      const base = parseDamage(it.d) || dmg;
+      const tAttack = [['STR', mods.str]].concat(proficient ? [[t('Proficiency'), pb]] : [], enchant ? [[t('Enchantment'), enchant]] : [], [['Tavern Brawler', mods.str]], gearAttack.parts);
+      const tDamage = [[abilityShort(dkey), mods[dkey]]].concat(base.flat ? [[t('Enchantment'), base.flat]] : [], [['Tavern Brawler', mods.str]]);
+      rows.push({ slot, thrown: true, name: it.n + ' · ' + t('thrown'), item: it, proficient, attack: tAttack, attackTotal: tAttack.reduce((a, p) => a + p[1], 0),
+        dice: base.dice, type: base.type || type, damage: tDamage, damageTotal: tDamage.reduce((a, p) => a + p[1], 0) });
+    }
   });
   // unarmed strike, for monks and Tavern Brawler builds
-  const monk = info.filter((x) => x.cls === 'Monk').length;
-  const brawler = hasPick(b, /tavern brawler/i);
   if (monk || brawler) {
     const key = monk && mods.dex > mods.str ? 'dex' : 'str';
     const attack = [[abilityShort(key), mods[key]], [t('Proficiency'), pb]];
     const damage = [[abilityShort(key), mods[key]]];
     if (brawler) { attack.push(['Tavern Brawler', mods.str]); damage.push(['Tavern Brawler', mods.str]); }
-    const die = monk ? classColumn('Monk', monk, /martial arts/i) : '';
+    const die = martial;
     rows.push({ slot: 'unarmed', name: t('Unarmed strike'), proficient: true, attack, attackTotal: attack.reduce((a, p) => a + p[1], 0),
       dice: die || '1', type: 'Bludgeoning', damage, damageTotal: damage.reduce((a, p) => a + p[1], 0) });
   }
@@ -9923,30 +10101,41 @@ function knownSpells(b) {
 }
 
 // ---------- everything together ----------
-// Everything the "Final numbers" card and the PDF sheet show, at the build's final level with the gear of one act.
-function finalStats(b, act) {
+// The build as it stands at an earlier level: the rows after it are blank.
+const atLevel = (b, level) => Object.assign({}, b, { levels: b.levels.map((l, i) => (i < level ? l : { cls: '', sub: '', picks: [] })) });
+// Everything the "Final numbers" card and the PDF sheet show, with the gear of one act.
+// opts.level looks at the build at that level instead of the last one; opts.swap replaces gear slots.
+function finalStats(b, act, opts) {
   act = act || 'act3';
+  const swap = (opts && opts.swap) || null;
+  if (opts && opts.level && opts.level < 12) b = atLevel(b, opts.level);
   const level = charLevel(b);
-  const ab = abilityScores(b, act);
+  const ab = abilityScores(b, act, swap);
   const { scores, mods, feats } = ab;
   const pb = profBonus(level);
-  const worn = wornItems(b, act);
+  const worn = wornItems(b, act, swap);
   const gains = level ? allGains(b) : [];
   const st = skillState(b);
   const expert = expertiseSkills(b);
   const picked = pickedSkills(b);
+  // half the proficiency bonus, rounded down, on checks without proficiency: every skill for a Bard's
+  // Jack of All Trades, the physical ones for a Champion's Remarkable Athlete
   const jack = gains.includes('Jack of All Trades') ? Math.floor(pb / 2) : 0;
+  const athlete = gains.some((g) => /^Remarkable Athlete: Proficiency/.test(g)) ? Math.floor(pb / 2) : 0;
+  const physical = ['Athletics', 'Acrobatics', 'Sleight of Hand', 'Stealth'];
   const skills = ALL_SKILLS.map((x) => {
     const proficient = !!st.granted[x] || st.chosen.includes(x) || expert.has(x) || picked.has(x);
-    const bonus = mods[skillAbility(x)] + (proficient ? pb : jack) + (expert.has(x) ? pb : 0) + namedBonus(worn, x);
+    const half = Math.max(jack, physical.includes(x) ? athlete : 0);
+    const bonus = mods[skillAbility(x)] + (proficient ? pb : half) + (expert.has(x) ? pb : 0) + namedBonus(worn, x);
     return { name: x, ability: skillAbility(x), proficient, expert: expert.has(x), bonus };
   });
   // saving throws: proficiency comes from the first class only, and from the Resilient feat
   const first = DATA.classes[startingClass(b)];
   const allSaves = gearBonus(worn, 'saves');
+  const permSaves = permanentBonuses(b, act).saves.reduce((a, p) => a + p[1], 0);
   const saves = ABILS.map(([key, short, name]) => {
     const proficient = (!!first && first.saves.includes(name)) || hasPick(b, new RegExp('resilient.*' + short, 'i'));
-    return { key, short, proficient, bonus: mods[key] + (proficient ? pb : 0) + allSaves.n + namedBonus(worn, name + ' Saving Throws') };
+    return { key, short, proficient, bonus: mods[key] + (proficient ? pb : 0) + allSaves.n + permSaves + namedBonus(worn, name + ' Saving Throws') };
   });
   // initiative: Dexterity, Alert, features that say "+N to Initiative", and gear
   const initiative = [['DEX', mods.dex]];
@@ -9960,21 +10149,34 @@ function finalStats(b, act) {
     label: c.sub || c.cls, ability: c.ab, dc: 8 + pb + mods[c.ab] + dc.n, attack: pb + mods[c.ab] + sa.n,
     prepared: PREPARES.includes(c.cls) ? Math.max(1, mods[c.ab] + levels[c.cls]) : 0,
   }));
-  const acInfo = Object.fromEntries(ACTS.map(([k]) => [k, armourClassInfo(b, k, k === act ? mods : null)]));
+  const acInfo = Object.fromEntries(ACTS.map(([k]) => [k, armourClassInfo(b, k, k === act && !swap ? mods : null, k === act ? swap : null)]));
   return {
     act, level, feats, scores, mods, sources: ab.sources, pb, skills, saves,
     hp: hitPoints(b, mods.con),
     initiative: initiative.reduce((a, p) => a + p[1], 0), initiativeParts: initiative,
     ac: Object.fromEntries(ACTS.map(([k]) => [k, acInfo[k].total])), acInfo,
-    attacks: level ? attackRows(b, act, ab, pb) : { rows: [], extras: [], situational: [] },
+    attacks: level ? attackRows(b, act, ab, pb, swap) : { rows: [], extras: [], situational: [] },
     casting, castingGear: [...dc.parts, ...sa.parts.filter((p) => !dc.parts.some((q) => q[0] === p[0] && q[1] === p[1]))], castingSituational: [...dc.situational, ...sa.situational],
     slots: spellSlots(b), pact: pactSlots(b), resources: classResources(b), known: knownSpells(b),
   };
 }
 
 const partsText = (parts) => parts.map(([n, v]) => esc((v < 0 ? '−' + Math.abs(v) : v) + ' ' + n)).join(' + ');
+// What the level after the current one brings, in one line.
+function nextLevelText(b) {
+  const i = b.current;
+  const x = levelInfo(b)[i];
+  if (!b.current || !x || !x.cls) return '';
+  const bits = [...levelGains(x), ...levelNumbers(x)];
+  if (picksSubclass(x)) bits.unshift(t('subclass'));
+  if (grantsFeat(x)) bits.push(t('feat'));
+  levelChoices(x).forEach((c) => { if (!bits.some((g) => norm(g).startsWith(norm(c.group.name)))) bits.push(c.group.name + (c.n > 1 ? ' ×' + c.n : '')); });
+  return `<p class="next-lvl"><b>${t('Next: level {n} · {cls} {k}', { n: i + 1, cls: x.cls, k: x.n })}</b> ${bits.length ? esc(bits.join(' · ')) : t('nothing new besides hit points')}</p>`;
+}
 function statsLive(b) {
-  const s = finalStats(b, state.ui.act);
+  const total = charLevel(b);
+  const at = b.current && b.current < total ? b.current : 0;
+  const s = finalStats(b, state.ui.act, at ? { level: at } : null);
   if (!s.level) return `<p class="muted">${t('Set at least the class of level 1 to see the final numbers.')}</p>`;
   // AC shows how it adds up; spells and situational bonuses are named but not counted
   const acBox = (label, info) => `<div class="stat ac"><span>${label}</span><b>${info.total}</b>
@@ -9995,8 +10197,8 @@ function statsLive(b) {
   const slots = s.slots.length ? `<p class="points"><b>${t('Spell slots')}</b> ${s.slots.map((n, i) => `<span class="slot-n" title="${t('Level {n}', { n: i + 1 })}">${i + 1}<i>×${n}</i></span>`).join('')}</p>` : '';
   const pact = s.pact ? `<p class="points"><b>${t('Pact Magic slots')}</b> ${t('{n} of level {lv}, back on a Short Rest', { n: s.pact.n, lv: s.pact.level })}</p>` : '';
   const known = s.known.map((k) => `${esc(k.cls)}: ${[k.maxCantrips ? t('{n} of {max} cantrips', { n: k.cantrips, max: k.maxCantrips }) : '', k.maxSpells ? t('{n} of {max} spells', { n: k.spells, max: k.maxSpells }) : ''].filter(Boolean).join(', ')}`).join(' · ');
-  return `<div class="stat-row">
-      ${box(t('Level'), s.level)}${box(t('Proficiency bonus'), signed(s.pb))}${box(t('Hit points'), s.hp)}${box(t('Initiative'), signed(s.initiative), s.initiativeParts.length > 1 ? partsText(s.initiativeParts) : '')}
+  return `${nextLevelText(b)}<div class="stat-row">
+      ${box(t('Level'), s.level, at ? esc(splitText(atLevel(b, at))) : '')}${box(t('Proficiency bonus'), signed(s.pb))}${box(t('Hit points'), s.hp)}${box(t('Initiative'), signed(s.initiative), s.initiativeParts.length > 1 ? partsText(s.initiativeParts) : '')}
       ${ACTS.map(([k, l]) => acBox(t('AC · {act}', { act: t(l) }), s.acInfo[k])).join('')}
     </div>
     <div class="abils final">${ABILS.map(([ab, short]) => `<div class="abil"><div class="abil-name">${short}</div>
@@ -10015,7 +10217,7 @@ function statsLive(b) {
     <h3 class="group">${t('Skills')}</h3>
     <div class="skill-final">${s.skills.map((k) => `<span class="${k.proficient ? 'prof' : ''}${k.expert ? ' expert' : ''}" title="${k.expert ? t('Expertise') : k.proficient ? t('Proficient') : ''}">
       ${esc(k.name)} <b>${signed(k.bonus)}</b></span>`).join('')}</div>
-    <p class="muted">${t('In gold: proficient; with a star: Expertise. Everything is for the final level with the gear of the act chosen above. Armour Class, attacks and spell numbers follow the game formulas; bonuses that depend on the situation are listed, not added.')}</p>`;
+    <p class="muted">${t('In gold: proficient; with a star: Expertise. Everything is for the level and the gear of the act chosen above. Armour Class, attacks and spell numbers follow the game formulas; bonuses that depend on the situation are listed, not added.')}</p>`;
 }
 function statsCard(b) {
   const extra = b.creation.extra || {};
@@ -10023,6 +10225,8 @@ function statsCard(b) {
   return `<section class="card">
     <h2>${t('Final numbers')}</h2>
     <div class="stat-tools">
+      <div><span class="lbl">${t('At level')}</span><div class="acts lvls">${Array.from({ length: charLevel(b) }, (x, i) => i + 1).map((n) =>
+        `<button class="${(b.current && b.current < charLevel(b) ? b.current : charLevel(b)) === n ? 'on' : ''}" data-act="stat-level" data-n="${n}">${n}</button>`).join('')}</div></div>
       <div><span class="lbl">${t('With the gear of')}</span>${actTabs(state.ui.act, 'act')}</div>
       ${elixirs.length ? `<label class="field"><span>${t('Elixir kept active')}</span><select data-path="elixir" data-rerender>${opt('', t('— none —'), b.elixir)}${
         elixirs.map((c) => opt(c.n, c.n + (elixirAbility(c.n) ? ' ★' : ''), b.elixir)).join('')}${b.elixir && !elixirs.some((c) => c.n === b.elixir) ? opt(b.elixir, b.elixir, b.elixir) : ''}</select></label>` : ''}
@@ -10036,11 +10240,47 @@ function statsCard(b) {
 }
 
 // ---------- party ----------
+// A member's numbers in the Party Planner: with the gear of the act on screen, at the level the build is marked at.
+const memberStats = (b) => finalStats(b, state.ui.partyAct, b.current ? { level: b.current } : null);
+// The attack the build leans on: the unarmed strike, a thrown weapon, the ranged main hand or the melee main hand.
+function mainAttack(s, style) {
+  const rows = s.attacks.rows;
+  const want = style === 'unarmed' ? (r) => r.slot === 'unarmed' : style === 'thrown' ? (r) => r.thrown : style === 'ranged' ? (r) => r.slot === 'rangedMain' : (r) => r.slot === 'meleeMain' && !r.thrown;
+  return rows.find(want) || rows.find((r) => r.slot === 'meleeMain' && !r.thrown) || rows[0] || null;
+}
+const avgDamage = (r) => (r ? avgDice(r.dice) + r.damageTotal : 0);
+// Level, hit points, armour class, initiative, main attack and spell save DC of every member, side by side.
+function partyNumbers(members) {
+  const active = members.filter((m) => m.build && charLevel(m.build));
+  if (!active.length) return '';
+  const stats = active.map((m) => memberStats(m.build));
+  const act = state.ui.partyAct;
+  const attacks = active.map((m, i) => mainAttack(stats[i], buildProfile(m.build, act).style));
+  const rows = [
+    [t('Level'), stats.map((s) => s.level), false],
+    [t('Hit points'), stats.map((s) => s.hp), true],
+    [t('Armour Class'), stats.map((s) => s.ac[act]), true],
+    [t('Initiative'), stats.map((s) => s.initiative), true, signed],
+    [t('Main attack'), attacks.map((r) => (r ? r.attackTotal : null)), true, signed, attacks.map((r) => (r ? r.name : ''))],
+    [t('Damage per hit'), attacks.map((r) => (r ? avgDamage(r) : null)), true, (v) => v.toFixed(1), attacks.map((r) => (r ? r.dice + (r.damageTotal ? ' ' + signed(r.damageTotal) : '') : ''))],
+    [t('Spell save DC'), stats.map((s) => (s.casting.length ? Math.max(...s.casting.map((c) => c.dc)) : null)), true],
+    ...ABILS.map(([key, short]) => [t('{ab} save', { ab: short }), stats.map((s) => s.saves.find((k) => k.key === key).bonus), true, signed]),
+  ];
+  return `<section class="card">
+    <h2>${t('Party numbers')}</h2>
+    <p class="muted">${t('Each member at the level marked in their build (the last one when none is marked), with the gear of this act. The best of each row is highlighted.')}</p>
+    <div class="table-wrap"><table class="ptable skills"><thead><tr><th></th>${active.map((m) => `<th data-ml="${m.i}">${esc(memberLabel(m))}</th>`).join('')}</tr></thead><tbody>${
+      rows.map(([label, vals, best, fmt, notes]) => {
+        const top = best ? Math.max(...vals.filter((v) => v != null)) : null;
+        return `<tr><th>${label}</th>${vals.map((v, i) => `<td class="${v != null && v === top ? 'best' : ''}">${v == null ? '—' : (fmt ? fmt(v) : v)}${notes && notes[i] ? `<small>${esc(notes[i])}</small>` : ''}</td>`).join('')}</tr>`;
+      }).join('')}</tbody></table></div>
+  </section>`;
+}
 // For each skill, every member's bonus, with the best one highlighted.
 function partySkills(members) {
   const active = members.filter((m) => m.build);
   if (!active.length) return '';
-  const stats = active.map((m) => finalStats(m.build, state.ui.partyAct));
+  const stats = active.map((m) => memberStats(m.build));
   const rows = ALL_SKILLS.map((x, i) => {
     const vals = stats.map((s) => s.skills[i]);
     const best = Math.max(...vals.map((v) => v.bonus));
@@ -10069,6 +10309,11 @@ function partyRoute(members) {
       const loc = parts[0].trim() || t('Location not set');
       (groups[loc] = groups[loc] || []).push(`<li><b class="r-${esc(s.rarity)}">${esc(s.name)}</b> <small><i data-ml="${m.i}">${esc(memberLabel(m))}</i> · ${t(slotLabel)}${parts[1] ? ' · ' + esc(parts.slice(1).join(' — ')) : ''}</small></li>`);
     }));
+    const actNum = ACTS.findIndex(([a]) => a === act) + 1;
+    active.forEach((m) => PERMANENT.filter((p) => p.a === actNum && (m.build.permanent || {})[p.n] && !m.build.permanent[p.n].got).forEach((p) => {
+      const loc = t('Permanent bonuses');
+      (groups[loc] = groups[loc] || []).push(`<li><b>${esc(p.n)}</b> <small><i data-ml="${m.i}">${esc(memberLabel(m))}</i> · ${esc(p.h)}</small></li>`);
+    }));
     const locs = Object.keys(groups).sort((a, c) => a.localeCompare(c));
     return locs.length ? `<div class="route-act"><h3>${t(label)}</h3>${locs.map((loc) => `<div class="loc"><h4>${esc(loc)}</h4><ul>${groups[loc].join('')}</ul></div>`).join('')}</div>` : '';
   }).join('');
@@ -10081,9 +10326,9 @@ function partyRoute(members) {
 }
 </script>
   <script>
-// Item tags and recommendations. Every item gets tags from the text of its effects; a build gets a
-// profile from its classes and choices; a goal (damage, defence, versatility) weighs the tags; and the
-// score of an item is how well its tags serve that goal for that profile.
+// Item tags and recommendations. An item is judged first by what it changes in the build's own numbers
+// (attack, damage, armour class, spell save DC, hit points…) and then by the effects the numbers cannot
+// show, which are read as tags from its text and weighed by the goal and by the build's profile.
 'use strict';
 
 const ABILITY_NAMES = 'strength|dexterity|constitution|intelligence|wisdom|charisma';
@@ -10143,6 +10388,8 @@ function buildProfile(b, act) {
   if ((levels.Monk || 0) >= 3) style = 'unarmed';
   else if (has(/tavern brawler/i) && levels.Barbarian) style = 'thrown';
   else if (has(/archery|sharpshooter/i)) style = 'ranged';
+  // a warlock who fights with a pact weapon is a weapon user, however many caster levels it has
+  else if (subs.has('The Hexblade') || has(/pact of the blade/i)) style = 'melee';
   else if (total && casterLevels * 2 >= total && !(levels.Paladin >= casterLevels)) style = 'caster';
   const topCaster = Object.keys(levels).filter((c) => CASTING_ABILITY[c]).sort((a, c) => levels[c] - levels[a])[0];
   const main = style === 'ranged' ? 'dex' : style === 'caster' ? (CASTING_ABILITY[topCaster] || 'cha')
@@ -10168,14 +10415,47 @@ function profileText(p) {
   return t(STYLE_LABEL[p.style]) + ' · ' + p.main.toUpperCase() + (traits.length ? ' · ' + traits.join(', ') : '');
 }
 
+// ---------- what an item changes in the numbers ----------
+// The numbers a goal looks at: armour class, hit points, initiative, saving throws, the main attack
+// (bonus and average damage per hit) and the best spell save DC and spell attack.
+function keyNumbers(s, act, style) {
+  const r = mainAttack(s, style);
+  return { ac: s.ac[act], hp: s.hp, initiative: s.initiative, saves: s.saves.reduce((a, k) => a + k.bonus, 0),
+    attack: r ? r.attackTotal : 0, damage: avgDamage(r),
+    dc: s.casting.length ? Math.max(...s.casting.map((c) => c.dc)) : 0,
+    spellAttack: s.casting.length ? Math.max(...s.casting.map((c) => c.attack)) : 0 };
+}
+// What moves in those numbers with the item in the slot, e.g. { ac: 1, attack: -1 }.
+function gearDelta(b, act, slot, it, base, style, level) {
+  const now = keyNumbers(finalStats(b, act, { swap: { [slot]: it }, level }), act, style);
+  const out = {};
+  Object.keys(now).forEach((k) => { const d = Math.round((now[k] - base[k]) * 10) / 10; if (d) out[k] = d; });
+  return out;
+}
+const DELTA_LABEL = { attack: 'Attack', damage: 'Damage', dc: 'Spell save DC', spellAttack: 'Spell attack', ac: 'AC', hp: 'Hit points', saves: 'Saving throws', initiative: 'Initiative' };
+// The six saving throws are compared as a total; when all move together, say it per saving throw.
+const deltaBit = (k, v) => (k === 'saves' && v % 6 === 0 ? t('Every saving throw') + ' ' + (v > 0 ? '+' : '−') + Math.abs(v / 6)
+  : t(DELTA_LABEL[k]) + (k === 'saves' ? ' (' + t('total') + ')' : '') + ' ' + (v > 0 ? '+' : '−') + Math.abs(v));
+const deltaText = (d) => Object.keys(DELTA_LABEL).filter((k) => d[k]).map((k) => deltaBit(k, d[k])).join(' · ');
+// What one point of each number is worth to each goal.
+const DELTA_WEIGHT = {
+  damage: { attack: 1.6, damage: 1, dc: 2, spellAttack: 1.2, initiative: 0.3 },
+  defence: { ac: 2.5, hp: 0.12, saves: 0.5, initiative: 0.3 },
+  versatile: { ac: 1, hp: 0.06, saves: 0.3, initiative: 0.5, attack: 0.8, damage: 0.5, dc: 1, spellAttack: 0.6 },
+};
+// A weapon number means little to a caster, a spell number little to someone who does not cast.
+const deltaFit = (k, p) => ((k === 'attack' || k === 'damage') && p.style === 'caster' ? 0.2
+  : (k === 'dc' || k === 'spellAttack') && p.style !== 'caster' ? (p.caster ? 0.4 : 0) : 1);
+
 // ---------- scoring ----------
 const GOALS = {
-  damage: { damage: 3, accuracy: 2.5, crit: 2, spelldc: 2.5, ability: 2, synergy: 1.5, initiative: 1, spells: 0.5, control: 0.5 },
-  defence: { ac: 3, defence: 2.5, saves: 2, healing: 1.5, initiative: 1, stealth: 0.5, mobility: 0.5, ability: 0.5 },
-  versatile: { spells: 2, mobility: 2, skills: 2, control: 1.5, stealth: 1.5, initiative: 1.5, saves: 1, healing: 1, damage: 1, ac: 1, ability: 1, synergy: 1 },
+  damage: { damage: 3, accuracy: 2.5, crit: 2, spelldc: 2.5, synergy: 1.5, initiative: 1, spells: 0.5, control: 0.5 },
+  defence: { defence: 1.5, saves: 1.2, healing: 1, initiative: 0.6, stealth: 0.4, mobility: 0.4 },
+  versatile: { spells: 2, mobility: 2, skills: 2, control: 1.5, stealth: 1.5, initiative: 1.5, saves: 1, healing: 1, damage: 1, synergy: 1 },
 };
 const GOAL_LABEL = { damage: 'Best for damage', defence: 'Best for defence', versatile: 'Most versatile' };
-const diceAverage = (text) => { const m = /(\d+)d(\d+)(?:\s*\+\s*(\d+))?/.exec(text || ''); return m ? Number(m[1]) * (Number(m[2]) + 1) / 2 + Number(m[3] || 0) : 0; };
+// Tags whose effect, when it is a flat bonus, already shows in the numbers: counted there, not twice.
+const TAG_NUMBER = { initiative: 'initiative', saves: 'saves', spelldc: 'dc' };
 
 // How much a tag of this item matters to this build, as a multiplier, with the reason when it stands out.
 function tagFit(tag, it, p, text) {
@@ -10197,72 +10477,311 @@ function tagFit(tag, it, p, text) {
   if (tag === 'unarmed') return p.style === 'unarmed' ? [1, ''] : [0, ''];
   if (tag === 'thrown') return p.style === 'thrown' ? [1, ''] : [0, ''];
   if (tag === 'concentration') return p.caster ? [1, ''] : [0.2, ''];
-  if (tag === 'ability') {
-    const raised = ABILS.filter((a) => new RegExp(a[2], 'i').test(text)).map((a) => a[0]);
-    if (raised.includes(p.main)) return [1.6, t('raises {ab}, your main ability', { ab: p.main.toUpperCase() })];
-    return raised.includes('con') ? [1, ''] : [0.4, ''];
-  }
   return [1, ''];
 }
 
-// Score of one item for a slot, an act and a goal: { score, reasons }.
-function scoreItem(b, p, it, slot, act, goal, current) {
+// Score of one item for a slot, an act and a goal: { score, reasons, delta }.
+function scoreItem(b, p, it, slot, act, goal, base) {
   const weights = GOALS[goal];
   const text = itemText(it);
   const reasons = [];
   let score = 0;
+  // a monk in armour loses Unarmoured Defence and movement, so armour is not offered
+  if (slot === 'chest' && p.monk && ARMOUR_TYPES.includes(it.t)) return { score: 0, reasons: [], delta: {} };
+  // first, what the item does to the numbers of this build
+  const delta = gearDelta(b, act, slot, it, base, p.style, p.level);
+  Object.keys(delta).forEach((k) => {
+    const w = (DELTA_WEIGHT[goal][k] || 0) * deltaFit(k, p);
+    if (!w) return;
+    score += delta[k] * w;
+    if (delta[k] > 0) reasons.push([10 + delta[k] * w, deltaBit(k, delta[k])]);
+  });
+  // then the effects the numbers do not show
   it.g.forEach((tag) => {
     const w = weights[tag];
-    if (!w) return;
+    if (!w || (TAG_NUMBER[tag] && delta[TAG_NUMBER[tag]])) return;
     const [fit, why] = tagFit(tag, it, p, text);
     if (fit <= 0) return;
     score += w * fit;
     reasons.push([w * fit, t(TAG_LABEL[tag]) + (why ? ' (' + why + ')' : '')]);
   });
-  // a monk in armour loses Unarmoured Defence and movement, so armour is not offered
-  if (slot === 'chest' && p.monk && ARMOUR_TYPES.includes(it.t)) return { score: 0, reasons: [] };
   if (it.s === 'shield' && (p.monk || p.style === 'ranged')) score -= 1;
-  // armour, shields and anything that changes Armour Class: count the real difference to what is worn now
-  if (weights.ac && (slot === 'chest' || it.s === 'shield' || it.g.includes('ac'))) {
-    const delta = armourClass(b, act, null, { [slot]: it }) - current;
-    if (delta) { score += delta * weights.ac * 0.6; reasons.push([Math.abs(delta) * weights.ac * 0.6, t('AC {n} against what you wear now', { n: signed(delta) })]); }
-  }
-  // weapons: the damage they deal and whether the build's ability works with them
-  if (isWeapon(it) && (slot === 'meleeMain' || slot === 'rangedMain') && weights.damage) {
-    let fit = 1;
-    if (it.s === 'melee' && p.main === 'dex' && !(it.pp || []).includes('Finesse')) fit = 0.4;
-    if (it.s === 'melee' && p.style === 'unarmed') fit = 0.2;
-    const power = diceAverage(it.d) * 0.35 * weights.damage / 3 * fit;
-    if (power) { score += power; reasons.push([power, t('{d} base damage', { d: it.d })]); }
-    if (fit < 1 && it.s === 'melee' && p.main === 'dex') reasons.push([0, t('not a finesse weapon, so it uses Strength')]);
-  }
+  if (isWeapon(it) && it.s === 'melee' && p.main === 'dex' && !(it.pp || []).includes('Finesse') && (slot === 'meleeMain') && weights.damage) reasons.push([0, t('not a finesse weapon, so it uses Strength')]);
   const matched = (it.el || []).filter((e) => p.elements.has(e));
   if (matched.length && weights.damage) { score += 1.5; reasons.push([1.5, t('matches your {el} damage', { el: matched.join(', ') })]); }
   const partners = SLOTS.map(([k]) => (k === slot ? null : ITEM_BY_NAME.get(norm(b.gear[act].slots[k].name)))).filter((x) => x && (x.en2 || []).some((e) => (it.en2 || []).includes(e)));
   if (partners.length) { score += 1.5; reasons.push([1.5, t('combines with {x}', { x: partners[0].n })]); }
-  // what the item does to the build's own numbers: a higher main ability, a spell DC, an attack bonus
-  if (weights.damage || weights.ability) {
-    const gain = abilityScores(b, act, { [slot]: it }).mods[p.main] - p.stats.mods[p.main];
-    if (gain > 0) { const w = gain * (weights.damage || weights.ability) * 0.9; score += w; reasons.push([w, t('{ab} modifier {n} with it on', { ab: p.main.toUpperCase(), n: signed(gain) })]); }
-  }
   if (score > 0) score += RARITY_RANK[it.r] * 0.25;
   reasons.sort((x, y) => y[0] - x[0]);
-  return { score, reasons: reasons.slice(0, 3).map((r) => r[1]) };
+  return { score, reasons: reasons.slice(0, 4).map((r) => r[1]), delta };
 }
 
+// The numbers the picker compares against: the build as it is, at the level it is marked at.
+function recommendBase(b, act) {
+  const p = buildProfile(b, act);
+  p.level = b.current && b.current < charLevel(b) ? b.current : 0;
+  return { p, base: keyNumbers(finalStats(b, act, { level: p.level }), act, p.style) };
+}
 // The usable items of a slot, best first for the goal.
 // An item another member of the party already wears drops down the list, and says who has it.
 function recommend(b, slot, act, goal, list) {
-  const p = buildProfile(b, act);
-  const current = armourClass(b, act);
+  const { p, base } = recommendBase(b, act);
   const taken = partyTaken(b, act);
   return list.map((it) => {
-    const r = Object.assign({ it }, scoreItem(b, p, it, slot, act, goal, current));
+    const r = Object.assign({ it }, scoreItem(b, p, it, slot, act, goal, base));
     if (taken[norm(it.n)]) { r.score *= 0.3; r.taken = taken[norm(it.n)]; }
     return r;
   }).filter((r) => r.score > 0)
     .sort((x, y) => y.score - x.score || x.it.n.localeCompare(y.it.n));
 }
+</script>
+  <script>
+// Guided choices: what each level lets the build choose (fighting styles, invocations, metamagic, manoeuvres…),
+// the dialog that picks them, the choices inside feats, the racial cantrip and the permanent bonuses.
+// A choice is stored as a line of the level, "Fighting Style: Archery", so builds stay readable as text.
+'use strict';
+
+const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const namesRe = (name) => new RegExp('(^|[^a-z])' + escRe(name) + '([^a-z]|$)', 'i');
+const prefixRe = (name) => new RegExp('^' + escRe(name) + 's?\\s*:', 'i');
+
+// The choices a build level opens: [{ group, i (its index in CHOICES), n }], from its class and the build's subclass of it.
+function levelChoices(info) {
+  return CHOICES.map((group, i) => ({ group, i, n: group.at[info.n] || 0 }))
+    .filter((x) => x.n && (x.group.owner === info.cls || (info.sub && x.group.owner === info.sub)));
+}
+// Every choice one class of the build has to make by its last level there, merged by name (a Champion's second
+// fighting style adds to the Fighter's first): [{ name, need, options, join, repeat }].
+function classChoices(b, cls) {
+  const info = levelInfo(b);
+  const n = info.filter((x) => x.cls === cls).length;
+  const sub = (info.find((x) => x.cls === cls && x.sub) || {}).sub;
+  const out = {};
+  CHOICES.filter((c) => c.owner === cls || (sub && c.owner === sub)).forEach((c) => {
+    const need = Object.keys(c.at).reduce((a, lv) => a + (Number(lv) <= n ? c.at[lv] : 0), 0);
+    if (!need) return;
+    const g = out[c.name] || (out[c.name] = { name: c.name, need: 0, options: [], join: c.join, repeat: c.repeat });
+    g.need += need;
+    c.options.forEach((o) => { if (!g.options.some((x) => x[0] === o[0])) g.options.push(o); });
+  });
+  return Object.values(out);
+}
+// What the levels of a class already say about a choice: the option names, with "?" for a line that
+// carries the prefix but names nothing the planner knows ("Manoeuvres: your choice").
+function chosenOf(b, cls, group) {
+  const info = levelInfo(b);
+  const prefix = prefixRe(group.name);
+  const out = [];
+  b.levels.forEach((l, i) => {
+    if (info[i].cls !== cls) return;
+    l.picks.forEach((p) => {
+      const text = p.trim();
+      if (prefix.test(text)) {
+        const named = group.options.map((o) => o[0]).filter((name) => namesRe(name).test(text.replace(prefix, '')));
+        if (group.repeat || !named.length) out.push(named[0] || '?');
+        else named.forEach((x) => { if (!out.includes(x)) out.push(x); });
+      } else if (!group.join) {
+        // a bare option name written as a choice of its own ("Riposte")
+        const o = group.options.find((x) => norm(x[0]) === norm(text.replace(/\(.*$/, '')));
+        if (o && !out.includes(o[0])) out.push(o[0]);
+      }
+    });
+  });
+  return out;
+}
+// The options the build has taken, with their descriptions, for rules that read them (a Favoured Enemy
+// that grants a skill or heavy armour): [[name, description]].
+function chosenOptions(b) {
+  const out = [];
+  Object.keys(classLevels(b)).forEach((cls) => classChoices(b, cls).forEach((g) => {
+    chosenOf(b, cls, g).forEach((name) => { const o = g.options.find((x) => x[0] === name); if (o) out.push([o[0], o[1] || '', g.name]); });
+  }));
+  return out;
+}
+
+// ---------- the chooser: a dialog that picks n options out of one or more lists ----------
+// dlg.parts = [{ label, n, min, options: [[name, description]], chosen: [], off: [names that cannot be taken] }]
+function chooserList() {
+  const q = norm(dlg.q);
+  return dlg.parts.map((p, i) => {
+    const rows = p.options.filter(([n, d]) => !q || norm(n).includes(q) || norm(d).includes(q)).map(([n, d]) => {
+      const off = (p.off || []).includes(n);
+      return `<button class="pick-row${off ? ' no' : ''}" data-act="choose-toggle" data-p="${i}" data-n="${esc(n)}"${off ? ' disabled' : ''}>
+        <b>${esc(n)}</b>${off ? `<span><em>${t('already chosen')}</em></span>` : ''}${d ? `<small class="fx">${esc(d)}</small>` : ''}</button>`;
+    }).join('');
+    return `<h4 class="choose-head">${esc(p.label)} <span data-count="${i}"></span></h4>
+      <div class="${p.options.every((o) => !o[1]) ? 'choose-grid' : ''}">${rows || `<p class="muted">${t('Nothing matches these filters.')}</p>`}</div>`;
+  }).join('');
+}
+function chooserSync() {
+  dlg.parts.forEach((p, i) => { const el = $(`[data-count="${i}"]`); if (el) el.textContent = t('{n} of {max}', { n: p.chosen.length, max: p.n }); });
+  $$('#dlg-list [data-act="choose-toggle"]').forEach((el) => el.classList.toggle('on', dlg.parts[+el.dataset.p].chosen.includes(el.dataset.n)));
+  const ok = $('#choose-ok');
+  if (ok) ok.disabled = !dlg.parts.every((p) => p.chosen.length >= (p.min == null ? p.n : p.min));
+}
+function openChooser(title, hint, parts, done) {
+  dlg = { kind: 'choose', q: '', parts, done, refresh: () => { $('#dlg-list').innerHTML = chooserList(); chooserSync(); } };
+  parts.forEach((p) => { p.chosen = p.chosen || []; });
+  openDialog(`<h2>${esc(title)}</h2>${hint ? `<p class="muted">${hint}</p>` : ''}
+    ${parts.some((p) => p.options.length > 12) ? `<div class="picker-tools"><input type="text" data-dlg="q" placeholder="${t('Search by name or effect…')}" autocomplete="off"></div>` : ''}
+    <div class="picker-list" id="dlg-list">${chooserList()}</div>
+    <div class="modal-btns"><button class="btn" data-act="dialog-close">${t('Cancel')}</button>
+      <button class="btn primary" id="choose-ok" data-act="choose-confirm" disabled>${t('Add')}</button></div>`, 'picker-box');
+  chooserSync();
+}
+
+// ---------- feats: the choices inside them ----------
+// The lists a feat asks to choose from, on top of the feat itself.
+function featParts(name, desc, b) {
+  const parts = [];
+  const abilities = featAbilities(name, desc);
+  if (name === 'Ability Improvement') parts.push({ key: 'ability', label: t('Abilities: one for +2, or two for +1 each'), n: 2, min: 1, options: abilities.map((a) => [a, '']) });
+  else if (abilities.length > 1) parts.push({ key: 'ability', label: t('Ability that gets +1'), n: 1, options: abilities.map((a) => [a, '']) });
+  const prof = proficiencies(b);
+  const st = skillState(b);
+  const known = new Set([...Object.keys(st.granted), ...st.chosen, ...pickedSkills(b)]);
+  const spells = (test) => SPELLS.filter(test).map((s) => [s.n, s.d || '']);
+  const magic = /^Magic Initiate: (\w+)$/.exec(name);
+  if (name === 'Skilled') parts.push({ label: t('Skills'), n: 3, options: ALL_SKILLS.filter((x) => !known.has(x)).map((x) => [x, '']) });
+  if (name === 'Weapon Master') {
+    parts.push({ label: t('Weapon types'), n: 4, options: WEAPON_TYPES.filter((w) => !canUse({ s: 'melee', t: w, c: (ITEMS.find((it) => it.t === w) || {}).c }, prof)).sort().map((w) => [w, '']) });
+  }
+  if (magic) {
+    parts.push({ label: t('{cls} cantrips', { cls: magic[1] }), n: 2, options: spells((s) => s.lv === 0 && (s.cl || []).includes(magic[1])) });
+    parts.push({ label: t('{cls} level 1 spell', { cls: magic[1] }), n: 1, options: spells((s) => s.lv === 1 && (s.cl || []).includes(magic[1])) });
+  }
+  if (name === 'Martial Adept') parts.push({ label: t('Manoeuvres'), n: 2, options: (CHOICES.find((c) => c.name === 'Manoeuvre') || { options: [] }).options.map((o) => [o[0], o[1]]) });
+  if (name === 'Ritual Caster') parts.push({ label: t('Ritual spells'), n: 2, options: spells((s) => s.ri && (s.cl || []).length) });
+  if (FEAT_OPTIONS[name]) {
+    parts.push({ label: name === 'Elemental Adept' ? t('Damage type') : t('Cantrip'), n: 1,
+      options: FEAT_OPTIONS[name].map((x) => [x, (SPELL_BY_NAME.get(norm(x)) || {}).d || '']) });
+  }
+  // a build that already has everything a list offers (every weapon type, say) has nothing to pick there
+  parts.forEach((p) => { p.n = Math.min(p.n, p.options.length); if (p.min != null) p.min = Math.min(p.min, p.n); });
+  return parts.filter((p) => p.options.length);
+}
+// "Feat: Weapon Master (+1 STR; Longbows, Rapiers, Scimitars, Tridents)"
+function featText(name, desc, parts) {
+  const bits = [];
+  const fixed = featAbilities(name, desc);
+  const ability = parts.find((p) => p.key === 'ability');
+  if (ability) bits.push(name === 'Ability Improvement' && ability.chosen.length === 1 ? '+2 ' + ability.chosen[0] : ability.chosen.map((a) => '+1 ' + a).join(', '));
+  else if (fixed.length === 1) bits.push('+1 ' + fixed[0]);
+  parts.filter((p) => p.key !== 'ability').forEach((p) => bits.push(p.chosen.join(', ')));
+  return 'Feat: ' + name + (bits.length ? ' (' + bits.join('; ') + ')' : '');
+}
+
+// ---------- racial cantrip ----------
+// High Elves and High Half-Elves learn one Wizard cantrip at creation.
+const raceCantrips = (b) => ([DATA.races[b.creation.race], DATA.subraces[b.creation.subrace]].some((d) => d && (d.features || []).some((f) => f[0] === 'Cantrip'))
+  ? SPELLS.filter((s) => s.lv === 0 && (s.cl || []).includes('Wizard')).map((s) => s.n) : []);
+
+// ---------- permanent bonuses ----------
+// What a permanent bonus does to the numbers, read from its text: an ability of choice, a named ability,
+// an optional extra ("and optionally +1 to Charisma"), or a bonus to every saving throw.
+function permanentEffect(p) {
+  if (p.fx) return p.fx;
+  const fx = { choice: 0, fixed: [], optional: null, saves: 0 };
+  const text = p.x || '';
+  let m = /\+(\d) to an? (?:chosen )?ability score/i.exec(text);
+  if (m) fx.choice = Number(m[1]);
+  m = new RegExp('optionally \\+(\\d) to (' + ABILITY_WORDS + ')', 'i').exec(text);
+  if (m) fx.optional = { ab: abilityKey(m[2]), n: Number(m[1]) };
+  for (const x of text.matchAll(new RegExp('\\+(\\d) (' + ABILITY_WORDS + ')\\b(?! saving)', 'gi'))) fx.fixed.push({ ab: abilityKey(x[2]), n: Number(x[1]) });
+  m = /\+(\d) bonus to all Saving Throws/i.exec(text);
+  if (m) fx.saves = Number(m[1]);
+  p.fx = fx;
+  return fx;
+}
+const changesNumbers = (p) => { const fx = permanentEffect(p); return !!(fx.choice || fx.fixed.length || fx.saves); };
+// The bonuses the build plans, up to an act: { abilities: {str: [[n, name]]}, saves: [[name, n]] }.
+function permanentBonuses(b, act) {
+  const actNum = act ? ACTS.findIndex(([k]) => k === act) + 1 : 3;
+  const out = { abilities: Object.fromEntries(ABILITY_KEYS.map((k) => [k, []])), saves: [] };
+  PERMANENT.forEach((p) => {
+    const mine = (b.permanent || {})[p.n];
+    if (!mine || !mine.on || p.a > actNum) return;
+    const fx = permanentEffect(p);
+    if (fx.choice && mine.ab) out.abilities[mine.ab].push([fx.choice, p.n]);
+    fx.fixed.forEach((f) => out.abilities[f.ab].push([f.n, p.n]));
+    if (fx.optional && mine.extra) out.abilities[fx.optional.ab].push([fx.optional.n, p.n]);
+    if (fx.saves) out.saves.push([p.n, fx.saves]);
+  });
+  return out;
+}
+function permanentCard(b) {
+  if (!PERMANENT.length) return '';
+  const mine = b.permanent || {};
+  const planned = PERMANENT.filter((p) => mine[p.n] && mine[p.n].on);
+  const open = !!state.ui.permOpen;
+  const row = (p) => {
+    const i = PERMANENT.indexOf(p);
+    const m = mine[p.n];
+    const fx = permanentEffect(p);
+    return `<div class="perm${m ? ' on' : ''}${m && m.got ? ' got' : ''}">
+      <label class="chk"><input type="checkbox" data-perm="on" data-i="${i}"${m ? ' checked' : ''}> <b>${esc(p.n)}</b>${changesNumbers(p) ? ` <i class="perm-tag">${t('changes the numbers')}</i>` : ''}</label>
+      <p>${esc(p.x)}</p>
+      ${m ? `<div class="perm-opts">
+        ${fx.choice ? `<label class="field"><span>${t('Ability it goes to')}</span><select data-perm="ab" data-i="${i}">${opt('', t('— choose —'), m.ab)}${ABILS.map(([k, short]) => opt(k, short, m.ab)).join('')}</select></label>` : ''}
+        ${fx.optional ? `<label class="chk"><input type="checkbox" data-perm="extra" data-i="${i}"${m.extra ? ' checked' : ''}> ${t('also +{n} {ab}', { n: fx.optional.n, ab: abilityShort(fx.optional.ab) })}</label>` : ''}
+        <label class="chk"><input type="checkbox" data-perm="got" data-i="${i}"${m.got ? ' checked' : ''}> ${t('obtained')}</label>
+      </div><p class="muted">${esc(p.h)}</p>` : ''}
+    </div>`;
+  };
+  return `<section class="card">
+    <div class="check-head"><h2>${t('Permanent bonuses')}</h2>
+      <span>${planned.length ? planned.map((p) => `<span class="chip-s${mine[p.n].got ? ' got' : ''}">${esc(p.n)}</span>`).join('') : `<span class="muted">${t('Rewards that stay with the character for the whole game, such as the +1 ability from Auntie Ethel.')}</span>`}</span>
+      <button class="btn tiny" data-act="perm-toggle">${open ? t('Hide') : t('Choose')}</button></div>
+    ${open ? ACTS.map(([, label], ai) => `<h3 class="group">${t(label)}</h3><div class="perms">${PERMANENT.filter((p) => p.a === ai + 1).map(row).join('')}</div>`).join('')
+      + `<p class="muted">${t('Tick what this build plans to get. The ones that change an ability or the saving throws enter Final numbers from their act on; the rest are a checklist. Until ticked as obtained they also show in the party route.')}</p>` : ''}
+  </section>`;
+}
+document.addEventListener('change', (e) => {
+  const el = e.target;
+  const b = curBuild();
+  if (!el.dataset || !el.dataset.perm || !b) return;
+  const p = PERMANENT[+el.dataset.i];
+  const kind = el.dataset.perm;
+  if (kind === 'on') { if (el.checked) b.permanent[p.n] = { on: true, ab: '', extra: false, got: false }; else delete b.permanent[p.n]; }
+  else if (b.permanent[p.n]) b.permanent[p.n][kind] = kind === 'ab' ? el.value : el.checked;
+  save();
+  render();
+});
+
+Object.assign(actions, {
+  'perm-toggle'() { state.ui.permOpen = !state.ui.permOpen; },
+  'choice-open'(el) {
+    const level = +el.dataset.l;
+    const b = curBuild();
+    const x = levelInfo(b)[level];
+    const group = CHOICES[+el.dataset.g];
+    const merged = classChoices(b, x.cls).find((g) => g.name === group.name) || group;
+    const taken = chosenOf(b, x.cls, merged);
+    const part = { label: t('Choose {n}', { n: group.at[x.n] }), n: group.at[x.n], min: 1, off: group.repeat ? [] : taken,
+      options: group.options.filter((o) => !o[2] || o[2] <= x.n).map((o) => [o[0], o[1]]) };
+    openChooser(group.name, t('{cls} level {n} · {have} of {need} chosen so far', { cls: x.cls, n: x.n, have: taken.length, need: merged.need }), [part], (parts) => {
+      const chosen = parts[0].chosen;
+      const lines = group.join ? [group.name + ': ' + chosen.join(group.join)] : chosen.map((name) => group.name + ': ' + name);
+      curBuild().levels[level].picks.push(...lines);
+      toast(t('Added to level {n}: {x}', { n: level + 1, x: chosen.join(', ') }));
+    });
+    return false;
+  },
+  'choose-toggle'(el) {
+    const p = dlg.parts[+el.dataset.p];
+    const i = p.chosen.indexOf(el.dataset.n);
+    if (i >= 0) p.chosen.splice(i, 1);
+    else { if (p.chosen.length >= p.n) p.chosen.shift(); p.chosen.push(el.dataset.n); }
+    chooserSync();
+    return false;
+  },
+  'choose-confirm'() {
+    const done = dlg.done;
+    const parts = dlg.parts;
+    closeDialog();
+    done(parts);
+  },
+});
 </script>
   <script>
 // The build check: every choice still to make and everything that does not add up, in one list.
@@ -10300,6 +10819,7 @@ function buildIssues(b) {
   else if (points > 27) add('warn', creation, t('Point buy is {n} over the 27 points', { n: points - 27 }));
   else if (points < 27) add('warn', creation, t('{n} point(s) of point buy left to spend', { n: 27 - points }));
   if (!c.plus2 || !c.plus1) add('warn', creation, t('The +2 and +1 ability bonuses are not both assigned'));
+  if (raceCantrips(b).length && !c.cantrip) add('warn', creation, t('Racial cantrip not chosen'));
   const st = skillState(b);
   if (!st.missing.length) {
     if (st.chosen.length > st.max) add('warn', creation, t('{n} skill(s) more than the build can choose', { n: st.chosen.length - st.max }));
@@ -10319,11 +10839,22 @@ function buildIssues(b) {
         add('warn', progression, t('{cls}: subclass not chosen (it is picked at {cls} level {n})', { cls, n: d.subclassLevel }));
       }
     });
+    // choices the class makes while levelling: fighting style, invocations, metamagic, manoeuvres…
+    Object.keys(levels).forEach((cls) => classChoices(b, cls).forEach((g) => {
+      const have = chosenOf(b, cls, g).length;
+      if (have < g.need) add('warn', progression, t('{cls}: {name} — {have} of {need} chosen', { cls, name: g.name, have, need: g.need }));
+    }));
     b.levels.forEach((l, i) => {
       const x = info[i];
       if (!x.cls) return;
       const n = i + 1;
       if (grantsFeat(x) && !l.picks.some((p) => /^feat\b/i.test(p.trim()))) add('warn', progression, t('Level {n}: feat not chosen', { n }));
+      // a feat that asks for more (an ability, skills, spells…) written without them
+      l.picks.forEach((p) => {
+        const m = /^feat\s*:\s*([^(+]+?)\s*$/i.exec(p.trim());
+        const feat = m && FEATS.find(([name]) => norm(name) === norm(m[1]));
+        if (feat && featParts(feat[0], feat[1], b).length) add('warn', progression, t('Level {n}: {feat} — its options are not chosen', { n, feat: feat[0] }));
+      });
       if (grantsExpertise(x) && !l.picks.some((p) => /^expertise\b/i.test(p.trim()))) add('warn', progression, t('Level {n}: Expertise not chosen', { n }));
       const max = maxSpellLevel(b, i);
       l.picks.forEach((p) => {
@@ -10367,6 +10898,10 @@ function buildIssues(b) {
     if (Number((c.extra || {})[ab]) && ACTS.some(([act]) => abilityScores(b, act).sources[ab].length)) {
       add('note', numbers, t('{ab} has a manual bonus and is also changed by gear or the elixir: make sure it is not counted twice', { ab: short }));
     }
+  });
+  PERMANENT.forEach((p) => {
+    const mine = (b.permanent || {})[p.n];
+    if (mine && permanentEffect(p).choice && !mine.ab) add('warn', t('Permanent bonuses'), t('{name}: choose the ability it goes to', { name: p.n }));
   });
   if (b.elixir && !CONSUMABLE_BY_NAME.has(norm(b.elixir))) add('note', numbers, t('The elixir "{x}" is not in the database, so it changes no number', { x: b.elixir }));
   return out;
@@ -10525,6 +11060,18 @@ async function readShareCode(text) {
     return data && typeof data === 'object' ? fromLean(data) : null;
   } catch (e) { return null; }
 }
+// Once the planner is published at a web address, a share code can travel as a link: the address plus #b=CODE.
+const HOSTED = /^https?:$/.test(location.protocol) && !/^(localhost$|127\.|\[::1\]$)/.test(location.hostname);
+const shareLink = (code) => location.origin + location.pathname + '#b=' + code;
+// Opening such a link offers to add the build, and clears the code from the address.
+async function importFromAddress() {
+  const m = /^#b=(.+)$/.exec(location.hash);
+  if (!m || window.BG3_TEST) return;
+  const build = await readShareCode(decodeURIComponent(m[1]));
+  history.replaceState(null, '', location.pathname + location.search);
+  if (!build) { toast(t('That share code is incomplete or damaged')); return; }
+  if (await ask(t('Add the shared build "{name}" to your builds?', { name: normalizeBuild(build).name }), t('Add'))) importData({ type: 'bg3-build', build });
+}
 async function copyText(text, area) {
   if (area) area.select();
   try { await navigator.clipboard.writeText(text); return true; } catch (e) {
@@ -10573,7 +11120,13 @@ Object.assign(actions, {
       <p>${t('Send this text to a friend. They paste it into Import and get a copy of "{name}".', { name: esc(b.name) })}</p>
       <textarea id="share-text" rows="5" readonly>${esc(code)}</textarea>
       <p class="muted">${t('{n} characters', { n: code.length })}</p>
-      <div class="modal-btns"><button class="btn" data-act="dialog-close">${t('Close')}</button><button class="btn primary" data-act="share-copy">${t('Copy')}</button></div>`);
+      <div class="modal-btns"><button class="btn" data-act="dialog-close">${t('Close')}</button>
+        ${HOSTED ? `<button class="btn" data-act="share-link" title="${t('A link that opens this planner and offers to add the build')}">${t('Copy link')}</button>` : ''}
+        <button class="btn primary" data-act="share-copy">${t('Copy')}</button></div>`);
+    return false;
+  },
+  async 'share-link'() {
+    toast((await copyText(shareLink(dlg.text))) ? t('Link copied') : t('Could not copy the link'));
     return false;
   },
   async 'share-copy'() {
@@ -10723,6 +11276,8 @@ Object.assign(actions, {
   'pick-add'(el) { const l = +el.dataset.l; curBuild().levels[l].picks.push(''); return { focus: `[data-path="levels.${l}.picks.${curBuild().levels[l].picks.length - 1}"]` }; },
   'pick-del'(el) { curBuild().levels[+el.dataset.l].picks.splice(+el.dataset.i, 1); },
   act(el) { state.ui.act = el.dataset.k; },
+  // the level the numbers are shown at; the last level means "the finished build"
+  'stat-level'(el) { const b = curBuild(); const n = +el.dataset.n; b.current = n >= charLevel(b) ? 0 : n; },
   async 'gear-copy-prev'() {
     const b = curBuild();
     const idx = ACTS.findIndex(([k]) => k === state.ui.act);
@@ -10861,6 +11416,7 @@ document.addEventListener('change', (e) => {
 });
 
 render();
+importFromAddress();
 </script>
   <script>if (window.BG3_TEST) document.write('<script src="tests/tests.js"><\/script>');</script>
 </body>

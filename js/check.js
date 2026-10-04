@@ -33,6 +33,7 @@ function buildIssues(b) {
   else if (points > 27) add('warn', creation, t('Point buy is {n} over the 27 points', { n: points - 27 }));
   else if (points < 27) add('warn', creation, t('{n} point(s) of point buy left to spend', { n: 27 - points }));
   if (!c.plus2 || !c.plus1) add('warn', creation, t('The +2 and +1 ability bonuses are not both assigned'));
+  if (raceCantrips(b).length && !c.cantrip) add('warn', creation, t('Racial cantrip not chosen'));
   const st = skillState(b);
   if (!st.missing.length) {
     if (st.chosen.length > st.max) add('warn', creation, t('{n} skill(s) more than the build can choose', { n: st.chosen.length - st.max }));
@@ -52,11 +53,22 @@ function buildIssues(b) {
         add('warn', progression, t('{cls}: subclass not chosen (it is picked at {cls} level {n})', { cls, n: d.subclassLevel }));
       }
     });
+    // choices the class makes while levelling: fighting style, invocations, metamagic, manoeuvres…
+    Object.keys(levels).forEach((cls) => classChoices(b, cls).forEach((g) => {
+      const have = chosenOf(b, cls, g).length;
+      if (have < g.need) add('warn', progression, t('{cls}: {name} — {have} of {need} chosen', { cls, name: g.name, have, need: g.need }));
+    }));
     b.levels.forEach((l, i) => {
       const x = info[i];
       if (!x.cls) return;
       const n = i + 1;
       if (grantsFeat(x) && !l.picks.some((p) => /^feat\b/i.test(p.trim()))) add('warn', progression, t('Level {n}: feat not chosen', { n }));
+      // a feat that asks for more (an ability, skills, spells…) written without them
+      l.picks.forEach((p) => {
+        const m = /^feat\s*:\s*([^(+]+?)\s*$/i.exec(p.trim());
+        const feat = m && FEATS.find(([name]) => norm(name) === norm(m[1]));
+        if (feat && featParts(feat[0], feat[1], b).length) add('warn', progression, t('Level {n}: {feat} — its options are not chosen', { n, feat: feat[0] }));
+      });
       if (grantsExpertise(x) && !l.picks.some((p) => /^expertise\b/i.test(p.trim()))) add('warn', progression, t('Level {n}: Expertise not chosen', { n }));
       const max = maxSpellLevel(b, i);
       l.picks.forEach((p) => {
@@ -100,6 +112,10 @@ function buildIssues(b) {
     if (Number((c.extra || {})[ab]) && ACTS.some(([act]) => abilityScores(b, act).sources[ab].length)) {
       add('note', numbers, t('{ab} has a manual bonus and is also changed by gear or the elixir: make sure it is not counted twice', { ab: short }));
     }
+  });
+  PERMANENT.forEach((p) => {
+    const mine = (b.permanent || {})[p.n];
+    if (mine && permanentEffect(p).choice && !mine.ab) add('warn', t('Permanent bonuses'), t('{name}: choose the ability it goes to', { name: p.n }));
   });
   if (b.elixir && !CONSUMABLE_BY_NAME.has(norm(b.elixir))) add('note', numbers, t('The elixir "{x}" is not in the database, so it changes no number', { x: b.elixir }));
   return out;

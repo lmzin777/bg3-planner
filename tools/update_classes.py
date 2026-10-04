@@ -157,19 +157,26 @@ def feature_names(text):
     return out
 
 
-def grid(table):
-    """Rows of a wikitable as lists of cell texts, with rowspan and colspan expanded."""
+def grid(table, multiline=False):
+    """Rows of a wikitable as lists of cell texts, with rowspan and colspan expanded.
+
+    With multiline, text on the lines after a cell marker stays part of that cell.
+    """
     rows, pending = [], {}
     for raw in re.split(r"\n\|-[^\n]*", table):
         cells = []
         for line in raw.split("\n"):
-            if not line or line[0] not in "!|" or line.startswith("|}") or line.startswith("{|") or line.startswith("|+"):
+            if line.startswith("|}") or line.startswith("{|") or line.startswith("|+"):
+                continue
+            if not line or line[0] not in "!|":
+                if multiline and cells and line.strip():
+                    cells[-1] = (cells[-1][0] + "\n" + line.strip(), cells[-1][1], cells[-1][2])
                 continue
             for part in re.split(r"\s*(?:!!|\|\|)\s*", line[1:]):
-                m = re.match(r'\s*((?:(?:style|rowspan|colspan|class|scope)\s*=\s*"[^"]*"\s*)+)\|(?!\|)(.*)$', part, re.S)
+                m = re.match(r'\s*((?:(?:style|rowspan|colspan|class|scope)\s*=\s*(?:"[^"]*"|\w+)\s*)+)\|(?!\|)(.*)$', part, re.S)
                 attrs, text = (m.group(1), m.group(2)) if m else ("", part)
-                rs = re.search(r'rowspan\s*=\s*"(\d+)"', attrs)
-                cs = re.search(r'colspan\s*=\s*"(\d+)"', attrs)
+                rs = re.search(r'rowspan\s*=\s*"?(\d+)', attrs)
+                cs = re.search(r'colspan\s*=\s*"?(\d+)', attrs)
                 cells.append((text.strip(), int(rs.group(1)) if rs else 1, int(cs.group(1)) if cs else 1))
         if not cells:
             continue

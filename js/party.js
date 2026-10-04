@@ -85,6 +85,7 @@ function renderParty() {
       ${checklist(active, act)}
     </section>
 
+    ${partyNumbers(members)}
     ${partyRoute(members)}
     ${partySkills(members)}
   </div>`;

@@ -113,11 +113,13 @@ function abilityScores(b, act, swap) {
   const feats = featBonuses(b);
   const worn = act ? wornItems(b, act, swap) : {};
   const elixir = elixirAbility(b.elixir);
+  const perm = permanentBonuses(b, act);
   const scores = {};
   const sources = {};
   ABILITY_KEYS.forEach((ab) => {
     let v = finalAbility(b, ab, feats);
     const src = [];
+    perm.abilities[ab].forEach(([n, name]) => { v += n; src.push(signed(n) + ' ' + name); });
     const effects = [...new Set(Object.values(worn))].flatMap((it) => itemAbilityEffects(it)
       .filter((e) => e.ab === ab && (!e.races || e.races.includes(b.creation.race))).map((e) => [e, it.n]));
     effects.filter(([e]) => e.kind === 'add').forEach(([e, name]) => {
@@ -151,6 +153,8 @@ function pickedSkills(b) {
     const m = /^(?:skills?|proficienc(?:y|ies))\s*:\s*(.+)$/i.exec(p.trim()) || /^feat\s*:\s*skilled\b(.*)$/i.exec(p.trim());
     if (m) ALL_SKILLS.forEach((k) => { if (new RegExp('\\b' + k + '\\b', 'i').test(m[1])) out.add(k); });
   });
+  // options that grant a skill by their own text: a Favoured Enemy, an Eldritch Invocation
+  chosenOptions(b).forEach(([, text]) => { if (/proficien/i.test(text)) ALL_SKILLS.forEach((k) => { if (new RegExp('\\b' + k + '\\b').test(text)) out.add(k); }); });
   return out;
 }
 
@@ -223,6 +227,8 @@ function armourClassInfo(b, act, mods, swap) {
 const armourClass = (b, act, mods, swap) => armourClassInfo(b, act, mods, swap).total;
 
 // ---------- attacks ----------
+// The average roll of a dice text: "2d6" is 7, a flat "1" is 1.
+const avgDice = (text) => { const m = /(\d+)d(\d+)/.exec(text || ''); return m ? Number(m[1]) * (Number(m[2]) + 1) / 2 : Number(text) || 0; };
 const WEAPON_SLOTS = ['meleeMain', 'meleeOff', 'rangedMain', 'rangedOff'];
 // "1d8 + 1 Slashing" as { dice, flat, type }; the flat part is the weapon's enchantment.
 function parseDamage(text) {
@@ -234,10 +240,13 @@ function parseDamage(text) {
 // Dexterity for ranged, the higher of the two for Finesse), proficiency bonus when proficient, the enchantment,
 // Archery +2 to ranged attack rolls, Duelling +2 damage, and the off hand adding its modifier only with
 // Two-Weapon Fighting. Extra damage that depends on the situation is listed apart.
-function attackRows(b, act, ab, pb) {
-  const worn = wornItems(b, act);
-  const prof = proficiencies(b, act);
+function attackRows(b, act, ab, pb, swap) {
+  const worn = wornItems(b, act, swap);
+  const prof = proficiencies(b, act, swap);
   const info = levelInfo(b);
+  const monk = info.filter((x) => x.cls === 'Monk').length;
+  const brawler = hasPick(b, /tavern brawler/i);
+  const martial = monk ? classColumn('Monk', monk, /martial arts/i) : '';
   const mods = ab.mods;
   const pact = hasPick(b, /pact of the blade/i) || info.some((x) => x.sub === 'The Hexblade');
   const twf = hasStyle(b, /two-weapon/);
@@ -247,10 +256,12 @@ function attackRows(b, act, ab, pb) {
     const it = worn[slot];
     if (!it || !isWeapon(it)) return;
     const off = slot === 'meleeOff' || slot === 'rangedOff';
-    let key = it.s === 'ranged' ? 'dex' : (it.pp || []).includes('Finesse') && mods.dex > mods.str ? 'dex' : 'str';
+    const proficient = canUse(it, prof) || (pact && slot === 'meleeMain');
+    // Monk weapons: any weapon the monk is proficient with that is neither Heavy nor Two-Handed. They may use Dexterity.
+    const monkWeapon = monk && it.s === 'melee' && proficient && it.w !== 'two' && !(it.pp || []).includes('Heavy');
+    let key = it.s === 'ranged' ? 'dex' : ((it.pp || []).includes('Finesse') || monkWeapon) && mods.dex > mods.str ? 'dex' : 'str';
     // a bound pact weapon attacks with Charisma
     if (pact && slot === 'meleeMain' && mods.cha > mods[key]) key = 'cha';
-    const proficient = canUse(it, prof) || (pact && slot === 'meleeMain');
     const enchant = Number(String(it.en || '').replace('+', '')) || 0;
     const attack = [[abilityShort(key), mods[key]]];
     if (proficient) attack.push([t('Proficiency'), pb]);
@@ -260,7 +271,9 @@ function attackRows(b, act, ab, pb) {
     // a versatile weapon with the other hand free is held in both hands
     const twoHands = it.w === 'versatile' && slot === 'meleeMain' && !worn.meleeOff && it.vd;
     const dmg = parseDamage(twoHands ? it.vd : it.d) || { dice: '', flat: 0, type: '' };
-    const type = dmg.type || (parseDamage(it.d) || {}).type || '';
+    let type = dmg.type || (parseDamage(it.d) || {}).type || '';
+    // Deft Strikes: a monk weapon rolls the Martial Arts die when that is more than its own
+    if (monkWeapon && avgDice(martial) > avgDice(dmg.dice)) { dmg.dice = martial; type = 'Bludgeoning'; }
     const damage = [];
     if (!off || twf || mods[key] < 0) damage.push([abilityShort(key), mods[key]]);
     if (dmg.flat) damage.push([t('Enchantment'), dmg.flat]);
@@ -272,16 +285,24 @@ function attackRows(b, act, ab, pb) {
     });
     rows.push({ slot, name: it.n, item: it, proficient, attack, attackTotal: attack.reduce((a, p) => a + p[1], 0),
       dice: dmg.dice, type, damage, damageTotal: damage.reduce((a, p) => a + p[1], 0) });
+    // thrown, for builds that throw: Strength on the attack roll, the weapon's melee damage, and Tavern Brawler
+    // adding Strength once more to both (the wiki's Attacks and Throw pages)
+    if (brawler && it.s === 'melee' && (it.pp || []).includes('Thrown')) {
+      const dkey = (it.pp || []).includes('Finesse') && mods.dex > mods.str ? 'dex' : 'str';
+      const base = parseDamage(it.d) || dmg;
+      const tAttack = [['STR', mods.str]].concat(proficient ? [[t('Proficiency'), pb]] : [], enchant ? [[t('Enchantment'), enchant]] : [], [['Tavern Brawler', mods.str]], gearAttack.parts);
+      const tDamage = [[abilityShort(dkey), mods[dkey]]].concat(base.flat ? [[t('Enchantment'), base.flat]] : [], [['Tavern Brawler', mods.str]]);
+      rows.push({ slot, thrown: true, name: it.n + ' · ' + t('thrown'), item: it, proficient, attack: tAttack, attackTotal: tAttack.reduce((a, p) => a + p[1], 0),
+        dice: base.dice, type: base.type || type, damage: tDamage, damageTotal: tDamage.reduce((a, p) => a + p[1], 0) });
+    }
   });
   // unarmed strike, for monks and Tavern Brawler builds
-  const monk = info.filter((x) => x.cls === 'Monk').length;
-  const brawler = hasPick(b, /tavern brawler/i);
   if (monk || brawler) {
     const key = monk && mods.dex > mods.str ? 'dex' : 'str';
     const attack = [[abilityShort(key), mods[key]], [t('Proficiency'), pb]];
     const damage = [[abilityShort(key), mods[key]]];
     if (brawler) { attack.push(['Tavern Brawler', mods.str]); damage.push(['Tavern Brawler', mods.str]); }
-    const die = monk ? classColumn('Monk', monk, /martial arts/i) : '';
+    const die = martial;
     rows.push({ slot: 'unarmed', name: t('Unarmed strike'), proficient: true, attack, attackTotal: attack.reduce((a, p) => a + p[1], 0),
       dice: die || '1', type: 'Bludgeoning', damage, damageTotal: damage.reduce((a, p) => a + p[1], 0) });
   }
@@ -385,30 +406,41 @@ function knownSpells(b) {
 }
 
 // ---------- everything together ----------
-// Everything the "Final numbers" card and the PDF sheet show, at the build's final level with the gear of one act.
-function finalStats(b, act) {
+// The build as it stands at an earlier level: the rows after it are blank.
+const atLevel = (b, level) => Object.assign({}, b, { levels: b.levels.map((l, i) => (i < level ? l : { cls: '', sub: '', picks: [] })) });
+// Everything the "Final numbers" card and the PDF sheet show, with the gear of one act.
+// opts.level looks at the build at that level instead of the last one; opts.swap replaces gear slots.
+function finalStats(b, act, opts) {
   act = act || 'act3';
+  const swap = (opts && opts.swap) || null;
+  if (opts && opts.level && opts.level < 12) b = atLevel(b, opts.level);
   const level = charLevel(b);
-  const ab = abilityScores(b, act);
+  const ab = abilityScores(b, act, swap);
   const { scores, mods, feats } = ab;
   const pb = profBonus(level);
-  const worn = wornItems(b, act);
+  const worn = wornItems(b, act, swap);
   const gains = level ? allGains(b) : [];
   const st = skillState(b);
   const expert = expertiseSkills(b);
   const picked = pickedSkills(b);
+  // half the proficiency bonus, rounded down, on checks without proficiency: every skill for a Bard's
+  // Jack of All Trades, the physical ones for a Champion's Remarkable Athlete
   const jack = gains.includes('Jack of All Trades') ? Math.floor(pb / 2) : 0;
+  const athlete = gains.some((g) => /^Remarkable Athlete: Proficiency/.test(g)) ? Math.floor(pb / 2) : 0;
+  const physical = ['Athletics', 'Acrobatics', 'Sleight of Hand', 'Stealth'];
   const skills = ALL_SKILLS.map((x) => {
     const proficient = !!st.granted[x] || st.chosen.includes(x) || expert.has(x) || picked.has(x);
-    const bonus = mods[skillAbility(x)] + (proficient ? pb : jack) + (expert.has(x) ? pb : 0) + namedBonus(worn, x);
+    const half = Math.max(jack, physical.includes(x) ? athlete : 0);
+    const bonus = mods[skillAbility(x)] + (proficient ? pb : half) + (expert.has(x) ? pb : 0) + namedBonus(worn, x);
     return { name: x, ability: skillAbility(x), proficient, expert: expert.has(x), bonus };
   });
   // saving throws: proficiency comes from the first class only, and from the Resilient feat
   const first = DATA.classes[startingClass(b)];
   const allSaves = gearBonus(worn, 'saves');
+  const permSaves = permanentBonuses(b, act).saves.reduce((a, p) => a + p[1], 0);
   const saves = ABILS.map(([key, short, name]) => {
     const proficient = (!!first && first.saves.includes(name)) || hasPick(b, new RegExp('resilient.*' + short, 'i'));
-    return { key, short, proficient, bonus: mods[key] + (proficient ? pb : 0) + allSaves.n + namedBonus(worn, name + ' Saving Throws') };
+    return { key, short, proficient, bonus: mods[key] + (proficient ? pb : 0) + allSaves.n + permSaves + namedBonus(worn, name + ' Saving Throws') };
   });
   // initiative: Dexterity, Alert, features that say "+N to Initiative", and gear
   const initiative = [['DEX', mods.dex]];
@@ -422,21 +454,34 @@ function finalStats(b, act) {
     label: c.sub || c.cls, ability: c.ab, dc: 8 + pb + mods[c.ab] + dc.n, attack: pb + mods[c.ab] + sa.n,
     prepared: PREPARES.includes(c.cls) ? Math.max(1, mods[c.ab] + levels[c.cls]) : 0,
   }));
-  const acInfo = Object.fromEntries(ACTS.map(([k]) => [k, armourClassInfo(b, k, k === act ? mods : null)]));
+  const acInfo = Object.fromEntries(ACTS.map(([k]) => [k, armourClassInfo(b, k, k === act && !swap ? mods : null, k === act ? swap : null)]));
   return {
     act, level, feats, scores, mods, sources: ab.sources, pb, skills, saves,
     hp: hitPoints(b, mods.con),
     initiative: initiative.reduce((a, p) => a + p[1], 0), initiativeParts: initiative,
     ac: Object.fromEntries(ACTS.map(([k]) => [k, acInfo[k].total])), acInfo,
-    attacks: level ? attackRows(b, act, ab, pb) : { rows: [], extras: [], situational: [] },
+    attacks: level ? attackRows(b, act, ab, pb, swap) : { rows: [], extras: [], situational: [] },
     casting, castingGear: [...dc.parts, ...sa.parts.filter((p) => !dc.parts.some((q) => q[0] === p[0] && q[1] === p[1]))], castingSituational: [...dc.situational, ...sa.situational],
     slots: spellSlots(b), pact: pactSlots(b), resources: classResources(b), known: knownSpells(b),
   };
 }
 
 const partsText = (parts) => parts.map(([n, v]) => esc((v < 0 ? '−' + Math.abs(v) : v) + ' ' + n)).join(' + ');
+// What the level after the current one brings, in one line.
+function nextLevelText(b) {
+  const i = b.current;
+  const x = levelInfo(b)[i];
+  if (!b.current || !x || !x.cls) return '';
+  const bits = [...levelGains(x), ...levelNumbers(x)];
+  if (picksSubclass(x)) bits.unshift(t('subclass'));
+  if (grantsFeat(x)) bits.push(t('feat'));
+  levelChoices(x).forEach((c) => { if (!bits.some((g) => norm(g).startsWith(norm(c.group.name)))) bits.push(c.group.name + (c.n > 1 ? ' ×' + c.n : '')); });
+  return `<p class="next-lvl"><b>${t('Next: level {n} · {cls} {k}', { n: i + 1, cls: x.cls, k: x.n })}</b> ${bits.length ? esc(bits.join(' · ')) : t('nothing new besides hit points')}</p>`;
+}
 function statsLive(b) {
-  const s = finalStats(b, state.ui.act);
+  const total = charLevel(b);
+  const at = b.current && b.current < total ? b.current : 0;
+  const s = finalStats(b, state.ui.act, at ? { level: at } : null);
   if (!s.level) return `<p class="muted">${t('Set at least the class of level 1 to see the final numbers.')}</p>`;
   // AC shows how it adds up; spells and situational bonuses are named but not counted
   const acBox = (label, info) => `<div class="stat ac"><span>${label}</span><b>${info.total}</b>
@@ -457,8 +502,8 @@ function statsLive(b) {
   const slots = s.slots.length ? `<p class="points"><b>${t('Spell slots')}</b> ${s.slots.map((n, i) => `<span class="slot-n" title="${t('Level {n}', { n: i + 1 })}">${i + 1}<i>×${n}</i></span>`).join('')}</p>` : '';
   const pact = s.pact ? `<p class="points"><b>${t('Pact Magic slots')}</b> ${t('{n} of level {lv}, back on a Short Rest', { n: s.pact.n, lv: s.pact.level })}</p>` : '';
   const known = s.known.map((k) => `${esc(k.cls)}: ${[k.maxCantrips ? t('{n} of {max} cantrips', { n: k.cantrips, max: k.maxCantrips }) : '', k.maxSpells ? t('{n} of {max} spells', { n: k.spells, max: k.maxSpells }) : ''].filter(Boolean).join(', ')}`).join(' · ');
-  return `<div class="stat-row">
-      ${box(t('Level'), s.level)}${box(t('Proficiency bonus'), signed(s.pb))}${box(t('Hit points'), s.hp)}${box(t('Initiative'), signed(s.initiative), s.initiativeParts.length > 1 ? partsText(s.initiativeParts) : '')}
+  return `${nextLevelText(b)}<div class="stat-row">
+      ${box(t('Level'), s.level, at ? esc(splitText(atLevel(b, at))) : '')}${box(t('Proficiency bonus'), signed(s.pb))}${box(t('Hit points'), s.hp)}${box(t('Initiative'), signed(s.initiative), s.initiativeParts.length > 1 ? partsText(s.initiativeParts) : '')}
       ${ACTS.map(([k, l]) => acBox(t('AC · {act}', { act: t(l) }), s.acInfo[k])).join('')}
     </div>
     <div class="abils final">${ABILS.map(([ab, short]) => `<div class="abil"><div class="abil-name">${short}</div>
@@ -477,7 +522,7 @@ function statsLive(b) {
     <h3 class="group">${t('Skills')}</h3>
     <div class="skill-final">${s.skills.map((k) => `<span class="${k.proficient ? 'prof' : ''}${k.expert ? ' expert' : ''}" title="${k.expert ? t('Expertise') : k.proficient ? t('Proficient') : ''}">
       ${esc(k.name)} <b>${signed(k.bonus)}</b></span>`).join('')}</div>
-    <p class="muted">${t('In gold: proficient; with a star: Expertise. Everything is for the final level with the gear of the act chosen above. Armour Class, attacks and spell numbers follow the game formulas; bonuses that depend on the situation are listed, not added.')}</p>`;
+    <p class="muted">${t('In gold: proficient; with a star: Expertise. Everything is for the level and the gear of the act chosen above. Armour Class, attacks and spell numbers follow the game formulas; bonuses that depend on the situation are listed, not added.')}</p>`;
 }
 function statsCard(b) {
   const extra = b.creation.extra || {};
@@ -485,6 +530,8 @@ function statsCard(b) {
   return `<section class="card">
     <h2>${t('Final numbers')}</h2>
     <div class="stat-tools">
+      <div><span class="lbl">${t('At level')}</span><div class="acts lvls">${Array.from({ length: charLevel(b) }, (x, i) => i + 1).map((n) =>
+        `<button class="${(b.current && b.current < charLevel(b) ? b.current : charLevel(b)) === n ? 'on' : ''}" data-act="stat-level" data-n="${n}">${n}</button>`).join('')}</div></div>
       <div><span class="lbl">${t('With the gear of')}</span>${actTabs(state.ui.act, 'act')}</div>
       ${elixirs.length ? `<label class="field"><span>${t('Elixir kept active')}</span><select data-path="elixir" data-rerender>${opt('', t('— none —'), b.elixir)}${
         elixirs.map((c) => opt(c.n, c.n + (elixirAbility(c.n) ? ' ★' : ''), b.elixir)).join('')}${b.elixir && !elixirs.some((c) => c.n === b.elixir) ? opt(b.elixir, b.elixir, b.elixir) : ''}</select></label>` : ''}
@@ -498,11 +545,47 @@ function statsCard(b) {
 }
 
 // ---------- party ----------
+// A member's numbers in the Party Planner: with the gear of the act on screen, at the level the build is marked at.
+const memberStats = (b) => finalStats(b, state.ui.partyAct, b.current ? { level: b.current } : null);
+// The attack the build leans on: the unarmed strike, a thrown weapon, the ranged main hand or the melee main hand.
+function mainAttack(s, style) {
+  const rows = s.attacks.rows;
+  const want = style === 'unarmed' ? (r) => r.slot === 'unarmed' : style === 'thrown' ? (r) => r.thrown : style === 'ranged' ? (r) => r.slot === 'rangedMain' : (r) => r.slot === 'meleeMain' && !r.thrown;
+  return rows.find(want) || rows.find((r) => r.slot === 'meleeMain' && !r.thrown) || rows[0] || null;
+}
+const avgDamage = (r) => (r ? avgDice(r.dice) + r.damageTotal : 0);
+// Level, hit points, armour class, initiative, main attack and spell save DC of every member, side by side.
+function partyNumbers(members) {
+  const active = members.filter((m) => m.build && charLevel(m.build));
+  if (!active.length) return '';
+  const stats = active.map((m) => memberStats(m.build));
+  const act = state.ui.partyAct;
+  const attacks = active.map((m, i) => mainAttack(stats[i], buildProfile(m.build, act).style));
+  const rows = [
+    [t('Level'), stats.map((s) => s.level), false],
+    [t('Hit points'), stats.map((s) => s.hp), true],
+    [t('Armour Class'), stats.map((s) => s.ac[act]), true],
+    [t('Initiative'), stats.map((s) => s.initiative), true, signed],
+    [t('Main attack'), attacks.map((r) => (r ? r.attackTotal : null)), true, signed, attacks.map((r) => (r ? r.name : ''))],
+    [t('Damage per hit'), attacks.map((r) => (r ? avgDamage(r) : null)), true, (v) => v.toFixed(1), attacks.map((r) => (r ? r.dice + (r.damageTotal ? ' ' + signed(r.damageTotal) : '') : ''))],
+    [t('Spell save DC'), stats.map((s) => (s.casting.length ? Math.max(...s.casting.map((c) => c.dc)) : null)), true],
+    ...ABILS.map(([key, short]) => [t('{ab} save', { ab: short }), stats.map((s) => s.saves.find((k) => k.key === key).bonus), true, signed]),
+  ];
+  return `<section class="card">
+    <h2>${t('Party numbers')}</h2>
+    <p class="muted">${t('Each member at the level marked in their build (the last one when none is marked), with the gear of this act. The best of each row is highlighted.')}</p>
+    <div class="table-wrap"><table class="ptable skills"><thead><tr><th></th>${active.map((m) => `<th data-ml="${m.i}">${esc(memberLabel(m))}</th>`).join('')}</tr></thead><tbody>${
+      rows.map(([label, vals, best, fmt, notes]) => {
+        const top = best ? Math.max(...vals.filter((v) => v != null)) : null;
+        return `<tr><th>${label}</th>${vals.map((v, i) => `<td class="${v != null && v === top ? 'best' : ''}">${v == null ? '—' : (fmt ? fmt(v) : v)}${notes && notes[i] ? `<small>${esc(notes[i])}</small>` : ''}</td>`).join('')}</tr>`;
+      }).join('')}</tbody></table></div>
+  </section>`;
+}
 // For each skill, every member's bonus, with the best one highlighted.
 function partySkills(members) {
   const active = members.filter((m) => m.build);
   if (!active.length) return '';
-  const stats = active.map((m) => finalStats(m.build, state.ui.partyAct));
+  const stats = active.map((m) => memberStats(m.build));
   const rows = ALL_SKILLS.map((x, i) => {
     const vals = stats.map((s) => s.skills[i]);
     const best = Math.max(...vals.map((v) => v.bonus));
@@ -530,6 +613,11 @@ function partyRoute(members) {
       const parts = s.where.split(/\s+[—–]\s+/);
       const loc = parts[0].trim() || t('Location not set');
       (groups[loc] = groups[loc] || []).push(`<li><b class="r-${esc(s.rarity)}">${esc(s.name)}</b> <small><i data-ml="${m.i}">${esc(memberLabel(m))}</i> · ${t(slotLabel)}${parts[1] ? ' · ' + esc(parts.slice(1).join(' — ')) : ''}</small></li>`);
+    }));
+    const actNum = ACTS.findIndex(([a]) => a === act) + 1;
+    active.forEach((m) => PERMANENT.filter((p) => p.a === actNum && (m.build.permanent || {})[p.n] && !m.build.permanent[p.n].got).forEach((p) => {
+      const loc = t('Permanent bonuses');
+      (groups[loc] = groups[loc] || []).push(`<li><b>${esc(p.n)}</b> <small><i data-ml="${m.i}">${esc(memberLabel(m))}</i> · ${esc(p.h)}</small></li>`);
     }));
     const locs = Object.keys(groups).sort((a, c) => a.localeCompare(c));
     return locs.length ? `<div class="route-act"><h3>${t(label)}</h3>${locs.map((loc) => `<div class="loc"><h4>${esc(loc)}</h4><ul>${groups[loc].join('')}</ul></div>`).join('')}</div>` : '';

@@ -665,7 +665,7 @@
       },
       "levels": [
         {"cls": "Cleric", "sub": "Tempest Cleric", "picks": ["Cantrip: Blade Ward", "Cantrip: Guidance", "Cantrip: Resistance", "Wrath of the Storm", "Prepared Spell: Create or Destroy Water"]},
-        {"cls": "Sorcerer", "sub": "Draconic Sorcerer", "picks": ["Cantrip: Friends", "Cantrip: Minor Illusion", "Cantrip: Ray of Frost", "Cantrip: Shocking Grasp", "Spell: Chromatic Orb", "Spell: Shield", "Witch Bolt (granted by the Draconic subclass)"]},
+        {"cls": "Sorcerer", "sub": "Draconic Sorcerer", "picks": ["Cantrip: Friends", "Cantrip: Minor Illusion", "Cantrip: Ray of Frost", "Cantrip: Shocking Grasp", "Spell: Chromatic Orb", "Spell: Shield", "Draconic Ancestry: Blue (Lightning)", "Witch Bolt (granted by the Blue ancestry)"]},
         {"cls": "Sorcerer", "sub": "", "picks": ["Spell: Magic Missile", "Metamagic: Extended Spell", "Metamagic: Twinned Spell"]},
         {"cls": "Cleric", "sub": "", "picks": ["Channel Divinity: Destructive Wrath", "Prepared Spell: Sanctuary"]},
         {"cls": "Sorcerer", "sub": "", "picks": ["Spell (choose): Cloud of Daggers, Enhance Ability or Misty Step", "Metamagic: Quickened Spell"]},

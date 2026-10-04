@@ -5,7 +5,7 @@
 // ---------- PDF sheet ----------
 function sheetHtml(b) {
   const c = b.creation;
-  const meta = [[t('Origin'), c.origin], [t('Race'), raceText(c)], [t('Background'), c.background], [t('Skills'), c.skills],
+  const meta = [[t('Origin'), c.origin], [t('Race'), raceText(c)], [t('Background'), c.background], [t('Skills'), c.skills], [t('Racial cantrip'), c.cantrip || ''],
     [t('From background'), (BACKGROUNDS[c.background] || []).join(', ')], [t('Party role'), b.role]]
     .filter((x) => String(x[1]).trim())
     .map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('');
@@ -25,6 +25,8 @@ function sheetHtml(b) {
         ...ACTS.map(([k, l]) => [t('AC · {act}', { act: t(l) }), fin.ac[k]]), [t('Abilities'), ABILS.map(([ab, short]) => fin.scores[ab] + ' ' + short).join(' · ')],
         [t('Saving throws'), fin.saves.map((k) => k.short + ' ' + signed(k.bonus) + (k.proficient ? '●' : '')).join(' · ')],
         ...(b.elixir ? [[t('Elixir kept active'), esc(b.elixir)]] : []),
+        ...(PERMANENT.some((p) => (b.permanent || {})[p.n]) ? [[t('Permanent bonuses'), PERMANENT.filter((p) => (b.permanent || {})[p.n]).map((p) => esc(p.n)
+          + (b.permanent[p.n].ab ? ' (' + abilityShort(b.permanent[p.n].ab) + ')' : '') + (b.permanent[p.n].got ? ' ✓' : '')).join(' · ')]] : []),
         ...fin.attacks.rows.map((r) => [esc(r.name), t('Attack') + ' ' + signedParts(r.attackTotal, r.attack) + ' · ' + t('Damage') + ' ' + esc(r.dice) + (r.damageTotal ? ' ' + (r.damageTotal > 0 ? '+ ' : '− ') + Math.abs(r.damageTotal) : '') + ' ' + esc(r.type)]),
         ...fin.casting.map((c) => [esc(c.label) + ' (' + abilityShort(c.ability) + ')', t('Spell save DC') + ' ' + c.dc + ' · ' + t('Spell attack') + ' ' + signed(c.attack)]),
         ...(fin.slots.length ? [[t('Spell slots'), fin.slots.map((n, i) => t('Level {n}', { n: i + 1 }) + ' ×' + n).join(' · ')]] : []),

@@ -29,16 +29,23 @@ function pickerList() {
   const ranked = picker.mode === 'all' ? null : recommend(curBuild(), picker.slot, picker.act, picker.mode, all);
   const list = ranked ? ranked.map((r) => r.it) : all;
   const why = ranked ? new Map(ranked.map((r) => [r.it, r])) : null;
+  // every row says what the item changes against what is in the slot now
+  const cmp = recommendBase(curBuild(), picker.act);
+  const current = wornItems(curBuild(), picker.act)[picker.slot];
+  const versus = (it) => (it === current ? '' : deltaText(why && why.get(it) ? why.get(it).delta : gearDelta(curBuild(), picker.act, picker.slot, it, cmp.base, cmp.p.style, cmp.p.level)));
   const rows = list.slice(0, PICKER_MAX).map((it, i) => {
     const ok = canUse(it, picker.prof);
     const where = [it.a ? t('Act {n}', { n: it.a }) : t('Any act'), [it.l, it.h].filter(Boolean).join(' — ')].filter(Boolean).join(' · ');
     const effect = (it.ps || []).map((p) => p[1] || p[0]).join(' ') || it.x || '';
     const r = why && why.get(it);
     const who = picker.taken[norm(it.n)];
+    if (!picker.versus.has(it)) picker.versus.set(it, versus(it));
+    const vs = picker.versus.get(it);
     return `<button class="pick-row r-${it.r}${ok ? '' : ' no'}" data-act="picker-choose" data-n="${esc(it.n)}">
       ${pic(it.i, 'pic small')}<b>${r ? `<i class="rank">${i + 1}</i>` : ''}${esc(it.n)}</b><span>${esc([it.t, it.d].filter(Boolean).join(' · '))}${ok ? '' : ` · <em>${t('not proficient')}</em>`}${
         who ? ` · <em>${t('worn by {who}', { who: esc(who) })}</em>` : ''}</span>
       ${r ? `<small class="why">${r.reasons.map(esc).join(' · ')}</small>` : ''}
+      ${it === current ? `<small class="delta">${t('in this slot now')}</small>` : vs ? `<small class="delta">${current ? t('Against {x}: {d}', { x: esc(current.n), d: esc(vs) }) : t('With it on: {d}', { d: esc(vs) })}</small>` : ''}
       ${effect ? `<small class="fx">${esc(effect)}</small>` : ''}<small>${esc(where)}</small></button>`;
   }).join('');
   $('#picker-count').textContent = t('{n} items', { n: list.length }) + (list.length > PICKER_MAX ? ' · ' + t('showing the first {n}, type to narrow it down', { n: PICKER_MAX }) : '');
@@ -47,7 +54,7 @@ function pickerList() {
 }
 function openPicker(path, slot) {
   const b = curBuild();
-  picker = { path, slot, act: state.ui.act, q: '', type: '', usable: true, byAct: true, mode: 'all', prof: proficiencies(b, state.ui.act), taken: partyTaken(b, state.ui.act) };
+  picker = { path, slot, act: state.ui.act, q: '', type: '', usable: true, byAct: true, mode: 'all', prof: proficiencies(b, state.ui.act), taken: partyTaken(b, state.ui.act), versus: new Map() };
   const kinds = SLOT_KINDS[slot] || [];
   const types = [...new Set(ITEMS.filter((it) => kinds.includes(it.s)).map((it) => it.t))].sort();
   const actLabel = t(ACTS.find(([k]) => k === picker.act)[1]);

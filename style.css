@@ -696,3 +696,30 @@ button.chip:hover { border-color: var(--gold); color: var(--text); }
 .stat small { white-space: normal; line-height: 1.35; }
 .toast.on { pointer-events: auto; }
 .toast .btn { background: #1a130a; color: var(--gold-hi); border-color: #1a130a; }
+
+/* ---------- guided choices, permanent bonuses, level marker, item comparison ---------- */
+.pick-row.on { border-color: var(--gold); background: rgba(201, 162, 77, .12); }
+.pick-row.on b::before { content: "✓ "; color: var(--gold); }
+.choose-head { margin: 12px 0 6px; font: 700 10.5px var(--sans); text-transform: uppercase; letter-spacing: .1em; color: var(--gold); }
+.choose-head span { color: var(--muted); margin-left: 6px; }
+.choose-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(150px, 100%), 1fr)); gap: 6px; }
+.choose-grid .pick-row { margin: 0; }
+.pick-row small.delta { color: var(--ok); }
+.lvl.cur { outline: 1px solid var(--gold); outline-offset: 4px; border-radius: 8px; }
+.lvl.later { opacity: .62; }
+.lvl-n small { display: block; font: 700 9px var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--gold); }
+.acts.lvls { flex-wrap: wrap; }
+.acts.lvls button { padding: 8px 0; min-width: 34px; letter-spacing: 0; border-bottom: 0; }
+.next-lvl { margin: 0 0 12px; padding: 8px 12px; border-left: 2px solid var(--gold); background: var(--field); border-radius: 6px; font-size: 13px; color: var(--muted); }
+.next-lvl b { color: var(--gold-hi); margin-right: 6px; }
+.perms { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 8px; }
+.perm { background: var(--panel-2); border: 1px solid var(--line-soft); border-radius: 10px; padding: 9px 12px; font-size: 13px; }
+.perm.on { border-color: var(--gold); }
+.perm.got { opacity: .7; }
+.perm p { margin: 4px 0 0; color: var(--muted); font-size: 12.5px; }
+.perm-tag { font-style: normal; font-size: 10.5px; color: var(--gold); border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; margin-left: 4px; }
+.perm-opts { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: end; margin-top: 8px; }
+.perm-opts .field { min-width: 130px; }
+.chip-s { display: inline-block; font-size: 12px; margin: 2px 4px 2px 0; padding: 2px 9px; border: 1px solid var(--gold); border-radius: 999px; color: var(--gold-hi); }
+.chip-s.got { opacity: .6; text-decoration: line-through; }
+.ptable td small { display: block; color: var(--muted); font-size: 11px; font-weight: 400; }
