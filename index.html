@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BG3 Planner</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Static text carries its English string in data-i18n; app.js swaps it for the chosen language. -->
+  <header class="top">
+    <div class="brand">BG3 <span>Planner</span> <small id="version"></small></div>
+    <nav class="tabs" id="tabs">
+      <button data-act="tab" data-tab="builds" data-i18n="Build Planner">Build Planner</button>
+      <button data-act="tab" data-tab="party" data-i18n="Party Planner">Party Planner</button>
+      <button data-act="tab" data-tab="presets" data-i18n="Ready-made builds">Ready-made builds</button>
+      <button data-act="tab" data-tab="items" data-i18n="Items">Items</button>
+      <button data-act="tab" data-tab="spells" data-i18n="Spells">Spells</button>
+    </nav>
+    <div class="top-tools">
+      <span class="saved" id="saved"></span>
+      <div class="langs" id="langs" role="group" aria-label="Language">
+        <button data-act="lang" data-lang="en">EN</button>
+        <button data-act="lang" data-lang="pt-BR">PT-BR</button>
+      </div>
+      <button class="btn ghost" data-act="export-all" data-i18n="Backup" data-i18n-title="Save or copy a backup with every build and party">Backup</button>
+      <button class="btn ghost" data-act="import" data-i18n="Import" data-i18n-title="Load a build or a backup, from a file or pasted text">Import</button>
+      <input type="file" id="file" accept=".json,application/json" hidden>
+    </div>
+  </header>
+
+  <main id="app"></main>
+
+  <div class="sheet-wrap" id="sheet-wrap" hidden>
+    <div class="sheet-bar">
+      <span data-i18n='Preview. In the print dialog, choose "Save as PDF" as the destination.'>Preview. In the print dialog, choose "Save as PDF" as the destination.</span>
+      <button class="btn primary" data-act="sheet-print" data-i18n="Print / Save as PDF">Print / Save as PDF</button>
+      <button class="btn" data-act="sheet-close" data-i18n="Close">Close</button>
+    </div>
+    <article class="sheet" id="sheet"></article>
+  </div>
+
+  <div class="modal" id="export-modal" hidden>
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="export-title">
+      <h2 id="export-title" data-i18n="Export build">Export build</h2>
+      <p class="muted" id="export-name"></p>
+      <div class="choices">
+        <button class="choice" data-act="build-pdf">
+          <strong>PDF</strong>
+          <span data-i18n="A clean sheet to read, print or share.">A clean sheet to read, print or share.</span>
+        </button>
+        <button class="choice" data-act="build-export">
+          <strong data-i18n="Planner file (.json)">Planner file (.json)</strong>
+          <span data-i18n="To keep as a backup or import into this planner later.">To keep as a backup or import into this planner later.</span>
+        </button>
+      </div>
+      <div class="modal-btns">
+        <button class="btn" data-act="export-close" data-i18n="Cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="picker" hidden>
+    <div class="modal-box picker-box" id="picker-box" role="dialog" aria-modal="true"></div>
+  </div>
+
+  <div class="modal" id="dialog" hidden>
+    <div class="modal-box" id="dialog-box" role="dialog" aria-modal="true"></div>
+  </div>
+
+  <div class="modal" id="modal" hidden>
+    <div class="modal-box" role="alertdialog" aria-modal="true" aria-labelledby="modal-msg">
+      <p id="modal-msg"></p>
+      <div class="modal-btns">
+        <button class="btn" id="modal-cancel" data-i18n="Cancel">Cancel</button>
+        <button class="btn primary" id="modal-ok">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <datalist id="dl-wiki"></datalist>
+  <datalist id="dl-chars">
+    <option value="Custom (Tav)"><option value="The Dark Urge"><option value="Astarion"><option value="Gale">
+    <option value="Karlach"><option value="Lae'zel"><option value="Shadowheart"><option value="Wyll">
+    <option value="Halsin"><option value="Jaheira"><option value="Minsc"><option value="Minthara">
+  </datalist>
+
+  <!-- index.html?test runs the automated checks in tests/tests.js without touching saved data -->
+  <script>window.BG3_TEST = /[?&]test/.test(location.search);</script>
+  <script src="i18n.js"></script>
+  <script src="presets.js"></script>
+  <script src="presets-pdf.js"></script>
+  <script src="gamedata.js"></script>
+  <script src="items.js"></script>
+  <script src="spells.js"></script>
+  <script src="classes.js"></script>
+  <script src="images.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/build.js"></script>
+  <script src="js/party.js"></script>
+  <script src="js/shell.js"></script>
+  <script src="js/wiki.js"></script>
+  <script src="js/sheet.js"></script>
+  <script src="js/rules.js"></script>
+  <script src="js/library.js"></script>
+  <script src="js/suggest.js"></script>
+  <script src="js/dialogs.js"></script>
+  <script src="js/progression.js"></script>
+  <script src="js/stats.js"></script>
+  <script src="js/recommend.js"></script>
+  <script src="js/main.js"></script>
+  <script>if (window.BG3_TEST) document.write('<script src="tests/tests.js"><\/script>');</script>
+</body>
+</html>
