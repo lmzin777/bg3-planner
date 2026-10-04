@@ -165,26 +165,22 @@ function levelSpellLists(b, i, sp) {
     // Eldritch Knights and Arcane Tricksters: spells of their schools first, the free picks last
     order: (names) => (learn.schools ? names.slice().sort((p, q) => off(p) - off(q)) : names) };
 }
-// The selects of a level, as cells of a grid. An empty one is marked in gold.
+// The choices of a level, as cells of a grid. An empty one is marked in gold.
 function slotCells(b, i, slots) {
   const x = levelInfo(b)[i];
-  const none = (cur) => `<option value=""${cur ? '' : ' selected'}>${t('— choose —')}</option>`;
-  const option = (name, cur, off) => `<option value="${esc(name)}"${name === cur ? ' selected' : ''}${off ? ' disabled' : ''}>${esc(name)}</option>`;
-  // under the control, what the chosen option gives; the tooltip has its whole description
+  // every choice looks the same: what is chosen, on a button that opens the list of options
+  const button = (act, attrs, value, img, empty) => `<button class="pslot" data-act="${act}" data-l="${i}"${attrs ? ' ' + attrs : ''}>${img || ''}<b>${
+    value ? esc(value) : empty || t('— choose —')}</b><i>▾</i></button>`;
+  // under the button, what the chosen option gives; the tooltip has its whole description
   const cell = (label, control, text, open, full) => `<div class="lslot${open ? ' open' : ''}"><span class="lslot-l">${esc(label)}</span>${control}${
     text ? `<small${full && full !== text ? ` title="${esc(full)}"` : ''}>${esc(text)}</small>` : ''}</div>`;
   const out = [];
   slots.choices.forEach(({ c, entries }) => {
     const g = c.group;
-    const merged = classChoices(b, x.cls).find((y) => y.name === g.name) || g;
-    const taken = g.repeat ? [] : chosenOf(b, x.cls, merged);
     for (let k = 0; k < c.n; k++) {
       const e = entries[k] || { value: '', note: '' };
-      const list = g.options.filter((o) => !o[2] || o[2] <= x.n || o[0] === e.value);
       const o = g.options.find((y) => y[0] === e.value);
-      out.push(cell(g.name + (c.n > 1 ? ' ' + (k + 1) : ''),
-        `<select data-slot="choice" data-l="${i}" data-g="${c.i}" aria-label="${esc(g.name)}">${none(e.value)}${
-          list.map((y) => option(y[0], e.value, y[0] !== e.value && taken.includes(y[0]))).join('')}</select>`,
+      out.push(cell(g.name + (c.n > 1 ? ' ' + (k + 1) : ''), button('choice-open', `data-g="${c.i}"`, e.value),
         [e.note, o && gainText(o[1])].filter(Boolean).join(' · '), !e.value, o ? o[1] : ''));
     }
   });
@@ -192,24 +188,16 @@ function slotCells(b, i, slots) {
     const f = slots.feat;
     const feat = FEATS.find(([n]) => n === f.name);
     const hasParts = feat && featParts(feat[0], feat[1], b).length;
-    out.push(cell(t('Feat'),
-      `<span class="lslot-row"><select data-slot="feat" data-l="${i}" aria-label="${t('Feat')}">${none(f.name || f.rest)}${
-        !feat && f.rest ? `<option selected>${esc(f.rest)}</option>` : ''}${FEATS.map(([n]) => option(n, f.name)).join('')}</select>${
-        hasParts ? `<button class="btn tiny${f.rest ? '' : ' gold'}" data-act="feat-options" data-l="${i}">${t('options')}</button>` : ''}</span>`,
+    out.push(cell(t('Feat'), `<span class="lslot-row">${button('feat-open', '', f.name || f.rest)}${
+      hasParts ? `<button class="btn tiny${f.rest ? '' : ' gold'}" data-act="feat-options" data-l="${i}">${t('options')}</button>` : ''}</span>`,
       feat ? [f.rest, feat[1]].filter(Boolean).join(' · ') : '', !f.name && !f.rest));
   }
   if (slots.expertise) {
-    const st = skillState(b);
-    const picked = pickedSkills(b);
-    const have = expertiseSkills(b);
     const mine = slots.expertise.values;
-    const proficient = ALL_SKILLS.filter((s) => st.granted[s] || st.chosen.includes(s) || picked.has(s));
+    const lacking = expertiseOptions(b, mine).length < 2;
     for (let k = 0; k < 2; k++) {
-      const v = mine[k] || '';
-      out.push(cell('Expertise ' + (k + 1),
-        `<select data-slot="expertise" data-l="${i}" aria-label="Expertise">${none(v)}${
-          proficient.filter((s) => s === v || !have.has(s)).map((s) => option(s, v)).join('')}</select>`,
-        proficient.length < 2 ? t('Only skills the build is proficient in. Choose them in Character creation first.') : '', !v));
+      out.push(cell('Expertise ' + (k + 1), button('expertise-open', '', mine[k] || ''),
+        lacking ? t('Only skills the build is proficient in. Choose them in Character creation first.') : '', !mine[k]));
     }
   }
   if (slots.spells) {
@@ -217,33 +205,35 @@ function slotCells(b, i, slots) {
     const learn = sp.learn;
     const lists = levelSpellLists(b, i, sp);
     const about = (name) => { const s = SPELL_BY_NAME.get(norm(name)); return s ? [spellMeta(s), s.d].filter(Boolean).join(' — ') : ''; };
-    // a cantrip or spell of the level: its picture and name on a button that opens the list to choose from
-    const spellCell = (label, kind, value) => {
-      const s = SPELL_BY_NAME.get(norm(value));
-      return cell(label, `<button class="spell-slot" data-act="spells-open" data-l="${i}" data-k="${kind}">${s ? pic(s.i, 'pic small') : ''}<b>${value ? esc(value) : t('— choose —')}</b><i>▾</i></button>`,
-        about(value), !value);
-    };
+    const image = (name) => { const s = SPELL_BY_NAME.get(norm(name)); return s ? pic(s.i, 'pic small') : ''; };
+    const spellCell = (label, kind, value) => cell(label, button('spells-open', `data-k="${kind}"`, value, image(value)), about(value), !value);
     for (let k = 0; k < learn.cantrips; k++) out.push(spellCell('Cantrip' + (learn.cantrips > 1 ? ' ' + (k + 1) : ''), 'cantrip', sp.cantrip[k] || ''));
     const chosen = lists.order(sp.spell);
     for (let k = 0; k < learn.spells; k++) {
       out.push(spellCell('Spell' + (learn.spells > 1 ? ' ' + (k + 1) : '') + (learn.schools ? ' · ' + (k >= lists.bound ? t('any school') : learn.schools.join(' / ')) : ''), 'spell', chosen[k] || ''));
     }
-    if (sp.swap) {
-      const olds = currentSpells(b).filter((y) => y.cls === x.cls && !y.cantrip && y.level < i).map((y) => y.name);
-      if (sp.swap.old && !olds.includes(sp.swap.old)) olds.unshift(sp.swap.old);
-      const levels = [...new Set(lists.reach.map((s) => s.lv))];
-      const fresh = (lv) => lists.reach.filter((s) => s.lv === lv && !sp.spell.includes(s.n)).map((s) => option(s.n, sp.swap.name)).join('');
-      if (olds.length) {
-        out.push(cell(t('Replace a known spell (optional)'),
-          `<select data-slot="swap" data-l="${i}" aria-label="${t('Spell to forget')}"><option value="">${t('— forget none —')}</option>${olds.map((n) => option(n, sp.swap.old)).join('')}</select>
-           <select data-slot="swap" data-l="${i}" aria-label="${t('Spell to learn instead')}">${none(sp.swap.name)}${
-             levels.length > 1 ? levels.map((lv) => `<optgroup label="${t('Level {n}', { n: lv })}">${fresh(lv)}</optgroup>`).join('') : levels.map(fresh).join('')}</select>`, about(sp.swap.name), false));
-      }
+    if (sp.swap && swapOlds(b, i, sp).length) {
+      out.push(cell(t('Replace a known spell (optional)'),
+        button('swap-open', '', sp.swap.name ? sp.swap.old + ' → ' + sp.swap.name : '', image(sp.swap.name), t('— no swap —')), about(sp.swap.name), false));
     }
   }
   return out.join('');
 }
-// Writes what the selects of one choice of a level say back into its lines. `values` is one per select.
+// The skills a level may take Expertise in: the ones the build is proficient in and has no Expertise in yet.
+function expertiseOptions(b, mine) {
+  const st = skillState(b);
+  const picked = pickedSkills(b);
+  const have = expertiseSkills(b);
+  return ALL_SKILLS.filter((s) => (st.granted[s] || st.chosen.includes(s) || picked.has(s)) && (mine.includes(s) || !have.has(s)));
+}
+// The spells of the class learned before this level and still known: the ones a level up may swap out.
+function swapOlds(b, i, sp) {
+  const cls = levelInfo(b)[i].cls;
+  const olds = currentSpells(b).filter((y) => y.cls === cls && !y.cantrip && y.level < i).map((y) => y.name);
+  if (sp.swap.old && !olds.includes(sp.swap.old)) olds.unshift(sp.swap.old);
+  return olds;
+}
+// Writes what was chosen for one choice of a level back into its lines. `values` are the names chosen.
 function writeSlot(b, i, kind, values, g) {
   const l = b.levels[i];
   const slots = levelSlots(b, i);
@@ -259,7 +249,7 @@ function writeSlot(b, i, kind, values, g) {
     const vals = values.map((v, k) => [v, k]).filter(([v, k]) => v && (group.repeat || values.indexOf(v) === k));
     put(slot.lines, group.join ? (vals.length ? [group.name + ': ' + vals.map((y) => y[0]).join(group.join)] : [])
       // a choice left as it was keeps its line, with whatever was noted on it
-      : vals.map(([v, k]) => { const e = slot.entries[k]; return e && e.value === v && e.raw ? e.raw : group.name + ': ' + v; }));
+      : vals.map(([v]) => { const e = slot.entries.find((y) => y.value === v && y.raw); return e ? e.raw : group.name + ': ' + v; }));
   } else if (kind === 'feat' && slots.feat) {
     const feat = FEATS.find(([n]) => n === values[0]);
     put(slots.feat.j >= 0 ? [slots.feat.j] : [], feat ? [featParts(feat[0], feat[1], b).length ? 'Feat: ' + feat[0] : featText(feat[0], feat[1], [])] : []);
@@ -291,21 +281,6 @@ function openFeatOptions(level) {
     if (cur && cur.j >= 0) now.levels[level].picks[cur.j] = text; else now.levels[level].picks.push(text);
   });
 }
-document.addEventListener('change', (e) => {
-  const el = e.target;
-  const b = curBuild();
-  if (!el.dataset || !el.dataset.slot || !b) return;
-  const i = +el.dataset.l;
-  const kind = el.dataset.slot;
-  const values = $$(`select[data-slot="${kind}"][data-l="${i}"]${kind === 'choice' ? `[data-g="${el.dataset.g}"]` : ''}`).map((s) => s.value);
-  // a swap with only one of its two spells chosen is not written yet: wait for the other
-  if (kind === 'swap' && !values[0] !== !values[1] && levelSlots(b, i).spells.swap.j < 0) return;
-  writeSlot(b, i, kind, values, +el.dataset.g);
-  save();
-  render();
-  if (kind === 'feat' && el.value) openFeatOptions(i);
-});
-
 // ---------- the chooser: a dialog that picks n options out of one or more lists ----------
 // dlg.parts = [{ label, n, min, options: [[name, description]], chosen: [], off: [names that cannot be taken] }]
 function chooserList() {
@@ -462,6 +437,65 @@ document.addEventListener('change', (e) => {
 Object.assign(actions, {
   'perm-toggle'() { state.ui.permOpen = !state.ui.permOpen; },
   'feat-options'(el) { openFeatOptions(+el.dataset.l); return false; },
+  // a guided choice of a level (fighting style, manoeuvres, invocations…): every pick of it in one list
+  'choice-open'(el) {
+    const level = +el.dataset.l;
+    const b = curBuild();
+    const info = levelInfo(b);
+    const x = info[level];
+    const slot = levelSlots(b, level).choices.find((s) => s.c.i === +el.dataset.g);
+    if (!slot) return false;
+    const g = slot.c.group;
+    const mine = slot.entries.map((e) => e.value).filter(Boolean);
+    const merged = classChoices(b, x.cls).find((y) => y.name === g.name) || g;
+    // what the other levels of the class already took cannot be taken again
+    const off = g.repeat ? [] : info.flatMap((y, j) => (j !== level && y.cls === x.cls ? chosenOf(b, x.cls, merged, j) : []));
+    openChooser(`${x.cls} ${x.n} · ${g.name}`, '', [{ label: g.name, n: slot.c.n, min: 0, off, chosen: mine.slice(),
+      options: g.options.filter((o) => !o[2] || o[2] <= x.n || mine.includes(o[0])).map((o) => [o[0], o[1]]) }],
+    (done) => writeSlot(curBuild(), level, 'choice', done[0].chosen, slot.c.i));
+    return false;
+  },
+  'feat-open'(el) {
+    const level = +el.dataset.l;
+    const f = levelSlots(curBuild(), level).feat;
+    if (!f) return false;
+    openChooser(t('Feats'), t('Choose the feat for level {n}.', { n: level + 1 }),
+      [{ label: t('Feat'), n: 1, min: 0, options: FEATS.map(([n, d]) => [n, d]), chosen: f.name ? [f.name] : [] }], (done) => {
+        const name = done[0].chosen[0] || '';
+        if (name === f.name) return;
+        writeSlot(curBuild(), level, 'feat', [name]);
+        if (name) openFeatOptions(level);  // the feat's own choices follow at once
+      });
+    return false;
+  },
+  'expertise-open'(el) {
+    const level = +el.dataset.l;
+    const b = curBuild();
+    const x = levelInfo(b)[level];
+    const ex = levelSlots(b, level).expertise;
+    if (!ex) return false;
+    const options = expertiseOptions(b, ex.values);
+    openChooser(`${x.cls} ${x.n} · Expertise`, options.length < 2 ? t('Only skills the build is proficient in. Choose them in Character creation first.') : esc(featureText('Expertise')),
+      [{ label: 'Expertise', n: 2, min: 0, options: options.map((s) => [s, '']), chosen: ex.values.slice() }],
+      (done) => writeSlot(curBuild(), level, 'expertise', done[0].chosen));
+    return false;
+  },
+  // a level up may trade one known spell for another: which one goes, which one comes
+  'swap-open'(el) {
+    const level = +el.dataset.l;
+    const b = curBuild();
+    const x = levelInfo(b)[level];
+    const sp = levelSlots(b, level).spells;
+    if (!sp || !sp.swap) return false;
+    const lists = levelSpellLists(b, level, sp);
+    const row = (s) => [s.n, s.d || '', spellMeta(s), pic(s.i, 'pic small'), t('Level {n}', { n: s.lv })];
+    const olds = swapOlds(b, level, sp).map((n) => SPELL_BY_NAME.get(norm(n)) || { n, d: '', lv: 0 });
+    openChooser(`${x.cls} ${x.n} · ${t('Replace a known spell (optional)')}`, t('Choose both, or leave both empty to keep every spell.'), [
+      { label: t('Spell to forget'), n: 1, min: 0, options: olds.map((s) => (s.lv ? row(s) : [s.n, ''])), chosen: sp.swap.old ? [sp.swap.old] : [] },
+      { label: t('Spell to learn instead'), n: 1, min: 0, options: lists.reach.filter((s) => !sp.spell.includes(s.n)).map(row), chosen: sp.swap.name ? [sp.swap.name] : [] },
+    ], (done) => writeSlot(curBuild(), level, 'swap', [done[0].chosen[0] || '', done[1].chosen[0] || '']));
+    return false;
+  },
   // every cantrip and spell of a level is chosen in one list, with what is already chosen marked
   'spells-open'(el) {
     const level = +el.dataset.l;
@@ -499,6 +533,8 @@ Object.assign(actions, {
     if (i >= 0) p.chosen.splice(i, 1);
     else { if (p.chosen.length >= p.n) p.chosen.shift(); p.chosen.push(el.dataset.n); }
     chooserSync();
+    // one choice out of one list needs no second click
+    if (dlg.parts.length === 1 && p.n === 1 && p.chosen.length === 1) return actions['choose-confirm']();
     return false;
   },
   'choose-confirm'() {

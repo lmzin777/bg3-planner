@@ -605,7 +605,7 @@
     writeSlot(b, 1, 'choice', ['Defence'], g('Fighting Style', 1));
     eq(b.levels[1].picks, ['Fighting Style: Defence'], 'choosing again replaces, it never adds');
     const html = levelRows(b, 1);
-    ok(/data-slot="choice"/.test(html) && /<option value="Defence" selected>/.test(html) && !/choice-open|data-path="levels\.1\.picks\.0"/.test(html), 'a select in place of the text line and the add button');
+    ok(/data-act="choice-open"/.test(html) && /<b>Defence<\/b>/.test(html) && !/<select data-slot|pick-add|data-path="levels\.1\.picks\.0"/.test(html), 'a slot in place of the text line and the add button');
     writeSlot(b, 1, 'choice', [''], g('Fighting Style', 1));
     eq([b.levels[1].picks, levelPending(b, 1).includes('Fighting Style: 0 of 1')], [[], true]);
 
@@ -627,6 +627,7 @@
     writeSlot(f, 3, 'feat', ['']);
     eq(f.levels[3].picks, []);
 
+    eq(expertiseOptions(build(['Rogue'], { background: 'Sage' }), []), ['Arcana', 'History'], 'Expertise only in what the build is proficient in');
     const r = build(['Rogue'], { background: 'Sage' });
     writeSlot(r, 0, 'expertise', ['Arcana', 'History']);
     eq([r.levels[0].picks, levelSlots(r, 0).expertise.values, levelPending(r, 0).some((x) => /Expertise/.test(x))], [['Expertise: Arcana + History'], ['Arcana', 'History'], false]);
@@ -648,7 +649,7 @@
     ok(lists.reach.some((x) => x.n === 'Longstrider') && lists.reach.every((x) => x.lv === 1 && x.cl.includes('Ranger')), 'the Ranger list, up to the spell level it can cast');
     writeSlot(b, 1, 'spell', ['Enhance Leap', 'Hunter\'s Mark']);
     eq(b.levels[1].picks, ['Spell: Enhance Leap', 'Spell: Hunter\'s Mark']);
-    ok(!levelSpellLists(b, 2, levelSlots(b, 2).spells).reach.some((x) => x.n === 'Enhance Leap') && /<option value="Enhance Leap"/.test(levelRows(b, 2)), 'a spell already known is not offered again, only as the one to swap out');
+    ok(!levelSpellLists(b, 2, levelSlots(b, 2).spells).reach.some((x) => x.n === 'Enhance Leap') && swapOlds(b, 2, levelSlots(b, 2).spells).includes('Enhance Leap') && /data-act="swap-open"/.test(levelRows(b, 2)), 'a spell already known is not offered again, only as the one to swap out');
     sp = levelSlots(b, 2).spells;
     eq([sp.learn.spells, !!sp.swap], [1, true], 'Ranger 3 learns one and may swap one');
     writeSlot(b, 2, 'swap', ['Enhance Leap', 'Longstrider']);

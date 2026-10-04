@@ -749,6 +749,8 @@ window.BG3_I18N = {
     '— forget none —': '— não esquecer nenhuma —',
 
     'Click the ones this level learns; click again to take one back. What the class already knows is not listed.': 'Clique nas que este nível aprende; clique de novo para tirar. O que a classe já conhece não aparece na lista.',
+    '— no swap —': '— sem troca —',
+    'Choose both, or leave both empty to keep every spell.': 'Escolha as duas, ou deixe as duas vazias para manter todas as spells.',
     // dialogs and toasts
     'Cancel': 'Cancelar',
     'Confirm': 'Confirmar',
