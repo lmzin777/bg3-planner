@@ -634,12 +634,40 @@
     writeSlot(r, 0, 'expertise', ['Arcana', '']);
     ok(levelPending(r, 0).includes('Expertise: 1 of 2'), String(levelPending(r, 0)));
   });
-  test('a level holds no more new spells than it teaches', () => {
-    const info = (cls, n, sub) => ({ cls, n, sub: sub || '' });
-    const cap = (cls, n, cantrip, sub) => spellCap(info(cls, n, sub), spellsAtLevel(info(cls, n, sub)), cantrip);
-    eq([cap('Sorcerer', 1, true), cap('Sorcerer', 1, false), cap('Ranger', 2, false), cap('Ranger', 4, false)], [4, 2, 2, 0]);
-    eq([cap('Cleric', 1, true), cap('Cleric', 1, false), cap('Wizard', 1, false)], [3, null, null], 'classes that prepare, and the Wizard with scrolls, add freely');
-    eq([cap('Fighter', 3, true, 'Eldritch Knight'), cap('Fighter', 3, false, 'Eldritch Knight')], [2, 3]);
+  test('the spells a level teaches are selects too', () => {
+    const b = build(['Ranger', 'Ranger', 'Ranger']);
+    eq(levelSlots(b, 0).spells, undefined, 'a Ranger learns no spell at level 1');
+    b.levels[1].picks.push('Spell: Enhance Leap', 'Spell: Longstrider', 'Spell: Hunter\'s Mark');
+    let sp = levelSlots(b, 1).spells;
+    eq([sp.learn.spells, sp.spell, sp.lines.spell, !!sp.swap], [2, ['Enhance Leap', 'Longstrider'], [0, 1], false], 'two spells at Ranger 2; a third line stays as text');
+    b.levels[1].picks.pop();
+    const html = levelRows(b, 1);
+    ok(/data-slot="spell"/.test(html) && !/spell-open|pick-add|data-path="levels\.1\.picks/.test(html), 'selects only: no add buttons, no text lines');
+    ok(/<option value="Longstrider" selected>/.test(html) && !/<option value="Fireball"/.test(html), 'the Ranger list, up to the spell level it can cast');
+    writeSlot(b, 1, 'spell', ['Enhance Leap', 'Hunter\'s Mark']);
+    eq(b.levels[1].picks, ['Spell: Enhance Leap', 'Spell: Hunter\'s Mark']);
+    ok(!/<option value="Enhance Leap"/.test(levelRows(b, 2).split('data-slot="swap"')[0]) && /<option value="Enhance Leap"/.test(levelRows(b, 2)), 'a spell already known is not offered again, only as the one to swap out');
+    sp = levelSlots(b, 2).spells;
+    eq([sp.learn.spells, !!sp.swap], [1, true], 'Ranger 3 learns one and may swap one');
+    writeSlot(b, 2, 'swap', ['Enhance Leap', 'Longstrider']);
+    eq([b.levels[2].picks, levelSlots(b, 2).spells.swap.old, currentSpells(b).map((x) => x.name)], [['Spell: Longstrider (replaces Enhance Leap)'], 'Enhance Leap', ['Hunter\'s Mark', 'Longstrider']]);
+    writeSlot(b, 2, 'swap', ['', 'Longstrider']);
+    eq(b.levels[2].picks, []);
+
+    const s = build(['Sorcerer']);
+    const cells = levelSlots(s, 0).spells.learn;
+    eq([cells.cantrips, cells.spells], [4, 2]);
+    writeSlot(s, 0, 'cantrip', ['Fire Bolt', '', 'Fire Bolt', 'Light']);
+    eq(s.levels[0].picks, ['Cantrip: Fire Bolt', 'Cantrip: Light']);
+    const c = build(['Cleric']);
+    eq([levelSlots(c, 0).spells.learn.cantrips, levelSlots(c, 0).spells.learn.spells], [3, 0], 'a Cleric chooses cantrips; its spells are prepared, not learned');
+    const ek = build(['Fighter', 'Fighter', 'Fighter']);
+    ek.levels[2].sub = 'Eldritch Knight';
+    const row = levelRows(ek, 2);
+    eq([(row.match(/data-slot="cantrip"/g) || []).length, (row.match(/data-slot="spell"/g) || []).length], [2, 3]);
+    ok(/Abjuration \/ Evocation/.test(row) && /any school/.test(row), 'two school picks and one free pick');
+    ok(/gain Proficiency/i.test(gainText('You have sworn to serve a crown. Gain Proficiency in History and Heavy Armour.')) && !/sworn/.test(gainText('You have sworn to serve a crown. Gain Proficiency in History and Heavy Armour.')), 'what an option gives, without the flavour');
+    eq(gainText('A tale of the road.'), 'A tale of the road.', 'nothing concrete to pick out: the whole text');
   });
   test('base scores move with − and + and stay inside the 27 points', () => {
     const b = build(['Fighter'], { abilities: { str: 15, dex: 15, con: 14, int: 8, wis: 8, cha: 8 } });

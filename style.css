@@ -808,7 +808,9 @@ button.chip:hover { border-color: var(--gold); color: var(--text); }
 .lslot select { width: 100%; min-width: 0; }
 .lslot.open .lslot-l { color: var(--gold); }
 .lslot.open select { border-color: var(--gold); }
-.lslot small { color: var(--muted); font-size: 11.5px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.lslot small { display: block; color: var(--text); opacity: .8; font-size: 12px; line-height: 1.4; }
+.lslot select + select { margin-top: 2px; }
+.lslots + .picks { margin-top: 2px; }
 .lslot-row { display: flex; gap: 4px; min-width: 0; }
 .lslot-row select { flex: 1; }
 .lvl-cls .fill { grid-column: 1 / -1; justify-self: start; color: var(--muted); }

@@ -113,15 +113,45 @@ function levelSlots(b, i) {
       });
     }
   }
+  // the cantrips and spells the level teaches, and the one known spell a level up may swap for another
+  const learn = spellsAtLevel(x);
+  if (learn && (learn.cantrips || learn.spells || learn.replace) && SPELLS.some((s) => (s.cl || []).includes(learn.list))) {
+    const sp = out.spells = { learn, cantrip: [], spell: [], lines: { cantrip: [], spell: [] }, swap: learn.replace ? { j: -1, old: '', name: '' } : null };
+    l.picks.forEach((p, j) => {
+      const m = out.owned.has(j) ? null : /^(spell|cantrip)s?\s*:\s*([^(]+?)\s*(?:\((.*)\))?\s*$/i.exec(p.trim());
+      if (!m) return;
+      const known = SPELL_BY_NAME.get(norm(m[2]));
+      const name = known ? known.n : m[2].trim();
+      const rep = /replaces\s+(.+)/i.exec(m[3] || '');
+      if (rep) {
+        if (sp.swap && sp.swap.j < 0) { Object.assign(sp.swap, { j, old: rep[1].trim(), name }); out.owned.add(j); }
+        return;
+      }
+      const kind = (known ? !known.lv : /^cantrip/i.test(m[1])) ? 'cantrip' : 'spell';
+      if (sp[kind].length >= (kind === 'cantrip' ? learn.cantrips : learn.spells)) return;
+      sp[kind].push(name);
+      sp.lines[kind].push(j);
+      out.owned.add(j);
+    });
+  }
   return out;
+}
+// The part of an option's description that matters to the build: the sentences that say what it gives.
+// A sentence of pure flavour is left out when there is something concrete to show; the tooltip keeps it all.
+const GAIN_WORDS = /\b(?:gains?|proficien\w*|expertise|resistan\w*|(?:dis)?advantage|bonus|cantrips?|learn\w*|immun\w*|damage|saving throws?|armour class|attack rolls?|hit points?|darkvision|movement|speed|actions?|can(?:'t|not)?|once per|recharge\w*)\b|[+-]\s?\d|\dd\d|\d\s?m\b/i;
+function gainText(desc) {
+  const parts = String(desc || '').split(/(?<=[.;])\s+/).map((s) => s.trim()).filter(Boolean);
+  const gains = parts.filter((s) => GAIN_WORDS.test(s));
+  return gains.length && gains.length < parts.length ? gains.join(' ') : parts.join(' ');
 }
 // The selects of a level, as cells of a grid. An empty one is marked in gold.
 function slotCells(b, i, slots) {
   const x = levelInfo(b)[i];
   const none = (cur) => `<option value=""${cur ? '' : ' selected'}>${t('— choose —')}</option>`;
   const option = (name, cur, off) => `<option value="${esc(name)}"${name === cur ? ' selected' : ''}${off ? ' disabled' : ''}>${esc(name)}</option>`;
-  const cell = (label, control, text, open) => `<div class="lslot${open ? ' open' : ''}"><span class="lslot-l">${esc(label)}</span>${control}${
-    text ? `<small title="${esc(text)}">${esc(text)}</small>` : ''}</div>`;
+  // under the control, what the chosen option gives; the tooltip has its whole description
+  const cell = (label, control, text, open, full) => `<div class="lslot${open ? ' open' : ''}"><span class="lslot-l">${esc(label)}</span>${control}${
+    text ? `<small${full && full !== text ? ` title="${esc(full)}"` : ''}>${esc(text)}</small>` : ''}</div>`;
   const out = [];
   slots.choices.forEach(({ c, entries }) => {
     const g = c.group;
@@ -134,7 +164,7 @@ function slotCells(b, i, slots) {
       out.push(cell(g.name + (c.n > 1 ? ' ' + (k + 1) : ''),
         `<select data-slot="choice" data-l="${i}" data-g="${c.i}" aria-label="${esc(g.name)}">${none(e.value)}${
           list.map((y) => option(y[0], e.value, y[0] !== e.value && taken.includes(y[0]))).join('')}</select>`,
-        [e.note, o && o[1]].filter(Boolean).join(' · '), !e.value));
+        [e.note, o && gainText(o[1])].filter(Boolean).join(' · '), !e.value, o ? o[1] : ''));
     }
   });
   if (slots.feat) {
@@ -159,6 +189,50 @@ function slotCells(b, i, slots) {
         `<select data-slot="expertise" data-l="${i}" aria-label="Expertise">${none(v)}${
           proficient.filter((s) => s === v || !have.has(s)).map((s) => option(s, v)).join('')}</select>`,
         proficient.length < 2 ? t('Only skills the build is proficient in. Choose them in Character creation first.') : '', !v));
+    }
+  }
+  if (slots.spells) {
+    const sp = slots.spells;
+    const learn = sp.learn;
+    const sub = subLabel(x.sub);
+    const max = maxSpellLevel(b, i);
+    // Magical Secrets takes spells from every class
+    const every = levelGains(x).some((g) => /magical secrets/i.test(g));
+    const pool = SPELLS.filter((s) => (every ? (s.cl || []).length : (s.cl || []).includes(learn.list) || (s.lr || []).some(([who]) => who === sub)))
+      .sort((p, q) => p.lv - q.lv || p.n.localeCompare(q.n));
+    const mine = new Set(currentSpells(b).filter((y) => y.cls === x.cls).map((y) => norm(y.name)));
+    const meta = (s) => [s.lv ? t('Level {n}', { n: s.lv }) : '', s.sc, s.rg, s.du, s.dm, s.co ? t('Concentration') : ''].filter(Boolean).join(' · ');
+    const about = (name) => { const s = SPELL_BY_NAME.get(norm(name)); return s ? [meta(s), s.d].filter(Boolean).join(' — ') : ''; };
+    // spells the class already knows are left out, so nothing is learned twice
+    const options = (value, list) => {
+      const usable = list.filter((s) => s.n === value || !mine.has(norm(s.n)));
+      const levels = [...new Set(usable.map((s) => s.lv))];
+      return none(value) + (value && !usable.some((s) => s.n === value) ? `<option selected>${esc(value)}</option>` : '')
+        + (levels.length > 1 ? levels.map((lv) => `<optgroup label="${t('Level {n}', { n: lv })}">${usable.filter((s) => s.lv === lv).map((s) => option(s.n, value)).join('')}</optgroup>`).join('')
+          : usable.map((s) => option(s.n, value)).join(''));
+    };
+    const spellCell = (label, kind, value, list) => cell(label, `<select data-slot="${kind}" data-l="${i}" aria-label="${esc(label)}">${options(value, list)}</select>`, about(value), !value);
+    const cantrips = pool.filter((s) => !s.lv);
+    for (let k = 0; k < learn.cantrips; k++) out.push(spellCell('Cantrip' + (learn.cantrips > 1 ? ' ' + (k + 1) : ''), 'cantrip', sp.cantrip[k] || '', cantrips));
+    const reach = pool.filter((s) => s.lv && (max <= 0 || s.lv <= max));
+    // Eldritch Knights and Arcane Tricksters: the first picks come from their two schools, the last ones are free
+    const inSchool = (s) => !learn.schools || learn.schools.includes(s.sc);
+    const offSchool = (name) => { const s = SPELL_BY_NAME.get(norm(name)); return s && !inSchool(s) ? 1 : 0; };
+    const chosen = learn.schools ? sp.spell.slice().sort((p, q) => offSchool(p) - offSchool(q)) : sp.spell;
+    const bound = learn.spells - (learn.any || 0);
+    for (let k = 0; k < learn.spells; k++) {
+      const free = !learn.schools || k >= bound;
+      out.push(spellCell('Spell' + (learn.spells > 1 ? ' ' + (k + 1) : '') + (learn.schools ? ' · ' + (free ? t('any school') : learn.schools.join(' / ')) : ''),
+        'spell', chosen[k] || '', free ? reach : reach.filter(inSchool)));
+    }
+    if (sp.swap) {
+      const olds = currentSpells(b).filter((y) => y.cls === x.cls && !y.cantrip && y.level < i).map((y) => y.name);
+      if (sp.swap.old && !olds.includes(sp.swap.old)) olds.unshift(sp.swap.old);
+      if (olds.length) {
+        out.push(cell(t('Replace a known spell (optional)'),
+          `<select data-slot="swap" data-l="${i}" aria-label="${t('Spell to forget')}"><option value="">${t('— forget none —')}</option>${olds.map((n) => option(n, sp.swap.old)).join('')}</select>
+           <select data-slot="swap" data-l="${i}" aria-label="${t('Spell to learn instead')}">${options(sp.swap.name, reach)}</select>`, about(sp.swap.name), false));
+      }
     }
   }
   return out.join('');
@@ -186,6 +260,11 @@ function writeSlot(b, i, kind, values, g) {
   } else if (kind === 'expertise' && slots.expertise) {
     const vals = [...new Set(values.filter(Boolean))];
     put(slots.expertise.j >= 0 ? [slots.expertise.j] : [], vals.length ? ['Expertise: ' + vals.join(' + ')] : []);
+  } else if ((kind === 'cantrip' || kind === 'spell') && slots.spells) {
+    put(slots.spells.lines[kind], [...new Set(values.filter(Boolean))].map((v) => (kind === 'cantrip' ? 'Cantrip: ' : 'Spell: ') + v));
+  } else if (kind === 'swap' && slots.spells && slots.spells.swap) {
+    // values: the known spell to forget, and the one learned in its place
+    put(slots.spells.swap.j >= 0 ? [slots.spells.swap.j] : [], values[0] && values[1] ? ['Spell: ' + values[1] + ' (replaces ' + values[0] + ')'] : []);
   }
 }
 // The choices inside the feat of a level (which ability, which skills…), written into its line when confirmed.
@@ -212,7 +291,10 @@ document.addEventListener('change', (e) => {
   if (!el.dataset || !el.dataset.slot || !b) return;
   const i = +el.dataset.l;
   const kind = el.dataset.slot;
-  writeSlot(b, i, kind, $$(`select[data-slot="${kind}"][data-l="${i}"]${kind === 'choice' ? `[data-g="${el.dataset.g}"]` : ''}`).map((s) => s.value), +el.dataset.g);
+  const values = $$(`select[data-slot="${kind}"][data-l="${i}"]${kind === 'choice' ? `[data-g="${el.dataset.g}"]` : ''}`).map((s) => s.value);
+  // a swap with only one of its two spells chosen is not written yet: wait for the other
+  if (kind === 'swap' && !values[0] !== !values[1] && levelSlots(b, i).spells.swap.j < 0) return;
+  writeSlot(b, i, kind, values, +el.dataset.g);
   save();
   render();
   if (kind === 'feat' && el.value) openFeatOptions(i);

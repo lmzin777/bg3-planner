@@ -129,7 +129,7 @@ function wizLevel(b, i) {
       [t('Now'), numbers.join(' · ')]].filter((r) => String(r[1]).trim()).map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
     ${gains.length ? `<h3 class="group">${t('This level gives')}</h3><ul class="wiz-gains">${gains.map((g) => `<li><b>${esc(g)}</b> ${esc(featureText(g))}</li>`).join('')}</ul>` : ''}
     <h3 class="group">${t('Choices of this level')}</h3>
-    <div class="levels">${levelRows(b, i)}</div>
+    ${levelChoicesBlock(b, i, true) || `<p class="muted">${t('This level has nothing to choose.')}</p>`}
     ${pending.length ? `<p class="points"><b class="warn">${t('Still to choose')}:</b> ${esc(pending.join(' · '))}</p>` : `<p class="okline">${t('Nothing left to choose at this level.')}</p>`}`;
 }
 

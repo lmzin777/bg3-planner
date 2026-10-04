@@ -150,7 +150,6 @@ Object.assign(actions, {
     else return false;
     c.skills = list.join(', ');
   },
-  'pick-add'(el) { const l = +el.dataset.l; curBuild().levels[l].picks.push(''); return { focus: `[data-path="levels.${l}.picks.${curBuild().levels[l].picks.length - 1}"]` }; },
   'pick-del'(el) { curBuild().levels[+el.dataset.l].picks.splice(+el.dataset.i, 1); },
   act(el) { state.ui.act = el.dataset.k; },
   'sec-toggle'(el) { const closed = state.ui.closed || (state.ui.closed = {}); closed[el.dataset.s] = !closed[el.dataset.s]; },

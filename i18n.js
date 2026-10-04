@@ -739,6 +739,15 @@ window.BG3_I18N = {
     '{name}\'s choices cleared': 'Escolhas de {name} apagadas',
     'No longer {name}: the origin is now Custom': 'Deixou de ser {name}: a origem agora é Custom',
 
+    // spells as selects
+    'This class casts spells from its own list, using spell slots. The cantrips and spells it learns are chosen level by level.': 'Esta classe conjura spells da própria lista, gastando spell slots. Os cantrips e spells que ela aprende são escolhidos nível a nível.',
+    'This level has nothing to choose.': 'Este nível não tem nada a escolher.',
+    'any school': 'qualquer escola',
+    'Replace a known spell (optional)': 'Trocar uma spell conhecida (opcional)',
+    'Spell to forget': 'Spell a esquecer',
+    'Spell to learn instead': 'Spell a aprender no lugar',
+    '— forget none —': '— não esquecer nenhuma —',
+
     // dialogs and toasts
     'Cancel': 'Cancelar',
     'Confirm': 'Confirmar',
