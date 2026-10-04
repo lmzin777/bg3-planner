@@ -1,109 +1,1250 @@
-// What each character-creation choice grants, shown next to the selectors in the planner.
-// Taken from the Races, Backgrounds and class pages of bg3.wiki. Game terms are in English.
-//   speed     movement speed
-//   prof      weapon and armour proficiencies
-//   skills    skill proficiencies granted outright (these lock the matching skill toggle)
-//   features  [name, what it does] pairs
-(function () {
-  'use strict';
-
-  const DARKVISION = ['Darkvision', 'See in the dark up to 12 m'];
-  const SUPERIOR_DARKVISION = ['Superior Darkvision', 'See in the dark up to 24 m'];
-  const FEY_ANCESTRY = ['Fey Ancestry', 'Advantage against being Charmed; immune to magical Sleep'];
-  const FLEET = ['Fleet of Foot', 'Base movement speed increased by 1.5 m'];
-  const DROW_MAGIC = ['Drow Magic', 'Dancing Lights at level 1, Faerie Fire at level 3, Darkness at level 5'];
-  const WIZARD_CANTRIP = ['Cantrip', 'One cantrip of your choice from the Wizard spell list'];
-  const dragon = (damage, breath, shape) => ({ features: [['Draconic Ancestry (' + damage + ')', 'Resistance to ' + damage + ' damage'], [breath, 'Breath attack: a ' + shape + ' of ' + damage + ' damage']] });
-
-  window.BG3_DATA = {
-    races: {
-      Human: { speed: '9 m / 30 ft', prof: ['Spears', 'Pikes', 'Halberds', 'Glaives', 'Light Armour', 'Shields'], skillNote: 'One skill of your choice',
-        features: [['Human Versatility', 'Carrying capacity increased by 25%']] },
-      Elf: { speed: '9 m / 30 ft', prof: ['Shortswords', 'Longswords', 'Shortbows', 'Longbows'], skills: ['Perception'], features: [FEY_ANCESTRY, DARKVISION] },
-      Drow: { speed: '9 m / 30 ft', prof: ['Rapiers', 'Shortswords', 'Hand Crossbows'], skills: ['Perception'], features: [FEY_ANCESTRY, SUPERIOR_DARKVISION, DROW_MAGIC] },
-      'Half-Elf': { speed: '9 m / 30 ft', prof: ['Spears', 'Pikes', 'Halberds', 'Glaives', 'Light Armour', 'Shields'], features: [FEY_ANCESTRY, DARKVISION] },
-      'Half-Orc': { speed: '9 m / 30 ft', skills: ['Intimidation'], features: [DARKVISION, ['Savage Attacks', 'One extra damage die on a critical hit with a melee weapon'],
-        ['Relentless Endurance', 'Drop to 1 hit point instead of being downed, once per Long Rest']] },
-      Halfling: { speed: '7.5 m / 25 ft', features: [['Halfling Luck', 'Reroll a 1 on an Attack Roll, Ability Check or Saving Throw'], ['Brave', 'Advantage against being Frightened']] },
-      Dwarf: { speed: '7.5 m / 25 ft', prof: ['Battleaxes', 'Handaxes', 'Light Hammers', 'Warhammers'],
-        features: [['Dwarven Resilience', 'Advantage against being Poisoned; resistance to Poison damage'], DARKVISION] },
-      Gnome: { speed: '7.5 m / 25 ft', features: [['Gnome Cunning', 'Advantage on Intelligence, Wisdom and Charisma Saving Throws'], DARKVISION] },
-      Tiefling: { speed: '9 m / 30 ft', features: [['Hellish Resistance', 'Resistance to Fire damage'], DARKVISION] },
-      Githyanki: { speed: '9 m / 30 ft', prof: ['Shortswords', 'Longswords', 'Greatswords', 'Light Armour', 'Medium Armour'],
-        features: [['Astral Knowledge', 'Each Long Rest, gain proficiency in every skill of one ability of your choice'],
-          ['Githyanki Psionics', 'Mage Hand at level 1, Enhance Leap at level 3, Misty Step at level 5']] },
-      Dragonborn: { speed: '9 m / 30 ft', features: [['Draconic Ancestry', 'A damage resistance and a breath attack, set by the subrace']] },
-    },
-    subraces: {
-      'High Elf': { features: [WIZARD_CANTRIP] },
-      'Wood Elf': { speed: '10.5 m / 35 ft', skills: ['Stealth'], features: [FLEET] },
-      'Lolth-Sworn Drow': { note: 'Drow subraces differ only in dialogue options and in the deities available to clerics.' },
-      'Seldarine Drow': { note: 'Drow subraces differ only in dialogue options and in the deities available to clerics.' },
-      'High Half-Elf': { features: [WIZARD_CANTRIP] },
-      'Wood Half-Elf': { speed: '10.5 m / 35 ft', skills: ['Stealth'], features: [FLEET] },
-      'Drow Half-Elf': { features: [DROW_MAGIC] },
-      'Lightfoot Halfling': { features: [['Naturally Stealthy', 'Advantage on Stealth checks']] },
-      'Strongheart Halfling': { features: [['Strongheart Resilience', 'Advantage against being Poisoned; resistance to Poison damage']] },
-      'Gold Dwarf': { features: [['Dwarven Toughness', 'Maximum hit points increased by 1 per level']] },
-      'Shield Dwarf': { prof: ['Light Armour', 'Medium Armour'], features: [['Dwarven Armour Training', 'Proficiency with light and medium armour']] },
-      Duergar: { features: [['Duergar Resilience', 'Advantage on Saving Throws against illusions and against being Charmed or Paralysed'], SUPERIOR_DARKVISION,
-        ['Duergar Magic', 'Enlarge at level 3, Invisibility at level 5']] },
-      'Forest Gnome': { features: [['Speak with Animals', 'Can be cast at will']] },
-      'Deep Gnome': { features: [SUPERIOR_DARKVISION, ['Stone Camouflage', 'Advantage on Stealth checks']] },
-      'Rock Gnome': { features: [["Artificer's Lore", 'Expertise in History']] },
-      'Asmodeus Tiefling': { features: [['Infernal Legacy', 'Produce Flame at level 1, Hellish Rebuke at level 3, Darkness at level 5']] },
-      'Mephistopheles Tiefling': { features: [['Legacy of Cania', 'Mage Hand at level 1, Burning Hands at level 3, Flame Blade at level 5']] },
-      'Zariel Tiefling': { features: [['Legacy of Avernus', 'Thaumaturgy at level 1, Searing Smite at level 3, Branding Smite at level 5']] },
-      'Black Dragonborn': dragon('Acid', 'Acid Breath', 'line'),
-      'Blue Dragonborn': dragon('Lightning', 'Lightning Breath', 'line'),
-      'Brass Dragonborn': dragon('Fire', 'Fire Breath', 'line'),
-      'Bronze Dragonborn': dragon('Lightning', 'Lightning Breath', 'line'),
-      'Copper Dragonborn': dragon('Acid', 'Acid Breath', 'line'),
-      'Gold Dragonborn': dragon('Fire', 'Fire Breath', 'cone'),
-      'Green Dragonborn': dragon('Poison', 'Poison Breath', 'cone'),
-      'Red Dragonborn': dragon('Fire', 'Fire Breath', 'cone'),
-      'Silver Dragonborn': dragon('Cold', 'Frost Breath', 'cone'),
-      'White Dragonborn': dragon('Cold', 'Frost Breath', 'cone'),
-    },
-    // Background skills live in app.js (BACKGROUNDS); this is the one-line flavour shown with them.
-    backgrounds: {
-      Acolyte: 'A life spent in service to a temple.',
-      Charlatan: 'A practised liar who lives by cons and false identities.',
-      Criminal: 'A history of breaking the law, with the contacts to match.',
-      Entertainer: 'A performer who lives for the crowd.',
-      'Folk Hero': 'A champion of the common people.',
-      'Guild Artisan': 'A skilled trader with a craft and guild connections.',
-      'Haunted One': 'Marked by a darkness that will not let go. Only available to The Dark Urge.',
-      Noble: 'Raised among wealth, power and privilege.',
-      Outlander: 'Grown up in the wilds, far from civilisation.',
-      Sage: 'Years of study in pursuit of knowledge.',
-      Soldier: 'Trained for war and used to the chain of command.',
-      Urchin: 'Survived alone on the streets as a child.',
-    },
-    origins: {
-      'Custom (Tav)': { text: 'A fully custom character: every choice is yours.' },
-      'The Dark Urge': { text: 'A custom character with its own story. The background is always Haunted One; race and class are free (the default is a White Dragonborn Sorcerer).' },
-      Astarion: { cls: 'Rogue', text: 'Vampire spawn. Race and background are fixed; the class can be changed.' },
-      Gale: { cls: 'Wizard', text: 'Wizard of Waterdeep. Race and background are fixed; the class can be changed.' },
-      Karlach: { cls: 'Barbarian', text: 'Escaped from Avernus with an infernal engine for a heart. Race and background are fixed; the class can be changed.' },
-      "Lae'zel": { cls: 'Fighter', text: 'Githyanki warrior. Race and background are fixed; the class can be changed.' },
-      Shadowheart: { cls: 'Cleric (Trickery Domain)', text: 'Cleric of Shar. Race and background are fixed; the class can be changed.' },
-      Wyll: { cls: 'Warlock (The Fiend)', text: 'The Blade of Frontiers. Race and background are fixed; the class can be changed.' },
-    },
-    // Level 1 of each class: saving throw proficiencies and how many skills to pick from which list.
-    classes: {
-      Barbarian: { saves: ['Strength', 'Constitution'], pick: 2, skills: ['Animal Handling', 'Athletics', 'Intimidation', 'Nature', 'Perception', 'Survival'] },
-      Bard: { saves: ['Dexterity', 'Charisma'], pick: 3, skills: 'any' },
-      Cleric: { saves: ['Wisdom', 'Charisma'], pick: 2, skills: ['History', 'Insight', 'Medicine', 'Persuasion', 'Religion'] },
-      Druid: { saves: ['Intelligence', 'Wisdom'], pick: 2, skills: ['Animal Handling', 'Arcana', 'Insight', 'Medicine', 'Nature', 'Perception', 'Religion', 'Survival'] },
-      Fighter: { saves: ['Strength', 'Constitution'], pick: 2, skills: ['Acrobatics', 'Animal Handling', 'Athletics', 'History', 'Insight', 'Intimidation', 'Perception', 'Survival'] },
-      Monk: { saves: ['Strength', 'Dexterity'], pick: 2, skills: ['Acrobatics', 'Athletics', 'History', 'Insight', 'Religion', 'Stealth'] },
-      Paladin: { saves: ['Wisdom', 'Charisma'], pick: 2, skills: ['Athletics', 'Insight', 'Intimidation', 'Medicine', 'Persuasion', 'Religion'] },
-      Ranger: { saves: ['Strength', 'Dexterity'], pick: 3, skills: ['Animal Handling', 'Athletics', 'Insight', 'Investigation', 'Nature', 'Perception', 'Stealth', 'Survival'] },
-      Rogue: { saves: ['Dexterity', 'Intelligence'], pick: 4, skills: ['Acrobatics', 'Athletics', 'Deception', 'Insight', 'Intimidation', 'Investigation', 'Perception', 'Performance', 'Persuasion', 'Sleight of Hand', 'Stealth'] },
-      Sorcerer: { saves: ['Constitution', 'Charisma'], pick: 2, skills: ['Arcana', 'Deception', 'Insight', 'Intimidation', 'Persuasion', 'Religion'] },
-      Warlock: { saves: ['Wisdom', 'Charisma'], pick: 2, skills: ['Arcana', 'Deception', 'History', 'Intimidation', 'Investigation', 'Nature', 'Religion'] },
-      Wizard: { saves: ['Intelligence', 'Wisdom'], pick: 2, skills: ['Arcana', 'History', 'Insight', 'Investigation', 'Medicine', 'Religion'] },
-    },
-  };
-})();
+// What each character-creation choice grants. Generated by tools/update_gamedata.py from bg3.wiki;
+// do not edit by hand, re-run the script instead.
+// races / subraces: { speed, prof (weapon and armour proficiencies), skills, skillPick (free skill picks), features: [[name, text]],
+//   spells: [[name, character level]], spellAbility, cantrip (class list to choose one cantrip from) } · raceOrder: {race: [subraces]}
+// backgrounds: { skills, text } · origins: { text, cls, sub, race, subrace, background, abilities, plus2, plus1 }
+// classes: { saves, pick, skills (or 'any'), start / multi (equipment proficiencies), multiSkills, hp: [level 1, later levels] }
+window.BG3_DATA_DATE = "2026-10-04";
+window.BG3_DATA = {
+ "races": {
+  "Human": {
+   "features": [
+    [
+     "Civil Militia",
+     "You have weapon proficiency with: Spears Pikes Halberds Glaives Light Armour Shields"
+    ],
+    [
+     "Human Versatility",
+     "Select an additional Skill to be Proficient in. Your carrying capacity is increased by a quarter."
+    ]
+   ],
+   "speed": "9 m",
+   "prof": [
+    "Light Armour",
+    "Shields",
+    "Halberds",
+    "Glaives",
+    "Spears",
+    "Pikes"
+   ],
+   "skillPick": 1
+  },
+  "Elf": {
+   "features": [
+    [
+     "Elven Weapon Training",
+     "You have Proficiency with Longswords, Shortswords, Longbows, and Shortbows."
+    ],
+    [
+     "Darkvision",
+     "Can see in the dark up to 12 m."
+    ],
+    [
+     "Fey Ancestry",
+     "The Feywild casts a veil over your mind. You have Advantage on Saving Throws against being Charmed, and magic can't put you to Sleeping."
+    ],
+    [
+     "Keen Senses",
+     "You gain Proficiency in the Perception skill."
+    ]
+   ],
+   "speed": "9 m",
+   "prof": [
+    "Shortswords",
+    "Longswords",
+    "Shortbows",
+    "Longbows"
+   ],
+   "skills": [
+    "Perception"
+   ]
+  },
+  "Drow": {
+   "features": [
+    [
+     "Drow Weapon Training",
+     "You have proficiency with Rapiers, Shortswords, and Hand Crossbows."
+    ],
+    [
+     "Superior Darkvision",
+     "Can see in the dark up to 24 m."
+    ],
+    [
+     "Fey Ancestry",
+     "The Feywild casts a veil over your mind. You have Advantage on Saving Throws against being Charmed, and magic can't put you to Sleeping."
+    ],
+    [
+     "Keen Senses",
+     "You gain Proficiency in the Perception skill."
+    ],
+    [
+     "Drow Magic",
+     "You gain access to the following Spells: Dancing Lights at level 1, Faerie Fire at level 3, Darkness at level 5"
+    ]
+   ],
+   "speed": "9 m",
+   "prof": [
+    "Hand Crossbows",
+    "Shortswords",
+    "Rapiers"
+   ],
+   "skills": [
+    "Perception"
+   ],
+   "spells": [
+    [
+     "Dancing Lights",
+     1
+    ],
+    [
+     "Faerie Fire",
+     3
+    ],
+    [
+     "Darkness",
+     5
+    ]
+   ],
+   "spellAbility": ""
+  },
+  "Half-Elf": {
+   "features": [
+    [
+     "Civil Militia",
+     "You have weapon proficiency with: Spears Pikes Halberds Glaives Light Armour Shields"
+    ],
+    [
+     "Darkvision",
+     "Can see in the dark up to 12 m."
+    ],
+    [
+     "Fey Ancestry",
+     "The Feywild casts a veil over your mind. You have Advantage on Saving Throws against being Charmed, and magic can't put you to Sleeping."
+    ]
+   ],
+   "speed": "9 m",
+   "prof": [
+    "Light Armour",
+    "Shields",
+    "Halberds",
+    "Glaives",
+    "Spears",
+    "Pikes"
+   ]
+  },
+  "Half-Orc": {
+   "features": [
+    [
+     "Darkvision",
+     "Can see in the dark up to 12 m."
+    ],
+    [
+     "Relentless Endurance",
+     "If you reach 0 hit points, you regain 1 Healing instead of becoming Downed."
+    ],
+    [
+     "Savage Attacks",
+     "When you land a Critical Hit with a melee weapon attack, you deal an extra die of weapon damage."
+    ],
+    [
+     "Menacing",
+     "You gain Proficiency in the Intimidation skill."
+    ]
+   ],
+   "speed": "9 m",
+   "skills": [
+    "Intimidation"
+   ]
+  },
+  "Halfling": {
+   "features": [
+    [
+     "Halfling Luck",
+     "When you roll a 1 for an Attack Roll, Check, or Saving Throw, you can reroll the dice and must use the new roll."
+    ],
+    [
+     "Brave",
+     "You have Advantage on Saving Throws against Frightened."
+    ]
+   ],
+   "speed": "7.5 m"
+  },
+  "Dwarf": {
+   "features": [
+    [
+     "Dwarven Combat Training",
+     "You have Proficiency with Battleaxes, Handaxes, Light Hammers, and Warhammers."
+    ],
+    [
+     "Darkvision",
+     "Can see in the dark up to 12 m."
+    ],
+    [
+     "Dwarven Resilience",
+     "You have advantage on Saving Throws against being Poisoned and you have Resistance against Poison damage."
+    ]
+   ],
+   "speed": "7.5 m",
+   "prof": [
+    "Light Hammers",
+    "Warhammers",
+    "Battleaxes",
+    "Handaxes"
+   ]
+  },
+  "Gnome": {
+   "features": [
+    [
+     "Gnome Cunning",
+     "You have Advantage on Intelligence, Wisdom, and Charisma Saving Throws."
+    ],
+    [
+     "Shortened Stride",
+     "Your movement speed is 7.5 m."
+    ]
+   ],
+   "speed": "7.5 m"
+  },
+  "Tiefling": {
+   "features": [
+    [
+     "Darkvision",
+     "Can see in the dark up to 12 m."
+    ],
+    [
+     "Hellish Resistance",
+     "Your blood protects you from flame, abyssal or otherwise. Gain Resistance to Fire damage, taking only half damage from it."
+    ]
+   ],
+   "speed": "9 m"
+  },
+  "Githyanki": {
+   "features": [
+    [
+     "Martial Prodigy",
+     "A lifetime of relentless training gave you Armour proficiency with Light Armour and Medium Armour, as well as Proficiency with Shortswords, Longswords, and Greatswords."
+    ],
+    [
+     "Astral Knowledge",
+     "Gain in all Skills corresponding to a chosen Ability (Long Rest)"
+    ],
+    [
+     "Githyanki Psionics",
+     "You gain access to the following Spells: Mage Hand at level 1, Jump at level 3, Misty Step at level 5"
+    ]
+   ],
+   "speed": "9 m",
+   "prof": [
+    "Light Armour",
+    "Medium Armour",
+    "Greatswords",
+    "Shortswords",
+    "Longswords"
+   ],
+   "spells": [
+    [
+     "Mage Hand",
+     1
+    ],
+    [
+     "Jump",
+     3
+    ],
+    [
+     "Misty Step",
+     5
+    ]
+   ],
+   "spellAbility": ""
+  },
+  "Dragonborn": {
+   "features": [],
+   "speed": "9 m"
+  }
+ },
+ "subraces": {
+  "High Elf": {
+   "features": [],
+   "cantrip": "Wizard"
+  },
+  "Wood Elf": {
+   "features": [
+    [
+     "Fleet of Foot",
+     "Your Movement Speed is increased by 1.5 m."
+    ]
+   ],
+   "skills": [
+    "Stealth"
+   ]
+  },
+  "Lolth-Sworn Drow": {
+   "features": [],
+   "note": "Lolth-sworn Drow do not gain any additional racial features but do gain access to certain locked dialogue choices."
+  },
+  "Seldarine Drow": {
+   "features": [],
+   "note": "Seldarine Drow do not gain any additional racial features but do gain access to certain locked dialogue choices."
+  },
+  "High Half-Elf": {
+   "features": [],
+   "cantrip": "Wizard"
+  },
+  "Wood Half-Elf": {
+   "features": [
+    [
+     "Fleet of Foot",
+     "Your Movement Speed is further increased by 1.5 m."
+    ]
+   ],
+   "skills": [
+    "Stealth"
+   ]
+  },
+  "Drow Half-Elf": {
+   "features": [
+    [
+     "Drow Magic",
+     "You gain access to the following Spells: Dancing Lights at level 1, Faerie Fire at level 3, Darkness at level 5"
+    ]
+   ],
+   "spells": [
+    [
+     "Dancing Lights",
+     1
+    ],
+    [
+     "Faerie Fire",
+     3
+    ],
+    [
+     "Darkness",
+     5
+    ]
+   ],
+   "spellAbility": "Charisma"
+  },
+  "Lightfoot Halfling": {
+   "features": [
+    [
+     "Naturally Stealthy",
+     "Your nimble nature makes you skilled at concealment. You have Advantage on Stealth Checks."
+    ]
+   ]
+  },
+  "Strongheart Halfling": {
+   "features": [
+    [
+     "Strongheart Resilience",
+     "You have Advantage on Saving Throws against being Poisoned and Resistance to Poison damage."
+    ]
+   ]
+  },
+  "Gold Dwarf": {
+   "features": [
+    [
+     "Dwarven Toughness",
+     "You have 1 extra maximum hp per level."
+    ]
+   ]
+  },
+  "Shield Dwarf": {
+   "features": [
+    [
+     "Dwarven Armour Training",
+     "You have Armour Proficiency with Light Armour and Medium Armour."
+    ]
+   ],
+   "prof": [
+    "Light Armour",
+    "Medium Armour"
+   ]
+  },
+  "Duergar": {
+   "features": [
+    [
+     "Superior Darkvision",
+     "Can see in the dark up to 24 m."
+    ],
+    [
+     "Duergar Resilience",
+     "An affected creature has Advantage on Saving Throws against Illusions and against being Charmed or Paralysed."
+    ],
+    [
+     "Duergar Magic",
+     "You gain the access to the following Cantrips: Enlarge at level 3, Invisibility at level 5"
+    ]
+   ],
+   "spells": [
+    [
+     "Enlarge",
+     3
+    ],
+    [
+     "Invisibility",
+     5
+    ]
+   ],
+   "spellAbility": ""
+  },
+  "Rock Gnome": {
+   "features": [
+    [
+     "Darkvision",
+     "Can see in the dark up to 12 m."
+    ],
+    [
+     "Artificer's Lore",
+     "Add twice your Proficiency Bonus to History checks."
+    ]
+   ]
+  },
+  "Forest Gnome": {
+   "features": [
+    [
+     "Darkvision",
+     "Can see in the dark up to 12 m."
+    ],
+    [
+     "Speak with Animals",
+     "Gain the ability to comprehend and communicate with beasts. Long Rest."
+    ]
+   ]
+  },
+  "Deep Gnome": {
+   "features": [
+    [
+     "Superior Darkvision",
+     "Can see in the dark up to 24 m."
+    ],
+    [
+     "Stone Camouflage",
+     "You have Advantage on Stealth checks."
+    ]
+   ]
+  },
+  "Asmodeus Tiefling": {
+   "features": [
+    [
+     "Infernal Legacy",
+     "Gain the following Spells: Produce Flame at level 1, Hellish Rebuke at level 3, Darkness at level 5"
+    ]
+   ],
+   "spells": [
+    [
+     "Produce Flame",
+     1
+    ],
+    [
+     "Hellish Rebuke",
+     3
+    ],
+    [
+     "Darkness",
+     5
+    ]
+   ],
+   "spellAbility": "Charisma"
+  },
+  "Mephistopheles Tiefling": {
+   "features": [
+    [
+     "Legacy of Cania",
+     "Gain the following Spells: Mage Hand at level 1, Burning Hands at level 3, Flame Blade at level 5"
+    ]
+   ],
+   "spells": [
+    [
+     "Mage Hand",
+     1
+    ],
+    [
+     "Burning Hands",
+     3
+    ],
+    [
+     "Flame Blade",
+     5
+    ]
+   ],
+   "spellAbility": "Charisma"
+  },
+  "Zariel Tiefling": {
+   "features": [
+    [
+     "Legacy of Avernus",
+     "Gain the following Spells: Thaumaturgy at level 1, Searing Smite at level 3, Branding Smite at level 5"
+    ]
+   ],
+   "spells": [
+    [
+     "Thaumaturgy",
+     1
+    ],
+    [
+     "Searing Smite",
+     3
+    ],
+    [
+     "Branding Smite",
+     5
+    ]
+   ],
+   "spellAbility": "Charisma"
+  },
+  "Black Dragonborn": {
+   "features": [
+    [
+     "Draconic Ancestry (Acid)",
+     "The blood of ancient dragons flow through your veins. You are Resistant to Acid damage."
+    ],
+    [
+     "Acid Breath",
+     "Spew forth a column of acid, dealing 2d6 Acid damage."
+    ]
+   ]
+  },
+  "Blue Dragonborn": {
+   "features": [
+    [
+     "Draconic Ancestry (Lightning)",
+     "The blood of ancient dragons flow through your veins. You are Resistant to Lightning damage."
+    ],
+    [
+     "Lightning Breath",
+     "Spew forth a column of lightning, dealing 2d6 Lightning damage"
+    ]
+   ]
+  },
+  "Brass Dragonborn": {
+   "features": [
+    [
+     "Draconic Ancestry (Fire)",
+     "The blood of ancient dragons flow through your veins. You are Resistant to Fire damage."
+    ],
+    [
+     "Fire Breath (Line)",
+     "Spew forth a column of fire, dealing 2d6 Fire damage."
+    ]
+   ]
+  },
+  "Bronze Dragonborn": {
+   "features": [
+    [
+     "Draconic Ancestry (Lightning)",
+     "The blood of ancient dragons flow through your veins. You are Resistant to Lightning damage."
+    ],
+    [
+     "Lightning Breath",
+     "Spew forth a column of lightning, dealing 2d6 Lightning damage"
+    ]
+   ]
+  },
+  "Copper Dragonborn": {
+   "features": [
+    [
+     "Draconic Ancestry (Acid)",
+     "The blood of ancient dragons flow through your veins. You are Resistant to Acid damage."
+    ],
+    [
+     "Acid Breath",
+     "Spew forth a column of acid, dealing 2d6 Acid damage."
+    ]
+   ]
+  },
+  "Gold Dragonborn": {
+   "features": [
+    [
+     "Draconic Ancestry (Fire)",
+     "The blood of ancient dragons flow through your veins. You are Resistant to Fire damage."
+    ],
+    [
+     "Fire Breath (Cone)",
+     "Spew forth a cone of fire, dealing 2d6 Fire damage."
+    ]
+   ]
+  },
+  "Green Dragonborn": {
+   "features": [
+    [
+     "Draconic Ancestry (Poison)",
+     "The blood of ancient dragons flow through your veins. You are Resistant to Poison damage."
+    ],
+    [
+     "Poison Breath",
+     "Spew forth a cone of poison, dealing 2d6 Poison damage."
+    ]
+   ]
+  },
+  "Red Dragonborn": {
+   "features": [
+    [
+     "Draconic Ancestry (Fire)",
+     "The blood of ancient dragons flow through your veins. You are Resistant to Fire damage."
+    ],
+    [
+     "Fire Breath (Cone)",
+     "Spew forth a cone of fire, dealing 2d6 Fire damage."
+    ]
+   ]
+  },
+  "Silver Dragonborn": {
+   "features": [
+    [
+     "Draconic Ancestry (Cold)",
+     "The blood of ancient dragons flow through your veins. You are Resistant to Cold damage."
+    ],
+    [
+     "Frost Breath",
+     "Spew forth a cone of ice, dealing 2d6 Cold damage."
+    ]
+   ]
+  },
+  "White Dragonborn": {
+   "features": [
+    [
+     "Draconic Ancestry (Cold)",
+     "The blood of ancient dragons flow through your veins. You are Resistant to Cold damage."
+    ],
+    [
+     "Frost Breath",
+     "Spew forth a cone of ice, dealing 2d6 Cold damage."
+    ]
+   ]
+  }
+ },
+ "raceOrder": {
+  "Human": [],
+  "Elf": [
+   "High Elf",
+   "Wood Elf"
+  ],
+  "Drow": [
+   "Lolth-Sworn Drow",
+   "Seldarine Drow"
+  ],
+  "Half-Elf": [
+   "High Half-Elf",
+   "Wood Half-Elf",
+   "Drow Half-Elf"
+  ],
+  "Half-Orc": [],
+  "Halfling": [
+   "Lightfoot Halfling",
+   "Strongheart Halfling"
+  ],
+  "Dwarf": [
+   "Gold Dwarf",
+   "Shield Dwarf",
+   "Duergar"
+  ],
+  "Gnome": [
+   "Rock Gnome",
+   "Forest Gnome",
+   "Deep Gnome"
+  ],
+  "Tiefling": [
+   "Asmodeus Tiefling",
+   "Mephistopheles Tiefling",
+   "Zariel Tiefling"
+  ],
+  "Githyanki": [],
+  "Dragonborn": [
+   "Black Dragonborn",
+   "Blue Dragonborn",
+   "Brass Dragonborn",
+   "Bronze Dragonborn",
+   "Copper Dragonborn",
+   "Gold Dragonborn",
+   "Green Dragonborn",
+   "Red Dragonborn",
+   "Silver Dragonborn",
+   "White Dragonborn"
+  ]
+ },
+ "backgrounds": {
+  "Acolyte": {
+   "skills": [
+    "Insight",
+    "Religion"
+   ],
+   "text": "Acolyte is a character background in Baldur's Gate 3 themed around religion. It influences a character's given skill proficiencies and provides opportunities to gain inspiration points."
+  },
+  "Charlatan": {
+   "skills": [
+    "Deception",
+    "Sleight of Hand"
+   ],
+   "text": "Charlatan is a character background in Baldur's Gate 3 themed around trickery and deceit. It influences a character's given skill proficiencies and provides opportunities to gain inspiration points."
+  },
+  "Criminal": {
+   "skills": [
+    "Deception",
+    "Stealth"
+   ],
+   "text": "Criminal is a character background in Baldur's Gate 3. It influences a character's given skill proficiencies and provides opportunities to gain inspiration points."
+  },
+  "Entertainer": {
+   "skills": [
+    "Acrobatics",
+    "Performance"
+   ],
+   "text": "Entertainer is a character background in Baldur's Gate 3. It influences a character's given skill proficiencies and provides opportunities to gain inspiration points."
+  },
+  "Folk Hero": {
+   "skills": [
+    "Animal Handling",
+    "Survival"
+   ],
+   "text": "Folk Hero is a character background in Baldur's Gate 3. It influences a character's given skill proficiencies and provides opportunities to gain inspiration points."
+  },
+  "Guild Artisan": {
+   "skills": [
+    "Insight",
+    "Persuasion"
+   ],
+   "text": "Guild Artisan is a character background in Baldur's Gate 3. It influences a character's given skill proficiencies and provides opportunities to gain inspiration points."
+  },
+  "Haunted One": {
+   "skills": [
+    "Medicine",
+    "Intimidation"
+   ],
+   "text": "Haunted One is a character background in Baldur's Gate 3 unique to the Dark Urge. It influences their given skill proficiencies and provides opportunities to gain inspiration points."
+  },
+  "Noble": {
+   "skills": [
+    "History",
+    "Persuasion"
+   ],
+   "text": "Noble is a character background in Baldur's Gate 3. It influences a character's given skill proficiencies and provides opportunities to gain inspiration points."
+  },
+  "Outlander": {
+   "skills": [
+    "Athletics",
+    "Survival"
+   ],
+   "text": "Outlander is a character background in Baldur's Gate 3. It influences a character's given skill proficiencies and provides opportunities to gain inspiration points."
+  },
+  "Sage": {
+   "skills": [
+    "Arcana",
+    "History"
+   ],
+   "text": "Sage is a character background in Baldur's Gate 3. It influences a character's given skill proficiencies and provides opportunities to gain inspiration points."
+  },
+  "Soldier": {
+   "skills": [
+    "Athletics",
+    "Intimidation"
+   ],
+   "text": "Soldier is a character background in Baldur's Gate 3. It influences a character's given skill proficiencies and provides opportunities to gain inspiration points."
+  },
+  "Urchin": {
+   "skills": [
+    "Sleight of Hand",
+    "Stealth"
+   ],
+   "text": "Urchin is a character background in Baldur's Gate 3. It influences a character's given skill proficiencies and provides opportunities to gain inspiration points."
+  }
+ },
+ "origins": {
+  "Custom (Tav)": {
+   "text": "A fully custom character: every choice is yours."
+  },
+  "The Dark Urge": {
+   "text": "A custom character with its own story. The background is always Haunted One; race and class are free.",
+   "background": "Haunted One"
+  },
+  "Astarion": {
+   "text": "Astarion is an Origin character and recruitable companion in Baldur's Gate 3. He is a high elven Rogue with the charlatan background.",
+   "cls": "Rogue",
+   "sub": "Arcane Trickster",
+   "race": "Elf",
+   "subrace": "High Elf",
+   "background": "Charlatan",
+   "abilities": {
+    "str": 8,
+    "dex": 15,
+    "con": 14,
+    "int": 12,
+    "wis": 13,
+    "cha": 10
+   },
+   "plus2": "dex",
+   "plus1": "int"
+  },
+  "Gale": {
+   "text": "Gale Dekarios is an Origin character and recruitable companion in Baldur's Gate 3. He is a human Wizard with the sage background.",
+   "cls": "Wizard",
+   "sub": "Evocation School",
+   "race": "Human",
+   "background": "Sage",
+   "abilities": {
+    "str": 8,
+    "dex": 13,
+    "con": 14,
+    "int": 15,
+    "wis": 10,
+    "cha": 12
+   },
+   "plus2": "int",
+   "plus1": "con"
+  },
+  "Karlach": {
+   "text": "Karlach Cliffgate is an Origin Character and a recruitable Companion in Baldur's Gate 3. She is a tiefling barbarian with the outlander background.",
+   "cls": "Barbarian",
+   "sub": "Berserker",
+   "race": "Tiefling",
+   "subrace": "Zariel Tiefling",
+   "background": "Outlander",
+   "abilities": {
+    "str": 15,
+    "dex": 13,
+    "con": 14,
+    "int": 8,
+    "wis": 12,
+    "cha": 10
+   },
+   "plus2": "str",
+   "plus1": "con"
+  },
+  "Lae'zel": {
+   "text": "Lae'zel is an Origin character and companion in Baldur's Gate 3. She is a githyanki Fighter with the Soldier background.",
+   "cls": "Fighter",
+   "sub": "Battle Master",
+   "race": "Githyanki",
+   "background": "Soldier",
+   "abilities": {
+    "str": 15,
+    "dex": 13,
+    "con": 14,
+    "int": 10,
+    "wis": 12,
+    "cha": 8
+   },
+   "plus2": "str",
+   "plus1": "con"
+  },
+  "Shadowheart": {
+   "text": "Shadowheart is an Origin character and recruitable companion in Baldur's Gate 3. She is a half-elven trickery domain cleric of Shar with the acolyte background.",
+   "cls": "Cleric",
+   "sub": "Trickery Domain",
+   "race": "Half-Elf",
+   "subrace": "High Half-Elf",
+   "background": "Acolyte",
+   "abilities": {
+    "str": 12,
+    "dex": 13,
+    "con": 14,
+    "int": 10,
+    "wis": 15,
+    "cha": 8
+   },
+   "plus2": "wis",
+   "plus1": "str"
+  },
+  "Wyll": {
+   "text": "Wyll Ravengard is an Origin Character and a recruitable Companion in Baldur's Gate 3. He is a human fiend packted Warlock with the folk hero background.",
+   "cls": "Warlock",
+   "sub": "The Fiend",
+   "race": "Human",
+   "background": "Folk Hero",
+   "abilities": {
+    "str": 8,
+    "dex": 12,
+    "con": 14,
+    "int": 13,
+    "wis": 10,
+    "cha": 15
+   },
+   "plus2": "cha",
+   "plus1": "dex"
+  }
+ },
+ "classes": {
+  "Barbarian": {
+   "saves": [
+    "Strength",
+    "Constitution"
+   ],
+   "pick": 2,
+   "skills": [
+    "Animal Handling",
+    "Athletics",
+    "Intimidation",
+    "Nature",
+    "Perception",
+    "Survival"
+   ],
+   "start": [
+    "Simple",
+    "Martial",
+    "Light Armour",
+    "Medium Armour",
+    "Shields"
+   ],
+   "multi": [
+    "Simple",
+    "Martial",
+    "Shields"
+   ],
+   "multiSkills": 0,
+   "hp": [
+    12,
+    7
+   ]
+  },
+  "Bard": {
+   "saves": [
+    "Dexterity",
+    "Charisma"
+   ],
+   "pick": 3,
+   "skills": "any",
+   "start": [
+    "Simple",
+    "Hand Crossbows",
+    "Rapiers",
+    "Longswords",
+    "Shortswords",
+    "Light Armour"
+   ],
+   "multi": [
+    "Light Armour"
+   ],
+   "multiSkills": 1,
+   "hp": [
+    8,
+    5
+   ]
+  },
+  "Cleric": {
+   "saves": [
+    "Wisdom",
+    "Charisma"
+   ],
+   "pick": 2,
+   "skills": [
+    "History",
+    "Insight",
+    "Medicine",
+    "Persuasion",
+    "Religion"
+   ],
+   "start": [
+    "Simple",
+    "Flails",
+    "Morningstars",
+    "Light Armour",
+    "Medium Armour",
+    "Shields"
+   ],
+   "multi": [
+    "Flails",
+    "Morningstars",
+    "Light Armour",
+    "Medium Armour",
+    "Shields"
+   ],
+   "multiSkills": 2,
+   "hp": [
+    8,
+    5
+   ]
+  },
+  "Druid": {
+   "saves": [
+    "Intelligence",
+    "Wisdom"
+   ],
+   "pick": 2,
+   "skills": [
+    "Animal Handling",
+    "Arcana",
+    "Insight",
+    "Medicine",
+    "Nature",
+    "Perception",
+    "Religion",
+    "Survival"
+   ],
+   "start": [
+    "Clubs",
+    "Daggers",
+    "Javelins",
+    "Maces",
+    "Quarterstaves",
+    "Scimitars",
+    "Sickles",
+    "Spears",
+    "Light Armour",
+    "Medium Armour",
+    "Shields"
+   ],
+   "multi": [
+    "Light Armour",
+    "Medium Armour",
+    "Shields"
+   ],
+   "multiSkills": 0,
+   "hp": [
+    8,
+    5
+   ]
+  },
+  "Fighter": {
+   "saves": [
+    "Strength",
+    "Constitution"
+   ],
+   "pick": 2,
+   "skills": [
+    "Acrobatics",
+    "Animal Handling",
+    "Athletics",
+    "History",
+    "Insight",
+    "Intimidation",
+    "Perception",
+    "Survival"
+   ],
+   "start": [
+    "Simple",
+    "Martial",
+    "Light Armour",
+    "Medium Armour",
+    "Heavy Armour",
+    "Shields"
+   ],
+   "multi": [
+    "Simple",
+    "Martial",
+    "Light Armour",
+    "Medium Armour",
+    "Shields"
+   ],
+   "multiSkills": 0,
+   "hp": [
+    10,
+    6
+   ]
+  },
+  "Monk": {
+   "saves": [
+    "Strength",
+    "Dexterity"
+   ],
+   "pick": 2,
+   "skills": [
+    "Acrobatics",
+    "Athletics",
+    "History",
+    "Insight",
+    "Religion",
+    "Stealth"
+   ],
+   "start": [
+    "Simple",
+    "Shortswords"
+   ],
+   "multi": [
+    "Simple",
+    "Shortswords"
+   ],
+   "multiSkills": 0,
+   "hp": [
+    8,
+    5
+   ]
+  },
+  "Paladin": {
+   "saves": [
+    "Wisdom",
+    "Charisma"
+   ],
+   "pick": 2,
+   "skills": [
+    "Athletics",
+    "Insight",
+    "Intimidation",
+    "Medicine",
+    "Persuasion",
+    "Religion"
+   ],
+   "start": [
+    "Simple",
+    "Martial",
+    "Light Armour",
+    "Medium Armour",
+    "Heavy Armour",
+    "Shields"
+   ],
+   "multi": [
+    "Simple",
+    "Martial",
+    "Light Armour",
+    "Medium Armour",
+    "Shields"
+   ],
+   "multiSkills": 0,
+   "hp": [
+    10,
+    6
+   ]
+  },
+  "Ranger": {
+   "saves": [
+    "Strength",
+    "Dexterity"
+   ],
+   "pick": 3,
+   "skills": [
+    "Animal Handling",
+    "Athletics",
+    "Insight",
+    "Investigation",
+    "Nature",
+    "Perception",
+    "Stealth",
+    "Survival"
+   ],
+   "start": [
+    "Simple",
+    "Martial",
+    "Light Armour",
+    "Medium Armour",
+    "Shields"
+   ],
+   "multi": [
+    "Simple",
+    "Martial",
+    "Light Armour",
+    "Medium Armour",
+    "Shields"
+   ],
+   "multiSkills": 1,
+   "hp": [
+    10,
+    6
+   ]
+  },
+  "Rogue": {
+   "saves": [
+    "Dexterity",
+    "Intelligence"
+   ],
+   "pick": 4,
+   "skills": [
+    "Acrobatics",
+    "Athletics",
+    "Deception",
+    "Insight",
+    "Intimidation",
+    "Investigation",
+    "Perception",
+    "Performance",
+    "Persuasion",
+    "Sleight of Hand",
+    "Stealth"
+   ],
+   "start": [
+    "Simple",
+    "Hand Crossbows",
+    "Longswords",
+    "Rapiers",
+    "Shortswords",
+    "Light Armour"
+   ],
+   "multi": [
+    "Light Armour"
+   ],
+   "multiSkills": 1,
+   "hp": [
+    8,
+    5
+   ]
+  },
+  "Sorcerer": {
+   "saves": [
+    "Constitution",
+    "Charisma"
+   ],
+   "pick": 2,
+   "skills": [
+    "Arcana",
+    "Deception",
+    "Insight",
+    "Intimidation",
+    "Persuasion",
+    "Religion"
+   ],
+   "start": [
+    "Daggers",
+    "Quarterstaves",
+    "Light Crossbows"
+   ],
+   "multi": [],
+   "multiSkills": 0,
+   "hp": [
+    6,
+    4
+   ]
+  },
+  "Warlock": {
+   "saves": [
+    "Wisdom",
+    "Charisma"
+   ],
+   "pick": 2,
+   "skills": [
+    "Arcana",
+    "Deception",
+    "History",
+    "Intimidation",
+    "Investigation",
+    "Nature",
+    "Religion"
+   ],
+   "start": [
+    "Simple",
+    "Light Armour"
+   ],
+   "multi": [
+    "Simple",
+    "Light Armour"
+   ],
+   "multiSkills": 0,
+   "hp": [
+    8,
+    5
+   ]
+  },
+  "Wizard": {
+   "saves": [
+    "Intelligence",
+    "Wisdom"
+   ],
+   "pick": 2,
+   "skills": [
+    "Arcana",
+    "History",
+    "Insight",
+    "Investigation",
+    "Medicine",
+    "Religion"
+   ],
+   "start": [
+    "Daggers",
+    "Quarterstaves",
+    "Light Crossbows"
+   ],
+   "multi": [],
+   "multiSkills": 0,
+   "hp": [
+    6,
+    4
+   ]
+  }
+ }
+};

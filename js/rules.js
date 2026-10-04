@@ -5,20 +5,7 @@
 // ---------- equipment proficiencies ----------
 // What a class grants as the starting class and when added later by multiclassing (from the class pages on bg3.wiki).
 const LIGHT = 'Light Armour', MEDIUM = 'Medium Armour', HEAVY = 'Heavy Armour', SHIELDS = 'Shields', SIMPLE = 'Simple', MARTIAL = 'Martial';
-const CLASS_PROF = {
-  Barbarian: { start: [LIGHT, MEDIUM, SHIELDS, SIMPLE, MARTIAL], multi: [SHIELDS, SIMPLE, MARTIAL] },
-  Bard: { start: [LIGHT, SIMPLE, 'Hand Crossbows', 'Rapiers', 'Longswords', 'Shortswords'], multi: [LIGHT] },
-  Cleric: { start: [LIGHT, MEDIUM, SHIELDS, SIMPLE, 'Flails', 'Morningstars'], multi: [LIGHT, MEDIUM, SHIELDS, 'Flails', 'Morningstars'] },
-  Druid: { start: [LIGHT, MEDIUM, SHIELDS, 'Clubs', 'Daggers', 'Javelins', 'Maces', 'Quarterstaves', 'Scimitars', 'Sickles', 'Spears'], multi: [LIGHT, MEDIUM, SHIELDS] },
-  Fighter: { start: [LIGHT, MEDIUM, HEAVY, SHIELDS, SIMPLE, MARTIAL], multi: [LIGHT, MEDIUM, SHIELDS, SIMPLE, MARTIAL] },
-  Monk: { start: [SIMPLE, 'Shortswords'], multi: [SIMPLE, 'Shortswords'] },
-  Paladin: { start: [LIGHT, MEDIUM, HEAVY, SHIELDS, SIMPLE, MARTIAL], multi: [LIGHT, MEDIUM, SHIELDS, SIMPLE, MARTIAL] },
-  Ranger: { start: [LIGHT, MEDIUM, SHIELDS, SIMPLE, MARTIAL], multi: [LIGHT, MEDIUM, SHIELDS, SIMPLE, MARTIAL] },
-  Rogue: { start: [LIGHT, SIMPLE, 'Hand Crossbows', 'Longswords', 'Rapiers', 'Shortswords'], multi: [LIGHT] },
-  Sorcerer: { start: ['Daggers', 'Quarterstaves', 'Light Crossbows'], multi: [] },
-  Warlock: { start: [LIGHT, SIMPLE], multi: [LIGHT, SIMPLE] },
-  Wizard: { start: ['Daggers', 'Quarterstaves', 'Light Crossbows'], multi: [] },
-};
+const CLASS_PROF = Object.fromEntries(Object.keys(DATA.classes).map((c) => [c, { start: DATA.classes[c].start, multi: DATA.classes[c].multi }]));
 // Subclasses that add proficiencies, matched against the free-text subclass field.
 const SUBCLASS_PROF = [
   ['Cleric', /life|nature/i, [HEAVY]],
@@ -55,7 +42,8 @@ const RACE_WEARER = [
 const isRace = (b, race) => b.creation.race === race || (race === 'Drow' && b.creation.subrace === 'Drow Half-Elf');
 const hasClass = (b, cls) => b.levels.some((l) => l.cls === cls);
 const FEATURE_NEED = [
-  [/not usable by humanoids/i, 'no playable character', () => false],
+  // gear of creatures the party never plays: Steel Watchers, gnolls, the Apostle of Myrkul
+  [/not usable by humanoids|can only be (?:used|wielded|equipped|worn) by|only use?able by/i, 'no playable character', () => false],
   [/Bardic Inspiration/i, 'Bard', (b) => hasClass(b, 'Bard')],
   [/Wild Shape/i, 'Druid', (b) => hasClass(b, 'Druid')],
   [/\bRag(?:e|ing)\b/, 'Barbarian', (b) => hasClass(b, 'Barbarian')],

@@ -309,6 +309,56 @@ function attackRows(b, act, ab, pb, swap) {
   return { rows, extras: [], situational: gearAttack.situational };
 }
 
+// ---------- a turn of attacks ----------
+// The lowest natural roll that is a critical hit: 20, less one for each effect that says "the number you need
+// to roll a Critical Hit is reduced by 1" without tying it to a situation or to spells (these stack).
+function critThreshold(b, worn, gains) {
+  const texts = [...new Set(gains)].map(featureText);
+  allPicks(b).forEach((p) => { const m = /^feat\s*:\s*([^(+]+)/i.exec(p.trim()); const feat = m && FEATS.find(([n]) => norm(n) === norm(m[1])); if (feat) texts.push(feat[1]); });
+  Object.values(worn).forEach((it) => texts.push(...effectTexts(it)));
+  const elixir = CONSUMABLE_BY_NAME.get(norm(b.elixir));
+  if (elixir) texts.push(elixir.x);
+  let n = 20;
+  texts.forEach((text) => String(text || '').split(/;|\.(?=\s|$)/).forEach((s) => {
+    const m = /(?:number you need to roll (?:to land )?a Critical Hit(?: while attacking)? is reduced by|reduce the number you need to roll (?:to land )?a Critical Hit(?: while attacking)? by) (\d)/i.exec(s);
+    if (m && !/\b(?:when|if|against|until|spell|obscured|after)\b/i.test(s.replace(/while attacking/i, ''))) n -= Number(m[1]);
+  }));
+  return Math.max(2, n);
+}
+// Gear that gives Advantage on every attack roll, whatever the situation (the Risky Ring).
+const gearAdvantage = (worn) => Object.values(worn).some((it) => sentencesOf(it).some((s) =>
+  /^(?:you |the wearer )?(?:gains?|ha(?:ve|s)) advantage on (?:all )?attack rolls\b/i.test(s) && !/\b(?:against|when|while|if|until|after)\b/i.test(s)));
+// The chance of an attack with this bonus to hit that Armour Class, and to crit: a natural 1 always misses,
+// a roll at or above the critical threshold always hits. With Advantage, the better of two rolls counts.
+function hitChance(bonus, ac, crit, advantage) {
+  let hits = 0;
+  for (let roll = 2; roll < crit; roll++) if (roll + bonus >= ac) hits++;
+  const pc = (21 - crit) / 20;
+  const any = (hits + 21 - crit) / 20;
+  return advantage ? { hit: 1 - (1 - any) ** 2, crit: 1 - (1 - pc) ** 2 } : { hit: any, crit: pc };
+}
+// What a turn of attacks is worth on average against an Armour Class: the Attack action (with Extra Attack)
+// with the main attack, plus the bonus action — the off-hand weapon, or a monk's Flurry of Blows.
+// A critical hit rolls every damage die twice.
+function turnPlan(stats, style, ac) {
+  const main = mainAttack(stats, style);
+  if (!main) return null;
+  const gains = stats.gains;
+  const extra = gains.includes('Improved Extra Attack') ? 3
+    : gains.includes('Extra Attack') || (gains.includes('Deepened Pact') && stats.pactBlade && main.slot === 'meleeMain') ? 2 : 1;
+  const one = (row) => {
+    const bonus = row.attackTotal + (row.attackDice || []).reduce((a, d) => a + avgDice(d), 0);
+    const p = hitChance(bonus, ac, stats.crit, stats.advantage);
+    const dice = avgDice(row.dice) + (row.extraDice || []).reduce((a, d) => a + avgDice(d[0]), 0);
+    return { p, each: p.hit * (dice + row.damageTotal) + p.crit * dice };
+  };
+  const parts = [Object.assign({ row: main, n: extra, how: t('Attack action') }, one(main))];
+  const off = stats.attacks.rows.find((r) => !r.thrown && r.slot === (main.slot === 'rangedMain' ? 'rangedOff' : main.slot === 'meleeMain' ? 'meleeOff' : ''));
+  if (main.slot === 'unarmed' && stats.monk) parts.push(Object.assign({ row: main, n: 2, how: 'Flurry of Blows' }, one(main)));
+  else if (off && !main.thrown) parts.push(Object.assign({ row: off, n: 1, how: t('bonus action') }, one(off)));
+  return { ac, parts, total: parts.reduce((a, x) => a + x.n * x.each, 0) };
+}
+
 // ---------- spellcasting ----------
 // The value of a column of the class table at a class level ("Ki Points" of a Monk 6).
 function classColumn(cls, n, re) {
@@ -505,6 +555,7 @@ function finalStats(b, act, opts) {
   const attacks = level ? attackRows(b, act, ab, pb, swap) : { rows: [], extras: [], situational: [] };
   // what is switched on, and what a feature's text always gives, on top of everything above
   const savesDice = [];
+  const on = b.active || [];
   (level ? activeEffects(b, act, mods) : []).forEach((x) => {
     const fx = x.fx;
     if (fx.ac) { acInfo[act].parts.push([x.label, fx.ac]); acInfo[act].total += fx.ac; }
@@ -523,6 +574,8 @@ function finalStats(b, act, opts) {
   });
   return {
     act, level, feats, scores, mods, sources: ab.sources, pb, skills, saves, savesDice,
+    gains, crit: level ? critThreshold(b, worn, gains) : 20, advantage: on.includes('adv') || gearAdvantage(worn),
+    monk: !!classLevels(b).Monk, pactBlade: hasPick(b, /pact of the blade/i) || levelInfo(b).some((x) => x.sub === 'The Hexblade'),
     hp: hitPoints(b, mods.con),
     initiative: initiative.reduce((a, p) => a + p[1], 0), initiativeParts: initiative,
     ac: Object.fromEntries(ACTS.map(([k]) => [k, acInfo[k].total])), acInfo,
@@ -555,9 +608,12 @@ function statsLive(b) {
     ${info.mage ? `<small class="extra">${t('{n} with Mage Armour', { n: info.mage })}</small>` : ''}
     ${info.situational.map((x) => `<small class="extra">${esc(x)}</small>`).join('')}</div>`;
   const box = (label, value, hint) => `<div class="stat"><span>${label}</span><b>${value}</b>${hint ? `<small>${hint}</small>` : ''}</div>`;
+  const ac = Number(state.ui.targetAc) || 16;
+  const turn = turnPlan(s, buildProfile(at ? atLevel(b, at) : b, state.ui.act).style, ac);
+  const chance = (r) => { const p = hitChance(r.attackTotal + (r.attackDice || []).reduce((a, d) => a + avgDice(d), 0), ac, s.crit, s.advantage); return t('{hit}% to hit AC {ac} · {crit}% critical', { hit: Math.round(p.hit * 100), ac, crit: Math.round(p.crit * 100) }); };
   const attacks = s.attacks.rows.map((r) => `<div class="atk">
       <div class="atk-name">${r.item ? pic(r.item.i, 'pic small') : ''}<b>${esc(r.name)}</b><small>${r.slot === 'unarmed' ? '' : t(SLOT_LABEL[r.slot])}${r.proficient ? '' : ` · <em>${t('not proficient')}</em>`}</small></div>
-      <div class="atk-num"><span>${t('Attack')}</span><b>${signed(r.attackTotal)}${(r.attackDice || []).map((d) => ' + ' + esc(d)).join('')}</b><small>${partsText(r.attack)}</small></div>
+      <div class="atk-num"><span>${t('Attack')}</span><b>${signed(r.attackTotal)}${(r.attackDice || []).map((d) => ' + ' + esc(d)).join('')}</b><small>${partsText(r.attack)}<br>${chance(r)}</small></div>
       <div class="atk-num"><span>${t('Damage')}</span><b>${esc(damageText(r))}</b><small>${esc(r.type)}${r.damage.length ? ' · ' + partsText(r.damage) : ''}${
         (r.extraDice || []).map((d) => ' · ' + esc(d[0] + (d[1] ? ' ' + d[1] : '') + ' ' + d[2])).join('')}</small></div>
     </div>`).join('');
@@ -579,6 +635,8 @@ function statsLive(b) {
     <h3 class="group">${t('Saving throws')}</h3>
     <div class="skill-final">${s.saves.map((k) => `<span class="${k.proficient ? 'prof' : ''}" title="${k.proficient ? t('Proficient') : ''}">${k.short} <b>${signed(k.bonus)}${s.savesDice.map((d) => ' + ' + esc(d)).join('')}</b></span>`).join('')}</div>
     ${attacks ? `<h3 class="group">${t('Attacks')}</h3><div class="atks">${attacks}</div>
+      ${turn ? `<p class="turn"><b>${turn.total.toFixed(1)}</b>${t('average damage in a turn against AC {ac}', { ac })}: ${turn.parts.map((x) => `${x.n} × ${esc(x.row.name)} (${esc(x.how)}, ${x.each.toFixed(1)} ${t('each')})`).join(' + ')}${
+        s.advantage ? ' · ' + t('with Advantage') : ''}${s.crit < 20 ? ' · ' + t('critical hit on {n} or more', { n: s.crit }) : ''}</p>` : ''}
       ${s.attacks.extras.length ? `<p class="muted">${t('On top, when it applies: {list}', { list: esc(s.attacks.extras.join(' · ')) })}</p>` : ''}
       ${s.attacks.situational.map((x) => `<p class="muted">${esc(x)}</p>`).join('')}` : ''}
     ${casting ? `<h3 class="group">${t('Spellcasting')}</h3><div class="atks">${casting}</div>${slots}${pact}
@@ -600,6 +658,7 @@ function statsCard(b) {
       <div><span class="lbl">${t('At level')}</span><div class="acts lvls">${Array.from({ length: charLevel(b) }, (x, i) => i + 1).map((n) =>
         `<button class="${(b.current && b.current < charLevel(b) ? b.current : charLevel(b)) === n ? 'on' : ''}" data-act="stat-level" data-n="${n}">${n}</button>`).join('')}</div></div>
       <div><span class="lbl">${t('With the gear of')}</span>${actTabs(state.ui.act, 'act')}</div>
+      <label class="field ac-field"><span>${t('Enemy Armour Class')}</span><input type="number" min="5" max="30" data-ui="targetAc" value="${Number(state.ui.targetAc) || 16}"></label>
       ${elixirs.length ? `<label class="field"><span>${t('Elixir kept active')}</span><select data-path="elixir" data-rerender>${opt('', t('— none —'), b.elixir)}${
         elixirs.map((c) => opt(c.n, c.n + (elixirAbility(c.n) ? ' ★' : ''), b.elixir)).join('')}${b.elixir && !elixirs.some((c) => c.n === b.elixir) ? opt(b.elixir, b.elixir, b.elixir) : ''}</select></label>` : ''}
     </div>

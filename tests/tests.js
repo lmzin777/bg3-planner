@@ -377,9 +377,9 @@
   test('traits are read from race, class and gear', () => {
     const list = (b, key, act) => traitsOf(b, act || 'act1')[key].map((x) => x[0] + (x[2] ? '*' : ''));
     const monk = build(Array.from({ length: 6 }, () => 'Monk'), { race: 'Elf', subrace: 'Wood Elf' });
-    eq(list(monk, 'speed'), ['10.5 m', '+4.5 m*'], 'Wood Elf base speed, and the monk table for Unarmoured Movement');
+    eq(list(monk, 'speed'), ['9 m', '+1.5 m', '+4.5 m*'], 'Elf speed, Fleet of Foot, and the monk table for Unarmoured Movement');
     eq(list(monk, 'senses'), ['Darkvision 12 m']);
-    ok(list(monk, 'advantage').includes('Charmed') && list(monk, 'immune').includes('magical Sleep'), 'Fey Ancestry');
+    ok(list(monk, 'advantage').some((x) => /Charmed/.test(x) && !/\*/.test(x)) && list(monk, 'immune').includes('magical Sleep'), 'Fey Ancestry: ' + list(monk, 'advantage') + ' / ' + list(monk, 'immune'));
     const tiefling = build(['Barbarian'], { race: 'Tiefling', subrace: 'Zariel Tiefling' });
     ok(list(tiefling, 'resist').includes('Fire') && list(tiefling, 'resist').includes('Physical damage*'), 'Hellish Resistance always, Rage only while raging');
     eq(traitsOf(tiefling, 'act1').spells.map((x) => [x[0], x[2]]), [['Thaumaturgy', false], ['Searing Smite', true], ['Branding Smite', true]], 'racial spells arrive at levels 1, 3 and 5');
@@ -398,7 +398,7 @@
     rogue.gear.act1.slots.meleeMain.name = 'Rapier';
     rogue.gear.act1.slots.rangedMain.name = 'Shortbow';
     rogue.levels[3].picks.push('Feat: Sharpshooter');
-    eq(availableToggles(rogue, 'act1').map((x) => x.key), ['sneak', 'feat:Sharpshooter']);
+    eq(availableToggles(rogue, 'act1').map((x) => x.key), ['adv', 'sneak', 'feat:Sharpshooter']);
     rogue.active = ['sneak', 'feat:Sharpshooter'];
     const r = finalStats(rogue, 'act1').attacks.rows;
     eq([r[0].extraDice[0][0], r[1].extraDice[0][0]], ['3d6', '3d6'], 'Sneak Attack on finesse and ranged weapons');
@@ -422,7 +422,8 @@
     eq(keys(b), ['origin', 'race', 'class', 'background', 'abilities', 'skills', 'done']);
     b.creation.race = 'Elf';
     b.levels[0].cls = 'Cleric';
-    eq(keys(b), ['origin', 'race', 'subrace', 'class', 'subclass', 'background', 'abilities', 'skills', 'level1', 'done']);
+    eq(keys(b).filter((k) => !k.startsWith('lv:')), ['origin', 'race', 'subrace', 'class', 'subclass', 'background', 'abilities', 'skills', 'level1', 'done']);
+    eq(keys(b).filter((k) => k.startsWith('lv:')).length, 11, 'one step per level from 2 to 12');
     eq(['race', 'subrace', 'class', 'subclass', 'abilities'].map((k) => wizDone(b, k)), [true, false, true, false, false]);
     b.levels[0].sub = 'Life Domain';
     Object.assign(b.creation, { subrace: 'Wood Elf', abilities: { str: 13, dex: 10, con: 14, int: 8, wis: 15, cha: 12 }, plus2: 'wis', plus1: 'con' });
@@ -501,6 +502,90 @@
     a.current = 3;
     eq([memberStats(a).level, finalStats(a).level], [3, 12]);
     ok(mainAttack(finalStats(preset('stealth-archer'), 'act3'), 'ranged').name === 'Titanstring Bow');
+  });
+
+  // ---------- creation data from the wiki ----------
+  test('races, backgrounds, classes and origins come from the generated data', () => {
+    eq(Object.keys(RACES).length, 11);
+    eq([RACES.Elf, RACES.Human, RACES.Dragonborn.length], [['High Elf', 'Wood Elf'], [], 10]);
+    eq([DATA.races.Elf.speed, DATA.races.Dwarf.speed, DATA.races.Elf.skills, DATA.subraces['Wood Elf'].skills], ['9 m', '7.5 m', ['Perception'], ['Stealth']]);
+    ok(DATA.races.Githyanki.prof.includes('Medium Armour') && DATA.races.Githyanki.prof.includes('Greatswords') && DATA.subraces['Shield Dwarf'].prof.includes('Medium Armour'));
+    eq([DATA.races.Human.skillPick, DATA.subraces['High Elf'].cantrip, DATA.subraces['Zariel Tiefling'].spells.map((x) => x[1])], [1, 'Wizard', [1, 3, 5]]);
+    ok(!DATA.races.Drow.features.some((f) => /Sunlight/.test(f[0])), 'what only NPC drow have is left out');
+    eq(Object.keys(BACKGROUNDS).length, 12);
+    eq([BACKGROUNDS.Sage, BACKGROUNDS['Haunted One']], [['Arcana', 'History'], ['Medicine', 'Intimidation']]);
+    eq(CLASSES.map((c) => HIT_DIE[c]), [12, 8, 8, 8, 10, 8, 10, 10, 8, 6, 8, 6]);
+    eq([DATA.classes.Fighter.saves, DATA.classes.Rogue.pick, DATA.classes.Bard.skills, MULTI_SKILLS], [['Strength', 'Constitution'], 4, 'any', { Bard: 1, Cleric: 2, Ranger: 1, Rogue: 1 }]);
+    ok(CLASS_PROF.Fighter.start.includes('Heavy Armour') && !CLASS_PROF.Fighter.multi.includes('Heavy Armour') && !CLASS_PROF.Wizard.multi.length);
+    const o = DATA.origins.Karlach;
+    eq([o.cls, o.race, o.subrace, o.background, o.plus2, pointsUsed({ creation: { abilities: o.abilities } })], ['Barbarian', 'Tiefling', 'Zariel Tiefling', 'Outlander', 'str', 27]);
+    eq(ORIGINS.map((x) => x[0]).slice(0, 3), ['Custom (Tav)', 'The Dark Urge', 'Astarion']);
+    const fighter = build(['Fighter']);
+    eq(['Watcher Greatsword', 'Watcher Crossbow', 'Chaos Flail', 'Scythe of Myrkul', 'Greatsword'].map((n) => suits(ITEM_BY_NAME.get(norm(n)), fighter)), [false, false, false, false, true], 'gear only monsters can use is never offered');
+  });
+
+  // ---------- level-up steps, spellbook, a turn of attacks ----------
+  test('each level says what it still has to choose', () => {
+    const b = build(['Sorcerer', 'Sorcerer', '', ''], { race: 'Human', background: 'Sage' });
+    eq(levelPending(b, 2), ['class not chosen']);
+    eq(levelPending(b, 0), ['subclass not chosen', 'spells and cantrips: 0 of 6']);
+    b.levels[0].sub = 'Draconic Bloodline';
+    eq(levelPending(b, 0), ['Draconic Ancestry: 0 of 1', 'spells and cantrips: 0 of 6']);
+    eq(levelPending(b, 1), ['Metamagic: 0 of 2', 'spells and cantrips: 0 of 1']);
+    b.levels[1].picks.push('Metamagic: Twinned Spell', 'Metamagic: Distant Spell', 'Spell: Shield');
+    eq(levelPending(b, 1), []);
+    const f = build(['Fighter', 'Fighter', 'Fighter', 'Fighter']);
+    eq(levelPending(f, 3), ['feat not chosen']);
+    f.levels[3].picks.push('Feat: Skilled');
+    eq(levelPending(f, 3), ['Skilled: options not chosen']);
+    ok(wizDone(b, 'lv:2') && !wizDone(b, 'lv:3'));
+    state.ui.wizard = 'lv:2';
+    ok(/Twinned Spell/.test(wizardView(b)) && /Nothing left to choose/.test(wizardView(b)), 'the level step renders');
+    state.ui.wizard = '';
+  });
+  test('the spellbook gathers every source of spells', () => {
+    const b = build(['Cleric', 'Cleric', 'Cleric'], { race: 'Tiefling', subrace: 'Zariel Tiefling', abilities: { str: 10, dex: 12, con: 14, int: 8, wis: 15, cha: 13 }, plus2: 'wis' });
+    b.levels[0].sub = 'Life Domain';
+    b.levels[0].picks.push('Cantrip: Guidance', 'Spell: Healing Word');
+    b.levels[2].picks.push('Feat: Magic Initiate: Wizard (Fire Bolt, Mage Hand; Shield)');
+    b.gear.act1.slots.ring1.name = 'Ring of Absolute Force';
+    const stats = finalStats(b, 'act1');
+    const book = spellbook(b, 'act1', stats);
+    const names = (title) => (book.find((g) => g.title === title) || { spells: [] }).spells.map((x) => x.name);
+    const life = book.find((g) => g.title === 'Cleric');
+    ok(names('Cleric').includes('Guidance') && names('Cleric').includes('Healing Word'), 'chosen: ' + names('Cleric'));
+    ok(names('Cleric').includes('Bless') && life.spells.find((x) => x.name === 'Bless').source.startsWith('always prepared'), 'Life Domain spells are always prepared');
+    eq([life.ability, life.dc, life.attack], ['wis', 13, 5], 'Wisdom 17: 8 + 2 + 3');
+    eq(names('Zariel Tiefling'), ['Thaumaturgy', 'Searing Smite'], 'racial spells up to the character level');
+    eq([names('Feats'), book.find((g) => g.title === 'Feats').ability], [['Fire Bolt', 'Mage Hand', 'Shield'], 'int'], 'Magic Initiate: Wizard casts with Intelligence');
+    eq(names('Gear'), ['Thunderwave']);
+    eq(itemCastAbility(build(['Fighter', 'Sorcerer', 'Rogue'])), 'cha', 'the class most recently started that has an ability for spells');
+    ok(allSpells(b, 'act1', stats).some((s) => s.n === 'Bless'), 'the printed sheet lists them too');
+  });
+  test('hit chance, critical hits and damage per turn', () => {
+    eq(hitChance(5, 16, 20, false), { hit: 0.5, crit: 0.05 }, '11 or more on the die');
+    eq(hitChance(5, 40, 20, false).hit, 0.05, 'a natural 20 always hits');
+    eq(hitChance(30, 10, 20, false).hit, 0.95, 'a natural 1 always misses');
+    eq([hitChance(5, 16, 19, false).crit, hitChance(5, 16, 20, true).hit], [0.1, 0.75]);
+    const b = build(Array.from({ length: 5 }, () => 'Fighter'), { abilities: { str: 15, dex: 10, con: 14, int: 8, wis: 12, cha: 8 }, plus2: 'str' });
+    b.gear.act1.slots.meleeMain.name = 'Greatsword';
+    state.ui.targetAc = 16;
+    const s = finalStats(b, 'act1');
+    const turn = turnPlan(s, 'melee', 16);
+    eq([turn.parts.length, turn.parts[0].n, s.crit], [1, 2, 20], 'Extra Attack at Fighter 5');
+    eq(Math.round(turn.total * 100) / 100, 11.7, '2 × (0.55 × (7 + 3) + 0.05 × 7): +6 to hit, 2d6 + 3');
+    b.levels[2].sub = 'Champion';
+    eq(finalStats(b, 'act1').crit, 19, 'Improved Critical Hit');
+    b.gear.act1.slots.meleeMain.name = 'Shortsword';
+    b.gear.act1.slots.meleeOff.name = 'Dagger';
+    eq(turnPlan(finalStats(b, 'act1'), 'melee', 16).parts.map((x) => [x.row.name, x.n]), [['Shortsword', 2], ['Dagger', 1]], 'the off hand is the bonus action');
+    b.gear.act1.slots.ring1.name = 'Risky Ring';
+    ok(finalStats(b, 'act1').advantage, 'the Risky Ring gives Advantage on every attack');
+    const monk = build(Array.from({ length: 3 }, () => 'Monk'));
+    eq(turnPlan(finalStats(monk, 'act1'), 'unarmed', 14).parts.map((x) => [x.how, x.n]), [['Attack action', 1], ['Flurry of Blows', 2]]);
+    const archer = preset('stealth-archer');
+    const base = recommendBase(archer, 'act3');
+    ok(base.base.turn > 0 && gearDelta(archer, 'act3', 'ring1', null, base.base, base.p.style, 0).turn < 0, 'taking the Risky Ring off lowers the damage per turn');
   });
 
   // ---------- build check ----------

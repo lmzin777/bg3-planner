@@ -13,6 +13,9 @@ function render() {
   $$('#langs button').forEach((b) => b.classList.toggle('on', b.dataset.lang === state.ui.lang));
   const views = { party: renderParty, presets: renderPresets, items: renderItems, spells: renderSpells };
   $('#app').innerHTML = (views[state.ui.tab] || renderBuilds)();
+  // the section menu sticks below the header, which is sticky itself on wide screens
+  const top = $('.top');
+  document.documentElement.style.setProperty('--top-h', (getComputedStyle(top).position === 'sticky' ? top.offsetHeight : 0) + 'px');
   libRefresh();
 }
 

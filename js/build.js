@@ -37,13 +37,31 @@ const emptyBuilds = () => `<section class="card empty"><h2>${t('No build selecte
   <div class="row-btns"><button class="btn primary" data-act="build-new">${t('+ New blank build')}</button>
   <button class="btn" data-act="tab" data-tab="presets">${t('See ready-made builds')}</button></div></section>`;
 
+// The sections of the build page, in order: [key, title, short name for the menu]. The menu at the top jumps to them, and each can be folded.
+const SECTIONS = [['overview', 'Overview', 'Overview'], ['check', 'Build check', 'Check'], ['creation', 'Character creation', 'Creation'], ['levels', 'Level progression', 'Levels'],
+  ['numbers', 'Final numbers', 'Numbers'], ['traits', 'Traits', 'Traits'], ['spells', 'Spellbook', 'Spellbook'], ['permanent', 'Permanent bonuses', 'Permanent'], ['gear', 'Gear by act', 'Gear'],
+  ['extras', 'Setup items and consumables', 'Consumables'], ['notes', 'Variants and notes', 'Notes']];
+// One section: an anchor for the menu and a caret on its title that folds it. A folded section is not worked out at all.
+function sec(key, body) {
+  const title = t(SECTIONS.find((x) => x[0] === key)[1]);
+  const caret = (open) => `<button class="caret" data-act="sec-toggle" data-s="${key}" title="${open ? t('Fold this section') : t('Open this section')}">${open ? '▾' : '▸'}</button>`;
+  if ((state.ui.closed || {})[key]) return `<section class="card closed" id="sec-${key}"><h2>${caret(false)}${title}</h2></section>`;
+  const html = body();
+  if (!html) return '';
+  const tagged = html.replace('<section class="card', `<section id="sec-${key}" class="card`);
+  return /<h2>/.test(tagged) ? tagged.replace('<h2>', `<h2>${caret(true)}`) : tagged.replace(/(<section[^>]*>)/, `$1<h2>${caret(true)}${title}</h2>`);
+}
+const sectionNav = () => `<nav class="secnav" aria-label="${t('Sections of the build')}">${SECTIONS.map(([key, title, short]) =>
+  `<button data-act="sec-go" data-s="${key}" title="${t(title)}"${(state.ui.closed || {})[key] ? ' class="off"' : ''}>${t(short)}</button>`).join('')}</nav>`;
+
 function buildEditor(b) {
   const c = b.creation;
   const subs = RACES[c.race] || [];
   const choose = t('— choose —');
   return `
     ${state.ui.fromParty ? `<button class="btn back" data-act="back-party">${t('← Back to the party')}</button>` : ''}
-    <section class="card hero">
+    ${sectionNav()}
+    <section class="card hero" id="sec-overview">
       <input class="title-input" type="text" data-path="name" value="${esc(b.name)}" placeholder="${t('Build name')}" aria-label="${t('Build name')}">
       <div class="split" data-d="split">${esc(splitText(b))}</div>
       <div class="grid g2">
@@ -57,9 +75,9 @@ function buildEditor(b) {
       ${b.credit ? `<p class="credit">${t('Based on: {x}', { x: esc(b.credit) })}</p>` : ''}
     </section>
 
-    ${checkCard(b)}
+    <div id="sec-check">${checkCard(b)}</div>
 
-    <section class="card">
+    ${sec('creation', () => `<section class="card">
       <div class="check-head"><h2>${t('Character creation')}</h2><span></span>
         <button class="btn tiny" data-act="wiz-open">${t('Do it step by step')}</button></div>
       <div class="grid g4">
@@ -77,40 +95,43 @@ function buildEditor(b) {
       ${skillsPicker(b)}
       <h3 class="group">${t('Equipment proficiencies')}</h3>
       <p class="points">${esc(profText(proficiencies(b)))}<br><span class="muted">${t('Worked out from the classes, subclasses, race and armour feats of this build. The item browser filters by it, and adds what the gear of the act grants.')}</span></p>
-    </section>
+    </section>`)}
 
-    <section class="card">
-      <h2>${t('Level progression')}</h2>
+    ${sec('levels', () => `<section class="card">
+      <div class="check-head"><h2>${t('Level progression')}</h2><span></span>
+        <button class="btn tiny" data-act="wiz-levels">${t('Level up step by step')}</button></div>
       <div class="levels">${levelRows(b)}</div>
-    </section>
+    </section>`)}
 
-    ${statsCard(b)}
+    ${sec('numbers', () => statsCard(b))}
 
-    ${traitsCard(b)}
+    ${sec('traits', () => traitsCard(b))}
 
-    ${permanentCard(b)}
+    ${sec('spells', () => spellbookCard(b))}
 
-    <section class="card">
+    ${sec('permanent', () => permanentCard(b))}
+
+    ${sec('gear', () => `<section class="card">
       <h2>${t('Gear by act')}</h2>
       ${actTabs(state.ui.act, 'act', (k) => actProgress(b, k))}
       ${gearAct(b, state.ui.act)}
-    </section>
+    </section>`)}
 
-    <section class="card">
+    ${sec('extras', () => `<section class="card">
       <div class="grid g2">
         <div><h2>${t('Setup items')}</h2>${simpleList(b, 'setup', t('Item'), t('What it is for / where to get it'))}</div>
         <div><h2>${t('Consumables')}</h2>${simpleList(b, 'consumables', t('Elixir, potion, arrow…'), t('Note'), 'consumable')}</div>
       </div>
-    </section>
+    </section>`)}
 
-    <section class="card">
+    ${sec('notes', () => `<section class="card">
       <div class="grid g2">
         <label class="field"><span class="h">${t('Variants')}</span>
           <textarea data-path="variants" rows="9" placeholder="${t('Other level splits, feat swaps, themed versions…')}">${esc(b.variants)}</textarea></label>
         <label class="field"><span class="h">${t('Notes and tricks')}</span>
           <textarea data-path="notes" rows="9" placeholder="${t('Combat rotation, interactions, reminders…')}">${esc(b.notes)}</textarea></label>
       </div>
-    </section>`;
+    </section>`)}`;
 }
 
 function abilCard(b, ab, short, name) {
@@ -151,7 +172,9 @@ function creationInfo(b) {
   const card = (kind, title, body, empty) =>
     `<div class="info${title ? '' : ' none'}"><h4>${kind}</h4>${title ? `<strong>${esc(title)}</strong>${body}` : `<p class="muted">${empty}</p>`}</div>`;
   const traits = (d) => `<dl>${row(t('Speed'), esc(d.speed || ''))}${row(t('Proficiencies'), esc((d.prof || []).join(', ')))}${
-    row(t('Skills'), esc([...(d.skills || []), d.skillNote].filter(Boolean).join(', ')))}</dl>${
+    row(t('Skills'), esc([...(d.skills || []), d.skillPick ? t('one skill of your choice') : ''].filter(Boolean).join(', ')))}${
+    row(t('Spells'), esc((d.spells || []).map(([n, lv]) => n + ' (' + t('level {n}', { n: lv }) + ')').join(', ')))}${
+    row(t('Cantrip'), d.cantrip ? t('one from the {cls} list', { cls: d.cantrip }) : '')}</dl>${
     d.features ? `<ul>${d.features.map(([n, text]) => `<li><b>${esc(n)}</b> ${esc(text)}</li>`).join('')}</ul>` : ''}${
     d.note ? `<p class="muted">${esc(d.note)}</p>` : ''}`;
   const origin = DATA.origins[c.origin];
@@ -159,10 +182,12 @@ function creationInfo(b) {
   const sub = DATA.subraces[c.subrace];
   const bg = BACKGROUNDS[c.background];
   return `<div class="info-cards">
-    ${card(t('Origin'), origin ? c.origin : '', origin ? `<p>${esc(origin.text)}</p>${origin.cls ? `<dl>${row(t('Default class'), esc(origin.cls))}</dl>` : ''}` : '', t('Choose an origin to see what it fixes.'))}
+    ${card(t('Origin'), origin ? c.origin : '', origin ? `<p>${esc(origin.text)}</p>${origin.cls ? `<dl>${row(t('Default class'), esc(origin.cls + (origin.sub ? ' · ' + origin.sub : '')))}${
+      origin.abilities ? row(t('Default abilities'), esc(ABILS.map(([k, short]) => origin.abilities[k] + (origin.plus2 === k ? 2 : origin.plus1 === k ? 1 : 0) + ' ' + short).join(' · '))) : ''}</dl>
+      <button class="btn tiny" data-act="origin-defaults">${t("Use {name}'s class and abilities", { name: esc(c.origin) })}</button>` : ''}` : '', t('Choose an origin to see what it fixes.'))}
     ${card(t('Race'), race ? c.race : '', race ? traits(race) + `<p class="muted">${t('Every race: +2 to one ability and +1 to another, your choice.')}</p>` : '', t('Choose a race to see what it grants.'))}
     ${card(t('Subrace'), sub ? c.subrace : '', sub ? traits(sub) : '', (RACES[c.race] || []).length ? t('Choose a subrace to see what it adds.') : race ? t('This race has no subraces.') : t('Choose a race first.'))}
-    ${card(t('Background'), bg ? c.background : '', bg ? `<p>${esc(DATA.backgrounds[c.background] || '')}</p><dl>${row(t('Skills'), esc(bg.join(', ')))}</dl><p class="muted">${t('The background also decides which deeds earn Inspiration.')}</p>` : '', t('Choose a background to see its skills.'))}
+    ${card(t('Background'), bg ? c.background : '', bg ? `<p>${esc(DATA.backgrounds[c.background].text || '')}</p><dl>${row(t('Skills'), esc(bg.join(', ')))}</dl><p class="muted">${t('The background also decides which deeds earn Inspiration.')}</p>` : '', t('Choose a background to see its skills.'))}
   </div>`;
 }
 
@@ -174,7 +199,7 @@ const skillAbility = (x) => { const g = SKILLS.find(([, list]) => list.includes(
 const abilityMod = (b, ab) => Math.floor((finalOf(b, ab) - 10) / 2);
 
 // Skill proficiencies a class gives when it is added by multiclassing (the wiki's Classes page).
-const MULTI_SKILLS = { Bard: 1, Ranger: 1, Rogue: 1, Cleric: 2 };
+const MULTI_SKILLS = Object.fromEntries(Object.keys(DATA.classes).filter((c) => DATA.classes[c].multiSkills).map((c) => [c, DATA.classes[c].multiSkills]));
 // Everything the skill section needs: what is chosen or granted, what is still missing above, and the pick limits.
 function skillState(b) {
   const c = b.creation;
@@ -183,7 +208,7 @@ function skillState(b) {
   const granted = grantedSkills(b);
   const chosen = skillList(c.skills).filter((x) => !granted[x]);
   const onList = (x) => !!ci && (ci.skills === 'any' || ci.skills.includes(x));
-  const human = c.race === 'Human';
+  const human = !!(DATA.races[c.race] || {}).skillPick;  // a race that picks one more skill, of any kind: Human
   // classes added later that bring skill picks from their own list
   const multi = [...new Set(b.levels.map((l) => l.cls).filter(Boolean))].filter((k) => k !== cls && MULTI_SKILLS[k]);
   const multiPicks = multi.reduce((a, k) => a + MULTI_SKILLS[k], 0);
@@ -221,7 +246,7 @@ function skillsPicker(b) {
   const status = st.missing.length
     ? `<p class="skill-lock">${t('Skills unlock once you choose: {list}', { list: st.missing.join(', ') })}</p>`
     : `<p class="points"><b class="${st.chosen.length > st.max ? 'warn' : st.chosen.length === st.max ? 'ok' : ''}">${t('{n} of {max} chosen', { n: st.chosen.length, max: st.max })}</b>${
-      t(' · {cls} picks {pick} from its list', { cls: st.cls, pick: st.ci.pick })}${st.human ? t(' · Human adds 1 of any skill') : ''}${
+      t(' · {cls} picks {pick} from its list', { cls: st.cls, pick: st.ci.pick })}${st.human ? t(' · {race} adds 1 of any skill', { race: b.creation.race }) : ''}${
       st.multi.map((k) => t(' · multiclassing into {cls} adds {n} from its list', { cls: k, n: MULTI_SKILLS[k] })).join('')}</p>`;
   return `${status}
     <div class="skill-groups${st.missing.length ? ' locked' : ''}">

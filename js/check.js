@@ -16,6 +16,32 @@ function partyTaken(b, act) {
   return out;
 }
 
+// What one level still has to choose, as short texts: the class, the subclass, a feat and its options,
+// Expertise, the choices the level opens, and the spells and cantrips it teaches.
+function levelPending(b, i) {
+  const l = b.levels[i];
+  const x = levelInfo(b)[i];
+  if (!l.cls) return [t('class not chosen')];
+  const out = [];
+  if (picksSubclass(x) && !x.sub) out.push(t('subclass not chosen'));
+  if (grantsFeat(x) && !l.picks.some((p) => /^feat\b/i.test(p.trim()))) out.push(t('feat not chosen'));
+  l.picks.forEach((p) => {
+    const m = /^feat\s*:\s*([^(+]+?)\s*$/i.exec(p.trim());
+    const feat = m && FEATS.find(([name]) => norm(name) === norm(m[1]));
+    if (feat && featParts(feat[0], feat[1], b).length) out.push(t('{feat}: options not chosen', { feat: feat[0] }));
+  });
+  if (grantsExpertise(x) && !l.picks.some((p) => /^expertise\b/i.test(p.trim()))) out.push(t('Expertise not chosen'));
+  levelChoices(x).forEach((c) => {
+    const have = chosenOf(b, x.cls, c.group, i).length;
+    if (have < c.n) out.push(c.group.name + ': ' + t('{n} of {max}', { n: have, max: c.n }));
+  });
+  const learn = spellsAtLevel(x);
+  const need = learn && SPELLS.some((s) => (s.cl || []).includes(learn.list)) ? learn.spells + learn.cantrips : 0;
+  const have = l.picks.filter((p) => /^(spell|cantrip)s?\s*:/i.test(p.trim()) && !/\(replaces /i.test(p)).length;
+  if (have < need) out.push(t('spells and cantrips: {n} of {max}', { n: have, max: need }));
+  return out;
+}
+
 // [{ level: 'warn' | 'note', where, text }] - 'warn' is something to fix or choose, 'note' is worth a look.
 function buildIssues(b) {
   const out = [];

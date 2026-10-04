@@ -30,12 +30,13 @@ function classChoices(b, cls) {
 }
 // What the levels of a class already say about a choice: the option names, with "?" for a line that
 // carries the prefix but names nothing the planner knows ("Manoeuvres: your choice").
-function chosenOf(b, cls, group) {
+// With `only`, just what that one level says.
+function chosenOf(b, cls, group, only) {
   const info = levelInfo(b);
   const prefix = prefixRe(group.name);
   const out = [];
   b.levels.forEach((l, i) => {
-    if (info[i].cls !== cls) return;
+    if (info[i].cls !== cls || (only != null && i !== only)) return;
     l.picks.forEach((p) => {
       const text = p.trim();
       if (prefix.test(text)) {
@@ -135,8 +136,8 @@ function featText(name, desc, parts) {
 
 // ---------- racial cantrip ----------
 // High Elves and High Half-Elves learn one Wizard cantrip at creation.
-const raceCantrips = (b) => ([DATA.races[b.creation.race], DATA.subraces[b.creation.subrace]].some((d) => d && (d.features || []).some((f) => f[0] === 'Cantrip'))
-  ? SPELLS.filter((s) => s.lv === 0 && (s.cl || []).includes('Wizard')).map((s) => s.n) : []);
+const raceCantrips = (b) => { const d = [DATA.races[b.creation.race], DATA.subraces[b.creation.subrace]].find((x) => x && x.cantrip);
+  return d ? SPELLS.filter((s) => s.lv === 0 && (s.cl || []).includes(d.cantrip)).map((s) => s.n) : []; };
 
 // ---------- permanent bonuses ----------
 // What a permanent bonus does to the numbers, read from its text: an ability of choice, a named ability,

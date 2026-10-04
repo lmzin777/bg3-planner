@@ -36,15 +36,17 @@ function traitsOf(b, act) {
   const level = charLevel(b);
   const push = (list, what, source, cond) => { if (!list.some((x) => norm(x[0]) === norm(what) && x[1] === source)) list.push([what, source, !!cond]); };
   // base speed: the subrace's when it has one, else the race's
-  const base = (DATA.subraces[c.subrace] || {}).speed || (DATA.races[c.race] || {}).speed;
-  if (base) out.speed.push([base.split('/')[0].trim(), c.subrace && (DATA.subraces[c.subrace] || {}).speed ? c.subrace : c.race, false]);
+  const base = (DATA.races[c.race] || {}).speed;
+  if (base) out.speed.push([base, c.race, false]);
+  // spells a race hands out as the character levels: "Dancing Lights at level 1, Faerie Fire at level 3"
+  [[c.race, DATA.races[c.race]], [c.subrace, DATA.subraces[c.subrace]]].forEach(([name, d]) => ((d && d.spells) || []).forEach(([spell, lv]) => out.spells.push([spell, name, lv > level, lv])));
   ownedTexts(b, act).forEach(([source, text, kind]) => {
     const used = kind === 'feature' && ACTION_FEATURES.has(source) && !/^Aura of/.test(source);  // an aura is always up
     splitSentences(text).forEach((s) => {
       const cond = used || SITUATION.test(s);
       let m = /movement speed (?:is )?(?:increas\w+|\+)\D{0,12}(\d+(?:\.\d+)?) ?m\b/i.exec(s);
       // the monk's own table says how much Unarmoured Movement gives at each level; Fleet of Foot is in the base speed
-      if (m && !/^Fleet of Foot/.test(s) && !/Unarmoured Movement/.test(source)) push(out.speed, '+' + m[1] + ' m', source, cond);
+      if (m && !/Unarmoured Movement/.test(source)) push(out.speed, '+' + m[1] + ' m', source, cond);
       m = /see in the dark up to (\d+) ?m/i.exec(s);
       if (m) push(out.senses, 'Darkvision ' + m[1] + ' m', source, false);
       else if (/darkvision/i.test(s) && kind !== 'race') push(out.senses, 'Darkvision', source, cond);
@@ -54,13 +56,12 @@ function traitsOf(b, act) {
         else if (/physical damage/i.test(s)) push(out.resist, 'Physical damage', source, cond);
         else types.forEach((d) => push(out.resist, d, source, cond));
       }
-      m = /advantage (?:on|against|in) ([^.;]+)/i.exec(s);
+      m = /advantage (?:on|against|in) ([^.;,]+)/i.exec(s);
       if (m && !/(?:enemies|attackers|foes|creatures) (?:also )?have advantage/i.test(s)) push(out.advantage, m[1].replace(/^being /i, '').trim(), source, cond);
       m = /immun\w* to ([^.;]+)|can(?:'t|not) be (surprised|charmed|frightened|knocked prone|poisoned|put to sleep)/i.exec(s);
       if (m && (m[1] || m[2]).trim().length > 3) push(out.immune, (m[1] || m[2]).trim(), source, cond);
+      if (/magic can(?:'t|not) put you to sleep/i.test(s)) push(out.immune, 'magical Sleep', source, false);
     });
-    // "Dancing Lights at level 1, Faerie Fire at level 3": spells a race hands out as the character levels
-    if (kind === 'race') for (const m of text.matchAll(/([A-Z][A-Za-z' ]+?) at level (\d+)/g)) out.spells.push([m[1].trim(), source.split(' · ')[1], Number(m[2]) > level, Number(m[2])]);
   });
   // monks move faster without armour: the class table says by how much
   const monk = classLevels(b).Monk;
@@ -111,6 +112,7 @@ function availableToggles(b, act) {
   const gains = [...new Set(allGains(b))];
   const pb = profBonus(charLevel(b));
   const add = (key, label, hint, fx, scope) => { if (!out.some((x) => x.key === key)) out.push({ key, label, hint, fx, scope: scope || 'all' }); };
+  if (charLevel(b)) add('adv', t('Advantage'), t('Roll every attack twice and keep the better result: hidden, flanking with a helper, Reckless Attack and the like.'), {});
   if (levels.Barbarian) add('rage', 'Rage', featureText('Rage'), { damage: Number(classColumn('Barbarian', levels.Barbarian, /rage damage/i)) || 0 }, 'melee');
   if (levels.Rogue) add('sneak', 'Sneak Attack', featureText('Sneak Attack'), { damageDice: classColumn('Rogue', levels.Rogue, /sneak attack/i) }, 'finesse');
   FEATS.forEach(([name, text]) => {

@@ -138,6 +138,35 @@ Object.assign(actions, {
   'pick-add'(el) { const l = +el.dataset.l; curBuild().levels[l].picks.push(''); return { focus: `[data-path="levels.${l}.picks.${curBuild().levels[l].picks.length - 1}"]` }; },
   'pick-del'(el) { curBuild().levels[+el.dataset.l].picks.splice(+el.dataset.i, 1); },
   act(el) { state.ui.act = el.dataset.k; },
+  'sec-toggle'(el) { const closed = state.ui.closed || (state.ui.closed = {}); closed[el.dataset.s] = !closed[el.dataset.s]; },
+  // jump to a section of the build page, opening it when it was folded
+  'sec-go'(el) {
+    const key = el.dataset.s;
+    const was = (state.ui.closed || {})[key];
+    if (was) { state.ui.closed[key] = false; save(); render(); }
+    const target = $('#sec-' + key);
+    if (target) target.scrollIntoView({ block: 'start' });
+    return false;
+  },
+  // an origin character's own class and ability scores, as the game sets them by default
+  async 'origin-defaults'() {
+    const b = curBuild();
+    const o = DATA.origins[b.creation.origin];
+    if (!o || !o.cls) return false;
+    const first = b.levels[0];
+    if (first.cls && first.cls !== o.cls && !(await ask(t('Level 1 is {cls} now. Change it to {x}? The choices of that level are cleared.', { cls: first.cls, x: o.cls }), t('Change')))) return false;
+    if (first.cls !== o.cls) Object.assign(first, { cls: o.cls, sub: '', picks: [] });
+    if ((CLASS_DATA[o.cls] || {}).subclassLevel === 1 && o.sub) first.sub = subLabel(matchSubclass(o.cls, o.sub) || o.sub);
+    if (o.abilities) Object.assign(b.creation, { abilities: Object.assign({}, o.abilities), plus2: o.plus2, plus1: o.plus1 });
+    toast(t("{name}'s class and abilities applied", { name: b.creation.origin }));
+  },
+  'wiz-levels'() {
+    const b = curBuild();
+    const next = b.levels.findIndex((l, i) => i > 0 && levelPending(b, i).length);
+    state.ui.wizard = startingClass(b) ? 'lv:' + ((next < 0 ? 1 : next) + 1) : 'class';
+    state.ui.wizardFor = b.id;
+    return { top: true };
+  },
   // the level the numbers are shown at; the last level means "the finished build"
   'stat-level'(el) { const b = curBuild(); const n = +el.dataset.n; b.current = n >= charLevel(b) ? 0 : n; },
   async 'gear-copy-prev'() {
@@ -240,6 +269,12 @@ document.addEventListener('input', (e) => {
       f.dir = (LIB_SORTS[tab].find(([k]) => k === f.sort) || [])[2] || 'asc';
       render();
     } else libRefresh();
+    return;
+  }
+  if (el.dataset && el.dataset.ui) {  // a setting of the view, such as the enemy Armour Class the attacks are measured against
+    state.ui[el.dataset.ui] = Number(el.value) || 0;
+    save();
+    refreshDerived();
     return;
   }
   if (!el.dataset || !el.dataset.path) return;

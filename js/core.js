@@ -2,7 +2,7 @@
 // The scripts are plain (not modules) so the planner also runs from a file opened directly; they share the global scope.
 'use strict';
 
-const APP_VERSION = '1.3';
+const APP_VERSION = '1.4';
 const STORE_KEY = 'bg3planner.v1';
 const PRESETS = window.BG3_PRESETS || [];
 const I18N = window.BG3_I18N || {};
@@ -13,7 +13,7 @@ const CHOICES = window.BG3_CHOICES || [];
 const FEAT_OPTIONS = window.BG3_FEAT_OPTIONS || {};
 const PERMANENT = window.BG3_PERMANENT || [];
 const SPELL_PICKS = window.BG3_SPELL_PICKS || {};
-const DATA = window.BG3_DATA || { races: {}, subraces: {}, backgrounds: {}, origins: {}, classes: {} };
+const DATA = window.BG3_DATA || { races: {}, subraces: {}, raceOrder: {}, backgrounds: {}, origins: {}, classes: {} };
 
 // UI text is written in English and passed through t(); other languages live in i18n.js.
 // Game terms (classes, races, skills, backgrounds, item names) stay in English in every language.
@@ -31,47 +31,14 @@ const RARITIES = [['', 'Rarity'], ['common', 'Common'], ['uncommon', 'Uncommon']
 const POINT_COST = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 };
 const PARTY_SIZE = 4;
 const TRASH_MAX = 15;
+// Creation data comes from gamedata.js, which tools/update_gamedata.py builds from the wiki.
 // Hit die per class: the first level of the character gets the full die, later levels half of it plus one.
-const HIT_DIE = { Barbarian: 12, Fighter: 10, Paladin: 10, Ranger: 10, Bard: 8, Cleric: 8, Druid: 8, Monk: 8, Rogue: 8, Warlock: 8, Sorcerer: 6, Wizard: 6 };
-
-// Character creation data, in the order the game presents it. Origin characters lock race and background.
-const ORIGINS = [
-  ['Custom (Tav)', null],
-  ['The Dark Urge', { background: 'Haunted One' }],
-  ['Astarion', { race: 'Elf', subrace: 'High Elf', background: 'Charlatan' }],
-  ['Gale', { race: 'Human', subrace: '', background: 'Sage' }],
-  ['Karlach', { race: 'Tiefling', subrace: 'Zariel Tiefling', background: 'Outlander' }],
-  ["Lae'zel", { race: 'Githyanki', subrace: '', background: 'Soldier' }],
-  ['Shadowheart', { race: 'Half-Elf', subrace: 'High Half-Elf', background: 'Acolyte' }],
-  ['Wyll', { race: 'Human', subrace: '', background: 'Folk Hero' }],
-];
-const RACES = {
-  Human: [],
-  Elf: ['High Elf', 'Wood Elf'],
-  Drow: ['Lolth-Sworn Drow', 'Seldarine Drow'],
-  'Half-Elf': ['High Half-Elf', 'Wood Half-Elf', 'Drow Half-Elf'],
-  'Half-Orc': [],
-  Halfling: ['Lightfoot Halfling', 'Strongheart Halfling'],
-  Dwarf: ['Gold Dwarf', 'Shield Dwarf', 'Duergar'],
-  Gnome: ['Forest Gnome', 'Deep Gnome', 'Rock Gnome'],
-  Tiefling: ['Asmodeus Tiefling', 'Mephistopheles Tiefling', 'Zariel Tiefling'],
-  Githyanki: [],
-  Dragonborn: ['Black', 'Blue', 'Brass', 'Bronze', 'Copper', 'Gold', 'Green', 'Red', 'Silver', 'White'].map((c) => c + ' Dragonborn'),
-};
-const BACKGROUNDS = {
-  Acolyte: ['Insight', 'Religion'],
-  Charlatan: ['Deception', 'Sleight of Hand'],
-  Criminal: ['Deception', 'Stealth'],
-  Entertainer: ['Acrobatics', 'Performance'],
-  'Folk Hero': ['Animal Handling', 'Survival'],
-  'Guild Artisan': ['Insight', 'Persuasion'],
-  'Haunted One': ['Medicine', 'Intimidation'],
-  Noble: ['History', 'Persuasion'],
-  Outlander: ['Athletics', 'Survival'],
-  Sage: ['Arcana', 'History'],
-  Soldier: ['Athletics', 'Intimidation'],
-  Urchin: ['Sleight of Hand', 'Stealth'],
-};
+const HIT_DIE = Object.fromEntries(CLASSES.map((c) => [c, ((DATA.classes[c] || {}).hp || [8])[0]]));
+// Origin characters lock race and background; a custom character and the Dark Urge leave the race free.
+const ORIGINS = Object.keys(DATA.origins).map((name) => { const o = DATA.origins[name]; return [name, o.race ? { race: o.race, subrace: o.subrace || '', background: o.background } : o.background ? { background: o.background } : null]; });
+// {race: [subraces]} and {background: [its two skills]}, in the order the game lists them.
+const RACES = Object.assign({}, DATA.raceOrder);
+const BACKGROUNDS = Object.fromEntries(Object.keys(DATA.backgrounds).map((k) => [k, DATA.backgrounds[k].skills]));
 const SKILLS = [
   ['STR', ['Athletics']],
   ['DEX', ['Acrobatics', 'Sleight of Hand', 'Stealth']],

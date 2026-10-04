@@ -92,8 +92,9 @@ function profileText(p) {
 // (bonus and average damage per hit) and the best spell save DC and spell attack.
 function keyNumbers(s, act, style) {
   const r = mainAttack(s, style);
+  const turn = turnPlan(s, style, Number(state.ui.targetAc) || 16);
   return { ac: s.ac[act], hp: s.hp, initiative: s.initiative, saves: s.saves.reduce((a, k) => a + k.bonus, 0),
-    attack: r ? r.attackTotal : 0, damage: avgDamage(r),
+    turn: turn ? turn.total : 0, attack: r ? r.attackTotal : 0, damage: avgDamage(r),
     dc: s.casting.length ? Math.max(...s.casting.map((c) => c.dc)) : 0,
     spellAttack: s.casting.length ? Math.max(...s.casting.map((c) => c.attack)) : 0 };
 }
@@ -107,19 +108,19 @@ function numbersDiff(now, base) {
 }
 // What moves in the numbers with the item in the slot, against a base.
 const gearDelta = (b, act, slot, it, base, style, level) => numbersDiff(numbersWith(b, act, slot, it, style, level), base);
-const DELTA_LABEL = { attack: 'Attack', damage: 'Damage', dc: 'Spell save DC', spellAttack: 'Spell attack', ac: 'AC', hp: 'Hit points', saves: 'Saving throws', initiative: 'Initiative' };
+const DELTA_LABEL = { turn: 'Damage per turn', attack: 'Attack', damage: 'Damage', dc: 'Spell save DC', spellAttack: 'Spell attack', ac: 'AC', hp: 'Hit points', saves: 'Saving throws', initiative: 'Initiative' };
 // The six saving throws are compared as a total; when all move together, say it per saving throw.
 const deltaBit = (k, v) => (k === 'saves' && v % 6 === 0 ? t('Every saving throw') + ' ' + (v > 0 ? '+' : '−') + Math.abs(v / 6)
   : t(DELTA_LABEL[k]) + (k === 'saves' ? ' (' + t('total') + ')' : '') + ' ' + (v > 0 ? '+' : '−') + Math.abs(v));
 const deltaText = (d) => Object.keys(DELTA_LABEL).filter((k) => d[k]).map((k) => deltaBit(k, d[k])).join(' · ');
 // What one point of each number is worth to each goal.
 const DELTA_WEIGHT = {
-  damage: { attack: 1.6, damage: 1, dc: 2, spellAttack: 1.2, initiative: 0.3 },
+  damage: { turn: 1.4, dc: 2, spellAttack: 1.2, initiative: 0.3 },
   defence: { ac: 2.5, hp: 0.12, saves: 0.5, initiative: 0.3 },
-  versatile: { ac: 1, hp: 0.06, saves: 0.3, initiative: 0.5, attack: 0.8, damage: 0.5, dc: 1, spellAttack: 0.6 },
+  versatile: { ac: 1, hp: 0.06, saves: 0.3, initiative: 0.5, turn: 0.7, dc: 1, spellAttack: 0.6 },
 };
 // A weapon number means little to a caster, a spell number little to someone who does not cast.
-const deltaFit = (k, p) => ((k === 'attack' || k === 'damage') && p.style === 'caster' ? 0.2
+const deltaFit = (k, p) => ((k === 'attack' || k === 'damage' || k === 'turn') && p.style === 'caster' ? 0.2
   : (k === 'dc' || k === 'spellAttack') && p.style !== 'caster' ? (p.caster ? 0.4 : 0) : 1);
 
 // ---------- scoring ----------

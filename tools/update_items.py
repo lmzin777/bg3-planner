@@ -100,6 +100,21 @@ def page_texts(titles):
     return out
 
 
+RESOURCE_NAMES = {}
+
+
+def resource_name(code, plural=False):
+    """Name of a resource from the code the wiki's {{R}} template takes: "srcpnt" is "Sorcery Point", "spell2" a "Level 2 Spell Slot"."""
+    key = (code.strip().lower(), plural)
+    if key not in RESOURCE_NAMES:
+        text = "{{R|" + code.strip() + ("|forceplural=yes" if plural else "") + "}}"
+        out = api(action="expandtemplates", text=text, prop="wikitext").get("expandtemplates", {}).get("wikitext", "")
+        out = re.sub(r"\[\[File:[^\]]*\]\]|&#8239;", "", out)
+        out = re.sub(r"\[\[(?:[^\]|]*\|)?([^\]]*)\]\]", r"\1", out)
+        RESOURCE_NAMES[key] = re.sub(r"<[^>]+>", "", out).strip() or code.strip()
+    return RESOURCE_NAMES[key]
+
+
 def field(text, key):
     """Value of a template parameter ("| key = value"), which may span several lines."""
     m = re.search(r"^\|\s*" + re.escape(key) + r"\s*=[ \t]*(.*(?:\n(?!\s*\||\s*\}\}).*)*)", text, re.M)
@@ -132,6 +147,8 @@ def clean(s):
                 return ""
             if name in ("temp hp", "temphp") and args:
                 return args[0] + " temporary hit points"
+            if name in ("r", "resource") and args and not any(re.match(r"icon\s*only", k, re.I) for k in named):
+                return resource_name(args[0].split(":")[0], any(k.lower().startswith("forceplural") for k in named))
             if name == "dist":
                 return named["m"] + " m" if named.get("m") else named.get("ft", "") + " ft"
             if name in ("damagetext", "damage text") and len(args) > 1:
