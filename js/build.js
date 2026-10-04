@@ -65,7 +65,7 @@ function buildEditor(b) {
       <div class="grid g4">
         ${selectField(t('Origin'), 'creation.origin', c.origin, ORIGINS.map((o) => o[0]), choose, 'data-rerender')}
         ${selectField(t('Race'), 'creation.race', c.race, Object.keys(RACES), choose, 'data-rerender')}
-        ${selectField(t('Subrace'), 'creation.subrace', c.subrace, subs, subs.length ? choose : t('No subrace'), subs.length || c.subrace ? '' : 'disabled')}
+        ${selectField(t('Subrace'), 'creation.subrace', c.subrace, subs, subs.length ? choose : t('No subrace'), subs.length || c.subrace ? 'data-rerender' : 'disabled')}
         ${selectField(t('Background'), 'creation.background', c.background, Object.keys(BACKGROUNDS).map((k) => [k, k === 'Haunted One' ? t('Haunted One (Dark Urge only)') : k]), choose, 'data-rerender')}
       </div>
       ${raceCantrips(b).length ? `<div class="grid g4">${selectField(t('Racial cantrip'), 'creation.cantrip', c.cantrip, raceCantrips(b), choose, 'data-rerender')}</div>` : ''}

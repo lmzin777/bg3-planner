@@ -9,6 +9,10 @@ const RARITY_RANK = { legendary: 5, veryrare: 4, rare: 3, uncommon: 2, common: 1
 const PICKER_MAX = 150;
 let picker = null;
 
+// Whether an item can be had by an act. One without a known act counts only when it is ordinary gear with a
+// stated source (basic and +1 equipment sold by traders): a rare item of unknown origin, or one the wiki gives
+// no source for (what an enemy or an ally carries), is not offered as if it were there from the start.
+const foundBy = (it, actNum) => (it.a ? it.a <= actNum : !!(it.l || it.h) && RARITY_RANK[it.r] <= 2);
 function pickerItems() {
   const kinds = SLOT_KINDS[picker.slot] || [];
   const actNum = ACTS.findIndex(([k]) => k === picker.act) + 1;
@@ -21,7 +25,7 @@ function pickerItems() {
     && (!q || norm(it.n).includes(q))
     && (!picker.type || it.t === picker.type)
     && (!usable || canUse(it, picker.prof))
-    && (!picker.byAct || !it.a || it.a <= actNum))
+    && (!picker.byAct || foundBy(it, actNum)))
     .sort((a, b) => RARITY_RANK[b.r] - RARITY_RANK[a.r] || a.n.localeCompare(b.n));
 }
 function pickerList() {

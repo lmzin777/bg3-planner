@@ -97,13 +97,16 @@ function keyNumbers(s, act, style) {
     dc: s.casting.length ? Math.max(...s.casting.map((c) => c.dc)) : 0,
     spellAttack: s.casting.length ? Math.max(...s.casting.map((c) => c.attack)) : 0 };
 }
-// What moves in those numbers with the item in the slot, e.g. { ac: 1, attack: -1 }.
-function gearDelta(b, act, slot, it, base, style, level) {
-  const now = keyNumbers(finalStats(b, act, { swap: { [slot]: it }, level }), act, style);
+// The numbers with the item in the slot (or with the slot empty, for a null item).
+const numbersWith = (b, act, slot, it, style, level) => keyNumbers(finalStats(b, act, { swap: { [slot]: it }, level }), act, style);
+// What differs between two sets of numbers, e.g. { ac: 1, attack: -1 }.
+function numbersDiff(now, base) {
   const out = {};
   Object.keys(now).forEach((k) => { const d = Math.round((now[k] - base[k]) * 10) / 10; if (d) out[k] = d; });
   return out;
 }
+// What moves in the numbers with the item in the slot, against a base.
+const gearDelta = (b, act, slot, it, base, style, level) => numbersDiff(numbersWith(b, act, slot, it, style, level), base);
 const DELTA_LABEL = { attack: 'Attack', damage: 'Damage', dc: 'Spell save DC', spellAttack: 'Spell attack', ac: 'AC', hp: 'Hit points', saves: 'Saving throws', initiative: 'Initiative' };
 // The six saving throws are compared as a total; when all move together, say it per saving throw.
 const deltaBit = (k, v) => (k === 'saves' && v % 6 === 0 ? t('Every saving throw') + ' ' + (v > 0 ? '+' : '−') + Math.abs(v / 6)
@@ -153,7 +156,9 @@ function tagFit(tag, it, p, text) {
 }
 
 // Score of one item for a slot, an act and a goal: { score, reasons, delta }.
-function scoreItem(b, p, it, slot, act, goal, base) {
+// The score measures the item against an empty slot, so the ranking does not depend on what happens to be
+// worn; the reasons and the delta say what changes against what is worn now.
+function scoreItem(b, p, it, slot, act, goal, base, empty) {
   const weights = GOALS[goal];
   const text = itemText(it);
   const reasons = [];
@@ -161,18 +166,23 @@ function scoreItem(b, p, it, slot, act, goal, base) {
   // a monk in armour loses Unarmoured Defence and movement, so armour is not offered
   if (slot === 'chest' && p.monk && ARMOUR_TYPES.includes(it.t)) return { score: 0, reasons: [], delta: {} };
   // first, what the item does to the numbers of this build
-  const delta = gearDelta(b, act, slot, it, base, p.style, p.level);
-  Object.keys(delta).forEach((k) => {
+  const now = numbersWith(b, act, slot, it, p.style, p.level);
+  const delta = numbersDiff(now, base);
+  const worth = numbersDiff(now, empty || base);
+  Object.keys(worth).forEach((k) => {
     const w = (DELTA_WEIGHT[goal][k] || 0) * deltaFit(k, p);
     if (!w) return;
-    score += delta[k] * w;
+    score += worth[k] * w;
     if (delta[k] > 0) reasons.push([10 + delta[k] * w, deltaBit(k, delta[k])]);
   });
-  // then the effects the numbers do not show
+  // then the effects the numbers do not show; an effect reserved for a race the build is not counts for little
+  const races = Object.keys(RACES).filter((r) => new RegExp('\\b' + r.replace('-', '.?') + '(?:s|es|ves)?\\b', 'i').test(text.replace(/dwarves/gi, 'dwarf').replace(/elves/gi, 'elf')));
+  const gate = races.length && !races.includes(b.creation.race) ? 0.2 : 1;
   it.g.forEach((tag) => {
     const w = weights[tag];
-    if (!w || (TAG_NUMBER[tag] && delta[TAG_NUMBER[tag]])) return;
-    const [fit, why] = tagFit(tag, it, p, text);
+    if (!w || (TAG_NUMBER[tag] && worth[TAG_NUMBER[tag]])) return;
+    const [base_fit, why] = tagFit(tag, it, p, text);
+    const fit = base_fit * gate;
     if (fit <= 0) return;
     score += w * fit;
     reasons.push([w * fit, t(TAG_LABEL[tag]) + (why ? ' (' + why + ')' : '')]);
@@ -198,9 +208,10 @@ function recommendBase(b, act) {
 // An item another member of the party already wears drops down the list, and says who has it.
 function recommend(b, slot, act, goal, list) {
   const { p, base } = recommendBase(b, act);
+  const empty = numbersWith(b, act, slot, null, p.style, p.level);
   const taken = partyTaken(b, act);
   return list.map((it) => {
-    const r = Object.assign({ it }, scoreItem(b, p, it, slot, act, goal, base));
+    const r = Object.assign({ it }, scoreItem(b, p, it, slot, act, goal, base, empty));
     if (taken[norm(it.n)]) { r.score *= 0.3; r.taken = taken[norm(it.n)]; }
     return r;
   }).filter((r) => r.score > 0)

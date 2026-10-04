@@ -135,7 +135,9 @@ function levelRows(b, only) {
 function spellButton(l, x, i) {
   const learn = spellsAtLevel(x);
   const need = learn ? learn.spells + learn.cantrips : 0;
-  const have = l.picks.filter((p) => /^(spell|cantrip)s?\s*:/i.test(p.trim())).length;
+  const have = l.picks.filter((p) => /^(spell|cantrip)s?\s*:/i.test(p.trim()) && !/\(replaces /i.test(p)).length;  // a swap is not a new spell
+  // a class with no spell list of its own (a Fighter who is not an Eldritch Knight) has nothing to pick here
+  if (!learn || !SPELLS.some((s) => (s.cl || []).includes(learn.list))) return '';
   const hint = need ? [learn.cantrips ? t('{n} cantrip(s)', { n: learn.cantrips }) : '', learn.spells ? t('{n} spell(s)', { n: learn.spells }) : ''].filter(Boolean).join(' + ') : '';
   return `<button class="btn tiny${need && have < need ? ' gold' : ''}" data-act="spell-open" data-l="${i}"${hint ? ` title="${t('This level teaches {x}', { x: hint })}"` : ''}>${t('+ spell')}${need ? ` · ${have}/${need}` : ''}</button>`;
 }
@@ -224,7 +226,7 @@ function spellPickerKnown() {
   if (!el) return;
   const b = curBuild();
   const learn = spellsAtLevel(levelInfo(b)[dlg.level]);
-  const here = b.levels[dlg.level].picks.filter((p) => /^(spell|cantrip)s?\s*:/i.test(p.trim())).length;
+  const here = b.levels[dlg.level].picks.filter((p) => /^(spell|cantrip)s?\s*:/i.test(p.trim()) && !/\(replaces /i.test(p)).length;
   const teaches = learn && learn.spells + learn.cantrips ? t('This level teaches {x}', { x: [learn.cantrips ? t('{n} cantrip(s)', { n: learn.cantrips }) : '', learn.spells ? t('{n} spell(s)', { n: learn.spells }) : ''].filter(Boolean).join(' + ') })
     + (learn.any ? ' ' + t('({n} of them free of the school limit)', { n: learn.any }) : '') + ' · ' + t('{n} chosen here', { n: here }) + '<br>' : '';
   el.innerHTML = teaches + (k ? [k.maxCantrips ? `<b class="${k.cantrips > k.maxCantrips ? 'warn' : ''}">${t('{n} of {max} cantrips', { n: k.cantrips, max: k.maxCantrips })}</b>` : '',

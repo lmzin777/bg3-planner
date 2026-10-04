@@ -730,6 +730,36 @@ button.chip:hover { border-color: var(--gold); color: var(--text); }
 .chip-s { display: inline-block; font-size: 12px; margin: 2px 4px 2px 0; padding: 2px 9px; border: 1px solid var(--gold); border-radius: 999px; color: var(--gold-hi); }
 .chip-s.got { opacity: .6; text-decoration: line-through; }
 .ptable td small { display: block; color: var(--muted); font-size: 11px; font-weight: 400; }
+
+/* ---------- traits, switchable bonuses, step-by-step creation ---------- */
+.trait-row { display: grid; grid-template-columns: minmax(120px, 190px) minmax(0, 1fr); gap: 6px 14px; padding: 7px 0; border-top: 1px solid var(--line-soft); align-items: start; }
+.trait-row:first-of-type { border-top: 0; }
+.trait-row .lbl, .toggles .lbl { font: 700 10.5px var(--sans); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); padding-top: 4px; }
+.trait-row > div { display: flex; flex-wrap: wrap; gap: 5px; }
+.trait { font-size: 12.5px; background: var(--field); border: 1px solid var(--line-soft); border-radius: 999px; padding: 3px 10px; color: var(--text); }
+.trait i { font-style: normal; color: var(--muted); font-size: 11px; margin-left: 6px; }
+.trait.cond { font-style: italic; color: var(--muted); border-style: dashed; }
+@container (max-width: 400px) { .trait-row { grid-template-columns: minmax(0, 1fr); } }
+.toggles { margin: 0 0 12px; }
+.toggles > div { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+.wiz-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 14px; }
+.wiz-bar button { cursor: pointer; display: inline-flex; align-items: center; gap: 6px; background: var(--field); color: var(--muted); border: 1px solid var(--line-soft); border-radius: 999px; padding: 4px 11px 4px 5px; font: 600 12px var(--sans); }
+.wiz-bar button i { font-style: normal; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--panel-2); border: 1px solid var(--line); font-size: 11px; }
+.wiz-bar button.done i { background: var(--ok); border-color: var(--ok); color: #0e0c0a; }
+.wiz-bar button.on { color: var(--gold-hi); border-color: var(--gold); }
+.wiz-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr)); gap: 8px; margin-bottom: 10px; }
+.wiz-card { cursor: pointer; text-align: left; font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line-soft); border-radius: 10px; padding: 11px 13px; display: grid; gap: 4px; align-content: start; }
+.wiz-card:hover { border-color: var(--line); }
+.wiz-card.on { border-color: var(--gold); background: rgba(201, 162, 77, .1); }
+.wiz-card strong { font: 600 16px var(--serif); color: var(--gold-hi); }
+.wiz-card small, .wiz-card li { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+.wiz-card ul { margin: 0; padding-left: 16px; display: grid; gap: 2px; }
+.wiz-card li b { color: var(--text); font-weight: 600; }
+.wiz-nav { justify-content: space-between; margin-top: 14px; }
+.wiz-nav span { display: flex; gap: 8px; }
+.wiz-sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: 8px 18px; margin: 12px 0; }
+.wiz-sum dt { font: 700 10.5px var(--sans); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+.wiz-sum dd { margin: 0; }
 </style>
 </head>
 <body>
@@ -1427,6 +1457,53 @@ window.BG3_I18N = {
     'Copy link': 'Copiar link',
     'Link copied': 'Link copiado',
     'Could not copy the link': 'Não foi possível copiar o link',
+
+    // spells per level, traits, switchable bonuses, step-by-step creation
+    '({n} of them free of the school limit)': '({n} delas livres do limite de escola)',
+    '+ New build, step by step': '+ Nova build, passo a passo',
+    'Advantage on': 'Vantagem em',
+    'Base scores go from 8 to 15. The +2 and +1 buttons are the bonuses every race gives.': 'Os valores base vão de 8 a 15. Os botões +2 e +1 são os bônus que toda raça dá.',
+    'Choose a race and a class to see speed, senses, resistances and advantages here.': 'Escolha uma raça e uma classe para ver aqui deslocamento, sentidos, resistências e vantagens.',
+    'Create a character one choice at a time, as in the game': 'Crie o personagem uma escolha por vez, como no jogo',
+    'Do it step by step': 'Fazer passo a passo',
+    'Immunities': 'Imunidades',
+    'Leave the step by step': 'Sair do passo a passo',
+    'Level 1': 'Nível 1',
+    'Level {n}: {x} replaces {y}': 'Nível {n}: {x} substitui {y}',
+    'Movement speed': 'Deslocamento',
+    'Next': 'Próximo',
+    'Only {schools}': 'Só {schools}',
+    'Open in the Build Planner': 'Abrir no Build Planner',
+    'Racial spells': 'Spells raciais',
+    'Read from the text of the race, class features, choices, feats, permanent bonuses and the gear of the act chosen in Final numbers. In italics: it depends on a situation, or it comes at a later level.': 'Lido do texto da raça, das features de classe, das escolhas, dos feats, dos bônus permanentes e do equipamento do ato escolhido em Números finais. Em itálico: depende de uma situação, ou só vem num nível mais alto.',
+    'Resistances': 'Resistências',
+    'Senses': 'Sentidos',
+    'Switch on to see the numbers with it': 'Ligue para ver os números com ele',
+    'The next spell replaces a known one (allowed once per level up)': 'A próxima spell substitui uma já conhecida (permitido uma vez por nível)',
+    'This level teaches {x}': 'Este nível ensina {x}',
+    'Traits': 'Traços',
+    'level {n}': 'nível {n}',
+    'uses a free pick: outside {schools}': 'usa uma escolha livre: fora de {schools}',
+    '{cls}: {n} of {max} cantrips chosen': '{cls}: {n} de {max} cantrips escolhidos',
+    '{cls}: {n} of {max} spells chosen': '{cls}: {n} de {max} spells escolhidas',
+    '{cls}: {n} spells outside {schools}, and only {max} may be': '{cls}: {n} spells fora de {schools}, e só {max} podem ser',
+    '{n} cantrip(s)': '{n} cantrip(s)',
+    '{n} chosen here': '{n} escolhidas aqui',
+    '{n} of {max} free picks used': '{n} de {max} escolhas livres usadas',
+    '{n} spell(s)': '{n} spell(s)',
+    '— nothing: learn a new spell —': '— nenhuma: aprender uma spell nova —',
+    'Level 1 choices': 'Escolhas do nível 1',
+    'Summary': 'Resumo',
+    'A custom character, or one of the origin characters with a fixed race and background.': 'Um personagem próprio, ou um dos personagens de origem, com raça e background fixos.',
+    'The race sets movement speed, some proficiencies and features.': 'A raça define o deslocamento, algumas proficiências e features.',
+    'What the subrace adds on top of the race.': 'O que a sub-raça acrescenta à raça.',
+    'The class of level 1. It decides the saving throws, the starting proficiencies and the skill list.': 'A classe do nível 1. Ela decide os saving throws, as proficiências iniciais e a lista de perícias.',
+    'This class chooses its subclass at level 1.': 'Esta classe escolhe a subclasse no nível 1.',
+    'The background grants two skills.': 'O background concede duas perícias.',
+    'Spend 27 points, then give +2 to one ability and +1 to another.': 'Gaste 27 pontos e depois dê +2 a um atributo e +1 a outro.',
+    'Skills granted by the choices so far are locked on; pick the rest from the class list.': 'As perícias concedidas pelas escolhas até aqui ficam travadas; escolha o resto na lista da classe.',
+    'What the class chooses at level 1: fighting style, cantrips, spells and the like.': 'O que a classe escolhe no nível 1: fighting style, cantrips, spells e afins.',
+    'What is set and what is still open. The other 11 levels and the gear are planned in the Build Planner.': 'O que já está definido e o que falta. Os outros 11 níveis e o equipamento são planejados no Build Planner.',
 
     // dialogs and toasts
     'Cancel': 'Cancelar',
@@ -3959,6 +4036,7 @@ window.BG3_CONSUMABLES = [
 // BG3_CHOICES = [{ name, owner (class or subclass), at: {class level: picks}, options: [[name, what it does, level that unlocks it]],
 //   join (when all picks go on one line), repeat (the same option may be taken again) }]
 // BG3_FEAT_OPTIONS = {feat: [options]} · BG3_PERMANENT = [{ n name, a act, x what it gives, h how to get it }]
+// BG3_SPELL_PICKS = {subclass: { list (whose spell list), schools, at: {class level: { cantrips, school, any }} }}
 window.BG3_CHOICES_DATE = "2026-10-04";
 window.BG3_CHOICES = [
   {"name":"Fighting Style","owner":"Fighter","at":{"1":1},"options":[["Archery","You gain a +2 bonus to Attack Rolls you make with ranged Weapons.",0],["Defence","You gain a +1 bonus to Armour Class while wearing Armour.",0],["Duelling","When you are wielding a melee weapon that is not Two-Handed in one hand, and no weapon in the other, you deal an additional 2 damage with that weapon.",0],["Great Weapon Fighting","When you roll a 1 or 2 on a damage die for an attack with a Two-Handed melee weapon, that die is rerolled once.",0],["Protection","When you have a Shield, impose Disadvantage on an enemy who attacks one of your allies when you are within 1.5 m. You must be able to see the enemy.",0],["Two-Weapon Fighting","When you make an offhand attack, you can add your Ability Score Modifier to the damage of the attack.",0]]},
@@ -4022,6 +4100,7 @@ window.BG3_PERMANENT = [
   {"n":"Vampire","a":3,"x":" Accepting a romanced Vampire Ascendant Astarion results in the gain of the class action Bite (Vampire Spawn) as well as access to the buff from Circle of Bones. ","h":" Only available to certain characters who accept the offer to be turned into a vampire. Allow romanced Astarion to complete the ascension ritual and comply with the request to be turned into a vampire. "},
   {"n":"Vampire Ascendant","a":3,"x":"Astarion gains class actions Ascendant Bite and Misty Escape (Vampire Ascendant), as well as an extra Necrotic necrotic damage on his weapon and unarmed attacks. ","h":" Only available to Astarion (companion or origin). Defeat Cazador without killing any of his spawn (or at most one, in which case Cazador can take their place) while having Astarion in your party. Afterward, allow Astarion to complete the ascension ritual. "}
 ];
+window.BG3_SPELL_PICKS = {"Eldritch Knight":{"list":"Wizard","schools":["Abjuration","Evocation"],"at":{"3":{"cantrips":2,"school":2,"any":1},"4":{"school":1},"7":{"school":2},"8":{"any":1},"10":{"cantrips":1,"school":1},"11":{"school":1}}},"Arcane Trickster":{"list":"Wizard","schools":["Enchantment","Illusion"],"at":{"3":{"cantrips":2,"school":2,"any":1},"4":{"school":1},"7":{"school":1},"8":{"any":1},"10":{"cantrips":1,"school":1},"11":{"school":1}}}};
 </script>
   <script>
 // What each class and subclass gains per level, the numbers of the class tables, what each feature does, and the feats.
@@ -4029,6 +4108,7 @@ window.BG3_PERMANENT = [
 // BG3_CLASSES[class] = { levels: {class level: [features]}, subclassLevel, subclasses: {name: {class level: [features]}},
 //   cols: [names of the number columns], table: {class level: [value per column]}, slots: {class level: [slots per spell level]} }
 // BG3_FEATS = [[name, what it does], ...] · BG3_FEATURES = {feature name: what it does}
+// BG3_ACTIONS = [features that are used as an action, bonus action or reaction, rather than always on]
 window.BG3_CLASSES_DATE = "2026-10-04";
 window.BG3_CLASSES = {
  "Barbarian": {
@@ -7637,6 +7717,7 @@ window.BG3_FEATURES = {
   "Wrathful Smite":"Your weapon absorbs your wrath as you strike, possibly Frightened your target.",
   "Writhing Tide":"Condense part of your swarm into a mass that lifts you up. Gain a flying speed of 9 m and become unaffected by surface effects."
 };
+window.BG3_ACTIONS = ["Abjure Enemy", "Accursed Spectre", "Action Surge", "Aid", "Animal Friendship", "Animate Dead", "Arcane Recovery", "Armour of Hexes", "Aura of Courage", "Aura of Devotion", "Aura of Hate", "Aura of Protection", "Aura of Warding", "Bane", "Banishing Smite", "Barkskin", "Beacon of Hope", "Benign Transposition: Teleport", "Bestow Curse", "Bind Hexed Weapon", "Bladesong", "Bless", "Blessing of the Trickster", "Blight", "Blindness", "Blink", "Blur", "Bolstering Magic: Boon", "Bone Chill", "Boot of the Giants", "Branding Smite", "Burning Hands", "Bursting Sinew", "Call Lightning", "Calm Emotions", "Champion Challenge", "Channel Divinity: Cloak of Shadows", "Charm Animals and Plants", "Charm Person", "Clench of the North Wind", "Cloak of Shadows", "Cloudkill", "Combat Inspiration", "Combat Wild Shape", "Command", "Compelled Duel", "Cone of Cold", "Confusion", "Contagion", "Control Undead", "Controlled Chaos", "Cosmic Omen of Weal: Attack Roll", "Cosmic Omen of Weal: Saving Throw", "Cosmic Omen of Woe: Attack Roll", "Cosmic Omen of Woe: Saving Throw", "Countercharm", "Create Sorcery Points", "Create Spell Slot", "Create or Destroy Water", "Crown of Madness", "Crusader's Mantle", "Cunning Action: Dash", "Cunning Action: Disengage", "Cunning Action: Hide", "Cure Wounds", "Curving Shot", "Cutting Words", "Dampen Elements", "Darkness", "Daylight", "Dazzling Breath", "Death Ward", "Destructive Wave", "Destructive Wrath", "Detect Thoughts", "Dimension Door", "Disguise Self", "Dissonant Whispers", "Divine Allegiance", "Divine Favour", "Divine Intervention", "Divine Sense", "Divine Smite", "Divine Strike: Elemental Fury", "Divine Strike: Necrotic", "Divine Strike: Poison", "Divine Strike: Radiant", "Divine Strike: Thunder", "Divine Strike: Weapon", "Dominate Beast", "Dominate Person", "Dreadful Aspect", "Drunkard's Luck", "Drunken Technique", "Elemental Affinity: Resistance", "Elemental Cleaver", "Elemental Weapon", "Embrace of the Inferno", "Ensnaring Strike", "Entropic Ward", "Evard's Black Tentacles", "Extra Attack", "Eyes of the Dark: Darkness", "Faerie Fire", "False Life", "Fear", "Fey Presence", "Fiendish Resilience", "Fire Shield", "Fireball", "Flame Strike", "Flames of the Phoenix", "Flaming Sphere", "Flurry of Blows", "Flurry of Blows: Push", "Flurry of Blows: Stagger", "Flurry of Blows: Topple", "Fly", "Fog Cloud", "Freedom of Movement", "Frenzy", "Fungal Infestation", "Gaseous Form", "Giant's Rage", "Gong of the Summit", "Grasping Vine", "Greater Invisibility", "Greater Restoration", "Guardian of Faith", "Guidance", "Guided Strike", "Guiding Bolt", "Gust of Wind", "Halo of Spores", "Harmony of Fire and Water", "Haste", "Healing Radiance", "Hellish Rebuke", "Hexblade's Curse", "Hide in Plain Sight", "Hold Monster", "Hold Person", "Holy Rebuke", "Hound of Ill Omen", "Hunter's Mark", "Hypnotic Gaze", "Ice Storm", "Illusory Self", "Improved Warding Flare", "Infiltration Expertise", "Inflict Wounds", "Inquisitor's Might", "Insect Plague", "Instinctive Charm", "Intimidating Presence", "Intoxicating Strike", "Intoxicating Strike (Bonus Action)", "Invoke Duplicity", "Jack of All Trades", "Ki Resonation: Blast", "Ki Resonation: Punch", "Ki Resonation: Punch (Bonus Action)", "Knowledge of the Ages", "Land's Stride: Difficult Terrain", "Lay on Hands", "Lesser Restoration", "Light", "Lunar Mend", "Mage Hand", "Magic Awareness", "Magic Weapon", "Mantle of Inspiration", "Mantle of Majesty: Command", "Mass Cure Wounds", "Mighty Impel", "Minor Conjuration: Create Water", "Minor Illusion", "Mirror Image", "Mist Stance", "Misty Escape", "Misty Step", "Moonbeam", "Natural Recovery", "Nature's Wrath", "Otiluke's Resilient Sphere", "Panache", "Pass Without Trace", "Patient Defence", "Phantasmal Force", "Phantasmal Killer", "Plant Growth", "Polymorph", "Preserve Life", "Projected Ward", "Protection from Energy", "Protection from Evil and Good", "Radiance of the Dawn", "Rage", "Rage: Wild Magic", "Ranger's Companion", "Ray of Enfeeblement", "Ray of Sickness", "Read Thoughts", "Reckless Attack", "Redirect Attack", "Remove Curse", "Revivify", "Ride the Wind", "Righteous Clarity", "Sacred Weapon", "Sanctuary", "Scorching Ray", "Second Wind", "See Invisibility", "Seeming", "Shadow Arts: Darkness", "Shadow Arts: Darkvision", "Shadow Arts: Hide", "Shadow Arts: Pass Without Trace", "Shadow Arts: Silence", "Shadow Step", "Shadow Strike", "Shadow Strike: Unarmed", "Shadow Walk", "Shapechanger", "Shatter", "Shield", "Shield of Faith", "Silence", "Sleep", "Sleet Storm", "Slow", "Slow Fall", "Sneak Attack", "Sobering Realisation", "Song of Rest", "Speak with Animals", "Speak with Dead", "Spike Growth", "Spirit Guardians", "Spiritual Weapon", "Spiteful Suffering", "Spreading Spores", "Staggering Smite", "Star Map: Guiding Bolt", "Step of the Wind: Dash", "Step of the Wind: Disengage", "Stinking Cloud", "Stoneskin", "Storm's Fury", "Stunning Strike", "Stunning Strike (Unarmed)", "Supreme Sneak", "Symbiotic Entity", "Tasha's Hideous Laughter", "Telekinesis", "Thaumaturgy", "Third Eye: Darkvision", "Third Eye: See Invisibility", "Thunderwave", "Tides of Chaos", "Toll the Dead", "Touch of Death", "Transmuter's Stone", "Transmuter's Stone: Acid Resistance", "Transmuter's Stone: Cold Resistance", "Transmuter's Stone: Constitution", "Transmuter's Stone: Darkvision", "Transmuter's Stone: Fire Resistance", "Transmuter's Stone: Lightning Resistance", "Transmuter's Stone: Speed", "Transmuter's Stone: Thunder Resistance", "True Strike", "Turn Undead", "Turn the Faithless", "Turn the Tide", "Turn the Unholy", "Twinkling Constellations", "Umbral Shroud", "Unstable Backlash", "Vampiric Touch", "Volley", "Vow of Enmity", "Wall of Fire", "Wall of Stone", "War God's Blessing", "Warding Bond", "Warding Flare", "Weapon Bond", "Web", "Whirlwind Attack", "Wholeness of Body", "Wild Shape", "Wild Shape: Air Myrmidon", "Wild Shape: Bear", "Wild Shape: Dire Raven", "Wild Shape: Earth Myrmidon", "Wild Shape: Fire Myrmidon", "Wild Shape: Sabre-Toothed Tiger", "Wild Shape: Water Myrmidon", "Wrathful Smite", "Writhing Tide"];
 </script>
   <script>
 window.BG3_IMAGES_LOCAL = false;
@@ -7646,7 +7727,7 @@ window.BG3_IMAGES_LOCAL = false;
 // The scripts are plain (not modules) so the planner also runs from a file opened directly; they share the global scope.
 'use strict';
 
-const APP_VERSION = '1.2';
+const APP_VERSION = '1.3';
 const STORE_KEY = 'bg3planner.v1';
 const PRESETS = window.BG3_PRESETS || [];
 const I18N = window.BG3_I18N || {};
@@ -7656,6 +7737,7 @@ const CONSUMABLES = window.BG3_CONSUMABLES || [];
 const CHOICES = window.BG3_CHOICES || [];
 const FEAT_OPTIONS = window.BG3_FEAT_OPTIONS || {};
 const PERMANENT = window.BG3_PERMANENT || [];
+const SPELL_PICKS = window.BG3_SPELL_PICKS || {};
 const DATA = window.BG3_DATA || { races: {}, subraces: {}, backgrounds: {}, origins: {}, classes: {} };
 
 // UI text is written in English and passed through t(); other languages live in i18n.js.
@@ -7789,6 +7871,8 @@ function blankBuild() {
     permanent: {},
     // the level the character is at in the playthrough; 0 means "show the finished build"
     current: 0,
+    // situational bonuses switched on in Final numbers (Rage, Bless, a ring that works only in shadow…)
+    active: [],
     variants: '',
     notes: '',
   };
@@ -7836,6 +7920,7 @@ function normalizeBuild(src) {
     Object.keys(s.permanent).forEach((k) => { const v = s.permanent[k]; if (v && v.on) b.permanent[k] = { on: true, ab: v.ab || '', extra: !!v.extra, got: !!v.got }; });
   }
   b.current = Math.max(0, Math.min(12, Number(s.current) || 0));
+  b.active = Array.isArray(s.active) ? s.active.map(String) : [];
   // The elixir the build keeps active. Builds saved before this field existed take the strongest
   // ability elixir from their consumables list, which is what those builds were planned around.
   if (typeof s.elixir === 'string') b.elixir = s.elixir;
@@ -7987,7 +8072,8 @@ function renderBuilds() {
   return `<div class="layout">
     <aside class="side">
       <div class="side-actions">
-        <button class="btn primary wide" data-act="build-new">${t('+ New blank build')}</button>
+        <button class="btn primary wide" data-act="wiz-new" title="${t('Create a character one choice at a time, as in the game')}">${t('+ New build, step by step')}</button>
+        <button class="btn wide" data-act="build-new">${t('+ New blank build')}</button>
         <button class="btn" data-act="build-dup"${dis}>${t('Duplicate')}</button>
         <button class="btn" data-act="export-open"${dis}>${t('Export')}</button>
         <button class="btn danger wide" data-act="build-del"${dis}>${t('Delete this build')}</button>
@@ -7997,7 +8083,7 @@ function renderBuilds() {
       ${state.trash.length ? `<button class="btn tiny wide" data-act="trash-open">${t('Recently deleted ({n})', { n: state.trash.length })}</button>` : ''}
       <p class="hint">${t('To start a variation, duplicate a build and edit the copy. Everything is saved automatically in this browser.')}</p>
     </aside>
-    <div class="content" data-scope="build">${b ? buildEditor(b) : emptyBuilds()}</div>
+    <div class="content" data-scope="build">${b ? (state.ui.wizard && state.ui.wizardFor === b.id ? wizardView(b) : buildEditor(b)) : emptyBuilds()}</div>
   </div>`;
 }
 
@@ -8029,11 +8115,12 @@ function buildEditor(b) {
     ${checkCard(b)}
 
     <section class="card">
-      <h2>${t('Character creation')}</h2>
+      <div class="check-head"><h2>${t('Character creation')}</h2><span></span>
+        <button class="btn tiny" data-act="wiz-open">${t('Do it step by step')}</button></div>
       <div class="grid g4">
         ${selectField(t('Origin'), 'creation.origin', c.origin, ORIGINS.map((o) => o[0]), choose, 'data-rerender')}
         ${selectField(t('Race'), 'creation.race', c.race, Object.keys(RACES), choose, 'data-rerender')}
-        ${selectField(t('Subrace'), 'creation.subrace', c.subrace, subs, subs.length ? choose : t('No subrace'), subs.length || c.subrace ? '' : 'disabled')}
+        ${selectField(t('Subrace'), 'creation.subrace', c.subrace, subs, subs.length ? choose : t('No subrace'), subs.length || c.subrace ? 'data-rerender' : 'disabled')}
         ${selectField(t('Background'), 'creation.background', c.background, Object.keys(BACKGROUNDS).map((k) => [k, k === 'Haunted One' ? t('Haunted One (Dark Urge only)') : k]), choose, 'data-rerender')}
       </div>
       ${raceCantrips(b).length ? `<div class="grid g4">${selectField(t('Racial cantrip'), 'creation.cantrip', c.cantrip, raceCantrips(b), choose, 'data-rerender')}</div>` : ''}
@@ -8053,6 +8140,8 @@ function buildEditor(b) {
     </section>
 
     ${statsCard(b)}
+
+    ${traitsCard(b)}
 
     ${permanentCard(b)}
 
@@ -8600,15 +8689,14 @@ function sheetHtml(b) {
         ...(b.elixir ? [[t('Elixir kept active'), esc(b.elixir)]] : []),
         ...(PERMANENT.some((p) => (b.permanent || {})[p.n]) ? [[t('Permanent bonuses'), PERMANENT.filter((p) => (b.permanent || {})[p.n]).map((p) => esc(p.n)
           + (b.permanent[p.n].ab ? ' (' + abilityShort(b.permanent[p.n].ab) + ')' : '') + (b.permanent[p.n].got ? ' ✓' : '')).join(' · ')]] : []),
-        ...fin.attacks.rows.map((r) => [esc(r.name), t('Attack') + ' ' + signedParts(r.attackTotal, r.attack) + ' · ' + t('Damage') + ' ' + esc(r.dice) + (r.damageTotal ? ' ' + (r.damageTotal > 0 ? '+ ' : '− ') + Math.abs(r.damageTotal) : '') + ' ' + esc(r.type)]),
+        ...fin.attacks.rows.map((r) => [esc(r.name), t('Attack') + ' ' + signedParts(r.attackTotal, r.attack) + ' · ' + t('Damage') + ' ' + esc(damageText(r)) + ' ' + esc(r.type)]),
         ...fin.casting.map((c) => [esc(c.label) + ' (' + abilityShort(c.ability) + ')', t('Spell save DC') + ' ' + c.dc + ' · ' + t('Spell attack') + ' ' + signed(c.attack)]),
         ...(fin.slots.length ? [[t('Spell slots'), fin.slots.map((n, i) => t('Level {n}', { n: i + 1 }) + ' ×' + n).join(' · ')]] : []),
         ...(fin.pact ? [[t('Pact Magic slots'), t('{n} of level {lv}, back on a Short Rest', { n: fin.pact.n, lv: fin.pact.level })]] : []),
         ...(fin.resources.length ? [[t('Class resources'), fin.resources.map(([n, v]) => esc(n) + ' ' + esc(v)).join(' · ')]] : [])]
         .map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>
       <p class="sh-skills">${fin.skills.map((k) => `<span class="${k.proficient ? 'prof' : ''}">${esc(k.name)} <b>${signed(k.bonus)}</b>${k.expert ? '★' : ''}</span>`).join(' · ')}</p></section>` : '';
-  const known = [...new Set(allPicks(b).map((p) => /^(?:spell|cantrip)\s*:\s*([^(]+)/i.exec(p.trim())).filter(Boolean).map((m) => norm(m[1])))]
-    .map((n) => SPELLS.find((s) => norm(s.n) === n)).filter(Boolean);
+  const known = [...new Set(currentSpells(b).map((x) => norm(x.name)))].map((n) => SPELL_BY_NAME.get(n)).filter(Boolean);
   const spells = known.length ? `<section><h2>${t('Spells')}</h2><ul>${known.map((s) => `<li><b>${esc(s.n)}</b> — ${s.lv ? t('Level {n}', { n: s.lv }) : t('Cantrip')}${
     [s.rg, s.du, s.dm, s.co ? t('Concentration') : ''].filter(Boolean).map((x) => ' · ' + esc(x)).join('')}. ${esc(s.d || '')}</li>`).join('')}</ul></section>` : '';
   const count = {};
@@ -8794,6 +8882,10 @@ const RARITY_RANK = { legendary: 5, veryrare: 4, rare: 3, uncommon: 2, common: 1
 const PICKER_MAX = 150;
 let picker = null;
 
+// Whether an item can be had by an act. One without a known act counts only when it is ordinary gear with a
+// stated source (basic and +1 equipment sold by traders): a rare item of unknown origin, or one the wiki gives
+// no source for (what an enemy or an ally carries), is not offered as if it were there from the start.
+const foundBy = (it, actNum) => (it.a ? it.a <= actNum : !!(it.l || it.h) && RARITY_RANK[it.r] <= 2);
 function pickerItems() {
   const kinds = SLOT_KINDS[picker.slot] || [];
   const actNum = ACTS.findIndex(([k]) => k === picker.act) + 1;
@@ -8806,7 +8898,7 @@ function pickerItems() {
     && (!q || norm(it.n).includes(q))
     && (!picker.type || it.t === picker.type)
     && (!usable || canUse(it, picker.prof))
-    && (!picker.byAct || !it.a || it.a <= actNum))
+    && (!picker.byAct || foundBy(it, actNum)))
     .sort((a, b) => RARITY_RANK[b.r] - RARITY_RANK[a.r] || a.n.localeCompare(b.n));
 }
 function pickerList() {
@@ -9485,7 +9577,8 @@ function levelNumbers(info) {
   return out;
 }
 
-function levelRows(b) {
+// With `only`, just that level's row (the step-by-step creation shows level 1 alone).
+function levelRows(b, only) {
   const info = levelInfo(b);
   const seen = {};
   const pending = {};  // per class: the choices still short of what the class should have made
@@ -9523,13 +9616,24 @@ function levelRows(b) {
             ${grantsFeat(x) ? `<button class="btn tiny gold" data-act="feat-open" data-l="${i}">${t('+ feat')}</button>` : ''}
             ${grantsExpertise(x) ? `<button class="btn tiny gold" data-act="expertise-open" data-l="${i}">${t('+ expertise')}</button>` : ''}
             ${choices}
-            ${l.cls && SPELLS.length ? `<button class="btn tiny" data-act="spell-open" data-l="${i}">${t('+ spell')}</button>` : ''}
+            ${l.cls && SPELLS.length ? spellButton(l, x, i) : ''}
             <button class="btn tiny" data-act="pick-add" data-l="${i}">${t('+ choice')}</button>
           </div>
         </div>
       </div>
     </div>${i === 0 || firstOfClass ? classNote(b, i, l.cls) : ''}`;
-  }).join('');
+  }).filter((row, i) => only == null || i === only).join('');
+}
+
+// "+ spell · 1/3": what the level has chosen out of the spells and cantrips it teaches; gold while short.
+function spellButton(l, x, i) {
+  const learn = spellsAtLevel(x);
+  const need = learn ? learn.spells + learn.cantrips : 0;
+  const have = l.picks.filter((p) => /^(spell|cantrip)s?\s*:/i.test(p.trim()) && !/\(replaces /i.test(p)).length;  // a swap is not a new spell
+  // a class with no spell list of its own (a Fighter who is not an Eldritch Knight) has nothing to pick here
+  if (!learn || !SPELLS.some((s) => (s.cl || []).includes(learn.list))) return '';
+  const hint = need ? [learn.cantrips ? t('{n} cantrip(s)', { n: learn.cantrips }) : '', learn.spells ? t('{n} spell(s)', { n: learn.spells }) : ''].filter(Boolean).join(' + ') : '';
+  return `<button class="btn tiny${need && have < need ? ' gold' : ''}" data-act="spell-open" data-l="${i}"${hint ? ` title="${t('This level teaches {x}', { x: hint })}"` : ''}>${t('+ spell')}${need ? ` · ${have}/${need}` : ''}</button>`;
 }
 
 // Shown under the first level of each class: what that class grants there.
@@ -9595,14 +9699,16 @@ function expertiseStep() {
 function spellPickerList() {
   const q = norm(dlg.q);
   const tooHigh = (s) => dlg.max > 0 && s.lv > dlg.max;
-  const list = SPELLS.filter((s) => (!dlg.onlyClass || (s.cl || []).includes(dlg.cls) || (s.lr || []).some(([who]) => who === dlg.sub))
-    && (!dlg.reach || !tooHigh(s))
+  const offSchool = (s) => !!dlg.schools && s.lv > 0 && !dlg.schools.includes(s.sc);
+  const list = SPELLS.filter((s) => (!dlg.onlyClass || (s.cl || []).includes(dlg.list) || (s.lr || []).some(([who]) => who === dlg.sub))
+    && (!dlg.reach || !tooHigh(s)) && (!dlg.school || !offSchool(s))
     && (dlg.lv === '' || String(s.lv) === dlg.lv) && (!q || norm(s.n).includes(q) || norm(s.d).includes(q)));
   $('#dlg-count').textContent = t('{n} spells', { n: list.length });
   spellPickerKnown();
   return list.slice(0, 120).map((s) =>
     `<button class="pick-row${tooHigh(s) ? ' no' : ''}" data-act="spell-choose" data-n="${esc(s.n)}">${pic(s.i, 'pic small')}<b>${esc(s.n)}</b>
-      <span>${s.lv ? t('Level {n}', { n: s.lv }) : t('Cantrip')}${s.sc ? ' · ' + esc(s.sc) : ''}${tooHigh(s) ? ` · <em>${t('above what this level can learn')}</em>` : ''}</span>
+      <span>${s.lv ? t('Level {n}', { n: s.lv }) : t('Cantrip')}${s.sc ? ' · ' + esc(s.sc) : ''}${tooHigh(s) ? ` · <em>${t('above what this level can learn')}</em>` : ''}${
+        offSchool(s) ? ` · <em>${t('uses a free pick: outside {schools}', { schools: dlg.schools.join(', ') })}</em>` : ''}</span>
       <small class="fx">${esc(s.d || '')}</small>
       <small>${esc([s.rg, s.du, s.dm, s.co ? t('Concentration') : ''].filter(Boolean).join(' · '))}</small></button>`).join('')
     || `<p class="muted">${t('Nothing matches these filters.')}</p>`;
@@ -9612,9 +9718,19 @@ function spellPickerKnown() {
   const k = knownSpells(curBuild()).find((x) => x.cls === dlg.cls);
   const el = $('#dlg-known');
   if (!el) return;
-  el.innerHTML = k ? [k.maxCantrips ? `<b class="${k.cantrips > k.maxCantrips ? 'warn' : ''}">${t('{n} of {max} cantrips', { n: k.cantrips, max: k.maxCantrips })}</b>` : '',
-    k.maxSpells ? `<b class="${k.spells > k.maxSpells ? 'warn' : ''}">${t('{n} of {max} spells', { n: k.spells, max: k.maxSpells })}</b>` : ''].filter(Boolean).join(' · ') + ' ' + t('chosen for {cls} so far', { cls: dlg.cls }) : '';
+  const b = curBuild();
+  const learn = spellsAtLevel(levelInfo(b)[dlg.level]);
+  const here = b.levels[dlg.level].picks.filter((p) => /^(spell|cantrip)s?\s*:/i.test(p.trim()) && !/\(replaces /i.test(p)).length;
+  const teaches = learn && learn.spells + learn.cantrips ? t('This level teaches {x}', { x: [learn.cantrips ? t('{n} cantrip(s)', { n: learn.cantrips }) : '', learn.spells ? t('{n} spell(s)', { n: learn.spells }) : ''].filter(Boolean).join(' + ') })
+    + (learn.any ? ' ' + t('({n} of them free of the school limit)', { n: learn.any }) : '') + ' · ' + t('{n} chosen here', { n: here }) + '<br>' : '';
+  el.innerHTML = teaches + (k ? [k.maxCantrips ? `<b class="${k.cantrips > k.maxCantrips ? 'warn' : ''}">${t('{n} of {max} cantrips', { n: k.cantrips, max: k.maxCantrips })}</b>` : '',
+    k.maxSpells ? `<b class="${k.spells > k.maxSpells ? 'warn' : ''}">${t('{n} of {max} spells', { n: k.spells, max: k.maxSpells })}</b>` : ''].filter(Boolean).join(' · ') + ' ' + t('chosen for {cls} so far', { cls: k.label })
+    + (k.schools ? ` · <b class="${k.offSchool > k.maxAny ? 'warn' : ''}">${t('{n} of {max} free picks used', { n: k.offSchool, max: k.maxAny })}</b>` : '') : '');
+  const swap = $('#dlg-replace');
+  if (swap) swap.innerHTML = opt('', t('— nothing: learn a new spell —'), dlg.replace) + spellSwapOptions().map((n) => opt(n, n, dlg.replace)).join('');
 }
+// Spells of this class learned at earlier levels and still known: the ones a level up may swap out.
+const spellSwapOptions = () => currentSpells(curBuild()).filter((x) => x.cls === dlg.cls && !x.cantrip && x.level < dlg.level).map((x) => x.name);
 
 Object.assign(actions, {
   'gain-info'(el) {
@@ -9669,15 +9785,18 @@ Object.assign(actions, {
     const b = curBuild();
     const x = levelInfo(b)[level];
     const max = maxSpellLevel(b, level);
-    dlg = { kind: 'spell', level, q: '', lv: '', cls: x.cls, sub: subLabel(x.sub), max, reach: max > 0,
-      onlyClass: SPELLS.some((s) => (s.cl || []).includes(x.cls)),
+    const learn = spellsAtLevel(x) || { list: x.cls };
+    dlg = { kind: 'spell', level, q: '', lv: '', cls: x.cls, sub: subLabel(x.sub), list: learn.list, schools: learn.schools, school: !!learn.schools, replace: '', max, reach: max > 0,
+      onlyClass: SPELLS.some((s) => (s.cl || []).includes(learn.list)),
       refresh: () => { $('#dlg-list').innerHTML = spellPickerList(); } };
     openDialog(`<h2>${t('Spells')}</h2><p class="muted">${t('Click a spell to add it to level {n}. You can add several.', { n: level + 1 })}</p>
       <div class="picker-tools"><input type="text" data-dlg="q" placeholder="${t('Search by name or description…')}" autocomplete="off">
         <select data-dlg="lv">${opt('', t('Any level'), '')}${opt('0', t('Cantrip'), '')}${[1, 2, 3, 4, 5, 6].map((n) => opt(String(n), t('Level {n}', { n }), '')).join('')}</select></div>
-      <div class="picker-tools"><label class="chk"><input type="checkbox" data-dlg="onlyClass"${dlg.onlyClass ? ' checked' : ''}> ${t('Only {cls} spells', { cls: x.cls })}</label>
+      <div class="picker-tools"><label class="chk"><input type="checkbox" data-dlg="onlyClass"${dlg.onlyClass ? ' checked' : ''}> ${t('Only {cls} spells', { cls: learn.list })}</label>
         ${max > 0 ? `<label class="chk"><input type="checkbox" data-dlg="reach" checked> ${t('Only up to spell level {n}, the most {cls} {lv} can learn', { n: max, cls: x.cls, lv: x.n })}</label>` : ''}
+        ${learn.schools ? `<label class="chk"><input type="checkbox" data-dlg="school" checked> ${t('Only {schools}', { schools: learn.schools.join(', ') })}</label>` : ''}
         <span class="muted" id="dlg-count"></span></div>
+      ${learn.replace ? `<div class="picker-tools"><label class="field"><span>${t('The next spell replaces a known one (allowed once per level up)')}</span><select data-dlg="replace" id="dlg-replace"></select></label></div>` : ''}
       <p class="points" id="dlg-known"></p>
       <div class="picker-list" id="dlg-list"></div>
       <div class="modal-btns"><span></span><button class="btn primary" data-act="dialog-close">${t('Done')}</button></div>`, 'picker-box');
@@ -9686,8 +9805,10 @@ Object.assign(actions, {
   },
   'spell-choose'(el) {
     const s = SPELLS.find((x) => x.n === el.dataset.n);
-    curBuild().levels[dlg.level].picks.push((s.lv ? 'Spell: ' : 'Cantrip: ') + s.n);
-    toast(t('Added to level {n}: {x}', { n: dlg.level + 1, x: s.n }));
+    const swap = s.lv && dlg.replace ? ' (replaces ' + dlg.replace + ')' : '';
+    curBuild().levels[dlg.level].picks.push((s.lv ? 'Spell: ' : 'Cantrip: ') + s.n + swap);
+    toast(swap ? t('Level {n}: {x} replaces {y}', { n: dlg.level + 1, x: s.n, y: dlg.replace }) : t('Added to level {n}: {x}', { n: dlg.level + 1, x: s.n }));
+    if (swap) dlg.replace = '';
     spellPickerKnown();
   },
 });
@@ -9978,7 +10099,7 @@ function attackRows(b, act, ab, pb, swap) {
       const m = new RegExp('additional damage equal to your (' + ABILITY_WORDS + ') modifier', 'i').exec(s);
       if (m && !CONDITIONAL.test(s)) damage.push([abilityShort(abilityKey(m[1])) + ' · ' + it.n, mods[abilityKey(m[1])]]);
     });
-    rows.push({ slot, name: it.n, item: it, proficient, attack, attackTotal: attack.reduce((a, p) => a + p[1], 0),
+    rows.push({ slot, name: it.n, item: it, proficient, twoHands: !!twoHands, attack, attackTotal: attack.reduce((a, p) => a + p[1], 0),
       dice: dmg.dice, type, damage, damageTotal: damage.reduce((a, p) => a + p[1], 0) });
     // thrown, for builds that throw: Strength on the attack roll, the weapon's melee damage, and Tavern Brawler
     // adding Strength once more to both (the wiki's Attacks and Throw pages)
@@ -10001,14 +10122,7 @@ function attackRows(b, act, ab, pb, swap) {
     rows.push({ slot: 'unarmed', name: t('Unarmed strike'), proficient: true, attack, attackTotal: attack.reduce((a, p) => a + p[1], 0),
       dice: die || '1', type: 'Bludgeoning', damage, damageTotal: damage.reduce((a, p) => a + p[1], 0) });
   }
-  // what can be added on top, depending on the fight
-  const levels = classLevels(b);
-  const extras = [];
-  if (levels.Barbarian) extras.push('Rage ' + classColumn('Barbarian', levels.Barbarian, /rage damage/i));
-  if (levels.Rogue) extras.push('Sneak Attack ' + classColumn('Rogue', levels.Rogue, /sneak attack/i));
-  if (hasPick(b, /sharpshooter/i)) extras.push('Sharpshooter −5 / +10');
-  if (hasPick(b, /great weapon master/i)) extras.push('Great Weapon Master −5 / +10');
-  return { rows, extras, situational: gearAttack.situational };
+  return { rows, extras: [], situational: gearAttack.situational };
 }
 
 // ---------- spellcasting ----------
@@ -10087,16 +10201,70 @@ function classResources(b) {
   Object.keys(counters).forEach((k) => out.push([k, counters[k]]));
   return out;
 }
+// Spells and cantrips written in the levels: [{ name, cantrip, level (row), cls, replaces }].
+// "Spell: Misty Step (replaces Sleep)" learns one and gives up another, as the game allows at a level up.
+function spellPicks(b) {
+  const info = levelInfo(b);
+  const out = [];
+  b.levels.forEach((l, i) => l.picks.forEach((p) => {
+    const m = /^(spell|cantrip)s?\s*:\s*([^(]+?)\s*(?:\((.*)\))?\s*$/i.exec(p.trim());
+    if (!m) return;
+    const rep = /replaces\s+(.+)/i.exec(m[3] || '');
+    out.push({ name: m[2].trim(), cantrip: /^cantrip/i.test(m[1]), level: i, cls: info[i].cls, replaces: rep ? rep[1].trim() : '' });
+  }));
+  return out;
+}
+// The spells the build knows in the end: what was learned, minus what was swapped out later, plus the cantrips
+// and spells that come with the race, a subclass choice or a feat.
+function currentSpells(b) {
+  const out = [];
+  spellPicks(b).forEach((p) => {
+    if (p.replaces) { const i = out.findIndex((x) => norm(x.name) === norm(p.replaces) && x.cls === p.cls); if (i >= 0) out.splice(i, 1); }
+    out.push({ name: p.name, cantrip: p.cantrip, cls: p.cls, level: p.level });
+  });
+  const extra = (name, source) => { const s = SPELL_BY_NAME.get(norm(name)); if (s && !out.some((x) => norm(x.name) === norm(name))) out.push({ name: s.n, cantrip: !s.lv, cls: '', source }); };
+  if (b.creation.cantrip) extra(b.creation.cantrip, b.creation.subrace || b.creation.race);
+  allPicks(b).forEach((p) => {
+    const m = /^(bonus cantrip|feat)\s*:\s*(.+)$/i.exec(p.trim());
+    if (m) m[2].split(/[(),;]/).forEach((x) => extra(x.trim(), /^feat/i.test(m[1]) ? 'Feat' : 'Bonus Cantrip'));
+  });
+  return out;
+}
+// What a build level teaches its class: { cantrips, spells, any, list (whose spell list), schools, replace }.
+// Classes read their table ("Spells Known" grows by one); Eldritch Knights and Arcane Tricksters borrow the
+// Wizard list, limited to two schools except for the picks marked as free.
+function spellsAtLevel(info) {
+  if (!info || !info.cls) return null;
+  const borrowed = SPELL_PICKS[info.sub];
+  if (borrowed) {
+    const at = borrowed.at[info.n] || {};
+    return { cantrips: at.cantrips || 0, spells: (at.school || 0) + (at.any || 0), any: at.any || 0, list: borrowed.list, schools: borrowed.schools, replace: info.n > 3 };
+  }
+  const grow = (re) => (Number(classColumn(info.cls, info.n, re)) || 0) - (info.n > 1 ? Number(classColumn(info.cls, info.n - 1, re)) || 0 : 0);
+  const swaps = (CLASS_DATA[info.cls].cols || []).some((c) => /spells known/i.test(c));
+  return { cantrips: grow(/cantrips known/i), spells: grow(/spells (known|learned)/i), any: 0, list: info.cls, schools: null,
+    replace: swaps && info.n > 1 && (Number(classColumn(info.cls, info.n - 1, /spells known/i)) || 0) > 0 };
+}
 // How many cantrips and spells each class lets the build know, next to how many it has chosen in that class's levels.
+// For the borrowed lists it also counts the spells outside the subclass's schools against the free picks.
 function knownSpells(b) {
   const levels = classLevels(b);
   const info = levelInfo(b);
+  const current = currentSpells(b);
   return Object.keys(levels).map((cls) => {
-    const picks = b.levels.filter((l, i) => info[i].cls === cls).flatMap((l) => l.picks);
-    const count = (re) => picks.filter((p) => re.test(p.trim())).length;
-    return { cls, cantrips: count(/^cantrips?\s*:/i), spells: count(/^spells?\s*:/i),
-      maxCantrips: Number(classColumn(cls, levels[cls], /cantrips known/i)) || 0,
-      maxSpells: Number(classColumn(cls, levels[cls], /spells (known|learned)/i)) || 0 };
+    const sub = (info.find((x) => x.cls === cls && x.sub) || {}).sub;
+    const borrowed = SPELL_PICKS[sub];
+    const mine = current.filter((x) => x.cls === cls);
+    const sum = (k) => Object.keys(borrowed.at).reduce((a, lv) => a + (Number(lv) <= levels[cls] ? borrowed.at[lv][k] || 0 : 0), 0);
+    const out = { cls, label: borrowed ? subLabel(sub) : cls, cantrips: mine.filter((x) => x.cantrip).length, spells: mine.filter((x) => !x.cantrip).length,
+      maxCantrips: borrowed ? sum('cantrips') : Number(classColumn(cls, levels[cls], /cantrips known/i)) || 0,
+      maxSpells: borrowed ? sum('school') + sum('any') : Number(classColumn(cls, levels[cls], /spells (known|learned)/i)) || 0 };
+    if (borrowed) {
+      out.schools = borrowed.schools;
+      out.maxAny = sum('any');
+      out.offSchool = mine.filter((x) => !x.cantrip && SPELL_BY_NAME.get(norm(x.name)) && !borrowed.schools.includes(SPELL_BY_NAME.get(norm(x.name)).sc)).length;
+    }
+    return out;
   }).filter((x) => x.maxCantrips || x.maxSpells);
 }
 
@@ -10150,12 +10318,31 @@ function finalStats(b, act, opts) {
     prepared: PREPARES.includes(c.cls) ? Math.max(1, mods[c.ab] + levels[c.cls]) : 0,
   }));
   const acInfo = Object.fromEntries(ACTS.map(([k]) => [k, armourClassInfo(b, k, k === act && !swap ? mods : null, k === act ? swap : null)]));
+  const attacks = level ? attackRows(b, act, ab, pb, swap) : { rows: [], extras: [], situational: [] };
+  // what is switched on, and what a feature's text always gives, on top of everything above
+  const savesDice = [];
+  (level ? activeEffects(b, act, mods) : []).forEach((x) => {
+    const fx = x.fx;
+    if (fx.ac) { acInfo[act].parts.push([x.label, fx.ac]); acInfo[act].total += fx.ac; }
+    if (fx.saves) saves.forEach((k) => { k.bonus += fx.saves; });
+    if (fx.savesDice) savesDice.push(fx.savesDice);
+    if (fx.initiative) initiative.push([x.label, fx.initiative]);
+    if (fx.dc) casting.forEach((c) => { c.dc += fx.dc; });
+    if (fx.spellAttack) casting.forEach((c) => { c.attack += fx.spellAttack; });
+    attacks.rows.forEach((r) => {
+      if (!effectHits(x.scope, r)) return;
+      if (fx.attack) { r.attack.push([x.label, fx.attack]); r.attackTotal += fx.attack; }
+      if (fx.attackDice) (r.attackDice = r.attackDice || []).push(fx.attackDice);
+      if (fx.damage) { r.damage.push([x.label, fx.damage]); r.damageTotal += fx.damage; }
+      if (fx.damageDice) (r.extraDice = r.extraDice || []).push([fx.damageDice, fx.damageType || '', x.label]);
+    });
+  });
   return {
-    act, level, feats, scores, mods, sources: ab.sources, pb, skills, saves,
+    act, level, feats, scores, mods, sources: ab.sources, pb, skills, saves, savesDice,
     hp: hitPoints(b, mods.con),
     initiative: initiative.reduce((a, p) => a + p[1], 0), initiativeParts: initiative,
     ac: Object.fromEntries(ACTS.map(([k]) => [k, acInfo[k].total])), acInfo,
-    attacks: level ? attackRows(b, act, ab, pb, swap) : { rows: [], extras: [], situational: [] },
+    attacks,
     casting, castingGear: [...dc.parts, ...sa.parts.filter((p) => !dc.parts.some((q) => q[0] === p[0] && q[1] === p[1]))], castingSituational: [...dc.situational, ...sa.situational],
     slots: spellSlots(b), pact: pactSlots(b), resources: classResources(b), known: knownSpells(b),
   };
@@ -10186,8 +10373,9 @@ function statsLive(b) {
   const box = (label, value, hint) => `<div class="stat"><span>${label}</span><b>${value}</b>${hint ? `<small>${hint}</small>` : ''}</div>`;
   const attacks = s.attacks.rows.map((r) => `<div class="atk">
       <div class="atk-name">${r.item ? pic(r.item.i, 'pic small') : ''}<b>${esc(r.name)}</b><small>${r.slot === 'unarmed' ? '' : t(SLOT_LABEL[r.slot])}${r.proficient ? '' : ` · <em>${t('not proficient')}</em>`}</small></div>
-      <div class="atk-num"><span>${t('Attack')}</span><b>${signed(r.attackTotal)}</b><small>${partsText(r.attack)}</small></div>
-      <div class="atk-num"><span>${t('Damage')}</span><b>${esc(r.dice)}${r.damageTotal ? ' ' + (r.damageTotal > 0 ? '+ ' : '− ') + Math.abs(r.damageTotal) : ''}</b><small>${esc(r.type)}${r.damage.length ? ' · ' + partsText(r.damage) : ''}</small></div>
+      <div class="atk-num"><span>${t('Attack')}</span><b>${signed(r.attackTotal)}${(r.attackDice || []).map((d) => ' + ' + esc(d)).join('')}</b><small>${partsText(r.attack)}</small></div>
+      <div class="atk-num"><span>${t('Damage')}</span><b>${esc(damageText(r))}</b><small>${esc(r.type)}${r.damage.length ? ' · ' + partsText(r.damage) : ''}${
+        (r.extraDice || []).map((d) => ' · ' + esc(d[0] + (d[1] ? ' ' + d[1] : '') + ' ' + d[2])).join('')}</small></div>
     </div>`).join('');
   const casting = s.casting.map((c) => `<div class="atk">
       <div class="atk-name"><b>${esc(c.label)}</b><small>${abilityShort(c.ability)} ${signed(s.mods[c.ability])}</small></div>
@@ -10196,7 +10384,7 @@ function statsLive(b) {
     </div>`).join('');
   const slots = s.slots.length ? `<p class="points"><b>${t('Spell slots')}</b> ${s.slots.map((n, i) => `<span class="slot-n" title="${t('Level {n}', { n: i + 1 })}">${i + 1}<i>×${n}</i></span>`).join('')}</p>` : '';
   const pact = s.pact ? `<p class="points"><b>${t('Pact Magic slots')}</b> ${t('{n} of level {lv}, back on a Short Rest', { n: s.pact.n, lv: s.pact.level })}</p>` : '';
-  const known = s.known.map((k) => `${esc(k.cls)}: ${[k.maxCantrips ? t('{n} of {max} cantrips', { n: k.cantrips, max: k.maxCantrips }) : '', k.maxSpells ? t('{n} of {max} spells', { n: k.spells, max: k.maxSpells }) : ''].filter(Boolean).join(', ')}`).join(' · ');
+  const known = s.known.map((k) => `${esc(k.label)}: ${[k.maxCantrips ? t('{n} of {max} cantrips', { n: k.cantrips, max: k.maxCantrips }) : '', k.maxSpells ? t('{n} of {max} spells', { n: k.spells, max: k.maxSpells }) : ''].filter(Boolean).join(', ')}`).join(' · ');
   return `${nextLevelText(b)}<div class="stat-row">
       ${box(t('Level'), s.level, at ? esc(splitText(atLevel(b, at))) : '')}${box(t('Proficiency bonus'), signed(s.pb))}${box(t('Hit points'), s.hp)}${box(t('Initiative'), signed(s.initiative), s.initiativeParts.length > 1 ? partsText(s.initiativeParts) : '')}
       ${ACTS.map(([k, l]) => acBox(t('AC · {act}', { act: t(l) }), s.acInfo[k])).join('')}
@@ -10205,7 +10393,7 @@ function statsLive(b) {
       <div class="abil-final"><b>${s.scores[ab]}</b><i>${signed(s.mods[ab])}</i></div>
       <small>${finalOf(b, ab)}${s.feats[ab] ? ' ' + t('+{n} feats', { n: s.feats[ab] }) : ''}${s.sources[ab].map((x) => '<br>' + esc(x)).join('')}</small></div>`).join('')}</div>
     <h3 class="group">${t('Saving throws')}</h3>
-    <div class="skill-final">${s.saves.map((k) => `<span class="${k.proficient ? 'prof' : ''}" title="${k.proficient ? t('Proficient') : ''}">${k.short} <b>${signed(k.bonus)}</b></span>`).join('')}</div>
+    <div class="skill-final">${s.saves.map((k) => `<span class="${k.proficient ? 'prof' : ''}" title="${k.proficient ? t('Proficient') : ''}">${k.short} <b>${signed(k.bonus)}${s.savesDice.map((d) => ' + ' + esc(d)).join('')}</b></span>`).join('')}</div>
     ${attacks ? `<h3 class="group">${t('Attacks')}</h3><div class="atks">${attacks}</div>
       ${s.attacks.extras.length ? `<p class="muted">${t('On top, when it applies: {list}', { list: esc(s.attacks.extras.join(' · ')) })}</p>` : ''}
       ${s.attacks.situational.map((x) => `<p class="muted">${esc(x)}</p>`).join('')}` : ''}
@@ -10232,6 +10420,7 @@ function statsCard(b) {
         elixirs.map((c) => opt(c.n, c.n + (elixirAbility(c.n) ? ' ★' : ''), b.elixir)).join('')}${b.elixir && !elixirs.some((c) => c.n === b.elixir) ? opt(b.elixir, b.elixir, b.elixir) : ''}</select></label>` : ''}
     </div>
     ${b.elixir && CONSUMABLE_BY_NAME.get(norm(b.elixir)) ? `<p class="muted">${esc(CONSUMABLE_BY_NAME.get(norm(b.elixir)).x)}</p>` : ''}
+    ${togglesRow(b)}
     <div id="stats-live">${statsLive(b)}</div>
     <h3 class="group">${t('Other ability bonuses')}</h3>
     <p class="muted">${t('Only for what the planner does not read by itself. Gear in the slots and the elixir above are already counted.')}</p>
@@ -10248,7 +10437,9 @@ function mainAttack(s, style) {
   const want = style === 'unarmed' ? (r) => r.slot === 'unarmed' : style === 'thrown' ? (r) => r.thrown : style === 'ranged' ? (r) => r.slot === 'rangedMain' : (r) => r.slot === 'meleeMain' && !r.thrown;
   return rows.find(want) || rows.find((r) => r.slot === 'meleeMain' && !r.thrown) || rows[0] || null;
 }
-const avgDamage = (r) => (r ? avgDice(r.dice) + r.damageTotal : 0);
+const avgDamage = (r) => (r ? avgDice(r.dice) + r.damageTotal + (r.extraDice || []).reduce((a, d) => a + avgDice(d[0]), 0) : 0);
+// "1d8 + 1d6 + 4": the weapon die, the dice switched on, and the flat part.
+const damageText = (r) => [r.dice, ...(r.extraDice || []).map((d) => d[0])].filter(Boolean).join(' + ') + (r.damageTotal ? ' ' + (r.damageTotal > 0 ? '+ ' : '− ') + Math.abs(r.damageTotal) : '');
 // Level, hit points, armour class, initiative, main attack and spell save DC of every member, side by side.
 function partyNumbers(members) {
   const active = members.filter((m) => m.build && charLevel(m.build));
@@ -10262,7 +10453,7 @@ function partyNumbers(members) {
     [t('Armour Class'), stats.map((s) => s.ac[act]), true],
     [t('Initiative'), stats.map((s) => s.initiative), true, signed],
     [t('Main attack'), attacks.map((r) => (r ? r.attackTotal : null)), true, signed, attacks.map((r) => (r ? r.name : ''))],
-    [t('Damage per hit'), attacks.map((r) => (r ? avgDamage(r) : null)), true, (v) => v.toFixed(1), attacks.map((r) => (r ? r.dice + (r.damageTotal ? ' ' + signed(r.damageTotal) : '') : ''))],
+    [t('Damage per hit'), attacks.map((r) => (r ? avgDamage(r) : null)), true, (v) => v.toFixed(1), attacks.map((r) => (r ? damageText(r) : ''))],
     [t('Spell save DC'), stats.map((s) => (s.casting.length ? Math.max(...s.casting.map((c) => c.dc)) : null)), true],
     ...ABILS.map(([key, short]) => [t('{ab} save', { ab: short }), stats.map((s) => s.saves.find((k) => k.key === key).bonus), true, signed]),
   ];
@@ -10394,7 +10585,7 @@ function buildProfile(b, act) {
   const topCaster = Object.keys(levels).filter((c) => CASTING_ABILITY[c]).sort((a, c) => levels[c] - levels[a])[0];
   const main = style === 'ranged' ? 'dex' : style === 'caster' ? (CASTING_ABILITY[topCaster] || 'cha')
     : style === 'thrown' ? 'str' : (stats.scores.str >= stats.scores.dex ? 'str' : 'dex');
-  const known = allPicks(b).map((p) => /^(?:spell|cantrip)\s*:\s*([^(]+)/i.exec(p.trim())).filter(Boolean).map((m) => SPELLS.find((s) => norm(s.n) === norm(m[1]))).filter(Boolean);
+  const known = currentSpells(b).map((x) => SPELL_BY_NAME.get(norm(x.name))).filter(Boolean);
   // damage types the build deals: from its spells and from choices that name one (not from resistances)
   const dealing = allPicks(b).filter((x) => !/resist|wanderer|ward/i.test(x)).join(' | ');
   const elements = new Set(ELEMENTS.filter((e) => new RegExp('\\b' + e + '\\b', 'i').test(dealing) || known.some((s) => (s.dm || '').includes(e))));
@@ -10425,13 +10616,16 @@ function keyNumbers(s, act, style) {
     dc: s.casting.length ? Math.max(...s.casting.map((c) => c.dc)) : 0,
     spellAttack: s.casting.length ? Math.max(...s.casting.map((c) => c.attack)) : 0 };
 }
-// What moves in those numbers with the item in the slot, e.g. { ac: 1, attack: -1 }.
-function gearDelta(b, act, slot, it, base, style, level) {
-  const now = keyNumbers(finalStats(b, act, { swap: { [slot]: it }, level }), act, style);
+// The numbers with the item in the slot (or with the slot empty, for a null item).
+const numbersWith = (b, act, slot, it, style, level) => keyNumbers(finalStats(b, act, { swap: { [slot]: it }, level }), act, style);
+// What differs between two sets of numbers, e.g. { ac: 1, attack: -1 }.
+function numbersDiff(now, base) {
   const out = {};
   Object.keys(now).forEach((k) => { const d = Math.round((now[k] - base[k]) * 10) / 10; if (d) out[k] = d; });
   return out;
 }
+// What moves in the numbers with the item in the slot, against a base.
+const gearDelta = (b, act, slot, it, base, style, level) => numbersDiff(numbersWith(b, act, slot, it, style, level), base);
 const DELTA_LABEL = { attack: 'Attack', damage: 'Damage', dc: 'Spell save DC', spellAttack: 'Spell attack', ac: 'AC', hp: 'Hit points', saves: 'Saving throws', initiative: 'Initiative' };
 // The six saving throws are compared as a total; when all move together, say it per saving throw.
 const deltaBit = (k, v) => (k === 'saves' && v % 6 === 0 ? t('Every saving throw') + ' ' + (v > 0 ? '+' : '−') + Math.abs(v / 6)
@@ -10481,7 +10675,9 @@ function tagFit(tag, it, p, text) {
 }
 
 // Score of one item for a slot, an act and a goal: { score, reasons, delta }.
-function scoreItem(b, p, it, slot, act, goal, base) {
+// The score measures the item against an empty slot, so the ranking does not depend on what happens to be
+// worn; the reasons and the delta say what changes against what is worn now.
+function scoreItem(b, p, it, slot, act, goal, base, empty) {
   const weights = GOALS[goal];
   const text = itemText(it);
   const reasons = [];
@@ -10489,18 +10685,23 @@ function scoreItem(b, p, it, slot, act, goal, base) {
   // a monk in armour loses Unarmoured Defence and movement, so armour is not offered
   if (slot === 'chest' && p.monk && ARMOUR_TYPES.includes(it.t)) return { score: 0, reasons: [], delta: {} };
   // first, what the item does to the numbers of this build
-  const delta = gearDelta(b, act, slot, it, base, p.style, p.level);
-  Object.keys(delta).forEach((k) => {
+  const now = numbersWith(b, act, slot, it, p.style, p.level);
+  const delta = numbersDiff(now, base);
+  const worth = numbersDiff(now, empty || base);
+  Object.keys(worth).forEach((k) => {
     const w = (DELTA_WEIGHT[goal][k] || 0) * deltaFit(k, p);
     if (!w) return;
-    score += delta[k] * w;
+    score += worth[k] * w;
     if (delta[k] > 0) reasons.push([10 + delta[k] * w, deltaBit(k, delta[k])]);
   });
-  // then the effects the numbers do not show
+  // then the effects the numbers do not show; an effect reserved for a race the build is not counts for little
+  const races = Object.keys(RACES).filter((r) => new RegExp('\\b' + r.replace('-', '.?') + '(?:s|es|ves)?\\b', 'i').test(text.replace(/dwarves/gi, 'dwarf').replace(/elves/gi, 'elf')));
+  const gate = races.length && !races.includes(b.creation.race) ? 0.2 : 1;
   it.g.forEach((tag) => {
     const w = weights[tag];
-    if (!w || (TAG_NUMBER[tag] && delta[TAG_NUMBER[tag]])) return;
-    const [fit, why] = tagFit(tag, it, p, text);
+    if (!w || (TAG_NUMBER[tag] && worth[TAG_NUMBER[tag]])) return;
+    const [base_fit, why] = tagFit(tag, it, p, text);
+    const fit = base_fit * gate;
     if (fit <= 0) return;
     score += w * fit;
     reasons.push([w * fit, t(TAG_LABEL[tag]) + (why ? ' (' + why + ')' : '')]);
@@ -10526,9 +10727,10 @@ function recommendBase(b, act) {
 // An item another member of the party already wears drops down the list, and says who has it.
 function recommend(b, slot, act, goal, list) {
   const { p, base } = recommendBase(b, act);
+  const empty = numbersWith(b, act, slot, null, p.style, p.level);
   const taken = partyTaken(b, act);
   return list.map((it) => {
-    const r = Object.assign({ it }, scoreItem(b, p, it, slot, act, goal, base));
+    const r = Object.assign({ it }, scoreItem(b, p, it, slot, act, goal, base, empty));
     if (taken[norm(it.n)]) { r.score *= 0.3; r.taken = taken[norm(it.n)]; }
     return r;
   }).filter((r) => r.score > 0)
@@ -10784,6 +10986,328 @@ Object.assign(actions, {
 });
 </script>
   <script>
+// What the character has besides numbers (speed, senses, resistances, advantages, immunities, racial spells),
+// gathered from the text of everything the build owns; and the situational bonuses that can be switched on
+// to see the numbers with them (Rage, Sneak Attack, Bless, Hunter's Mark, a ring that works only in shadow…).
+'use strict';
+
+const DAMAGE_WORDS = ['Acid', 'Bludgeoning', 'Cold', 'Fire', 'Force', 'Lightning', 'Necrotic', 'Piercing', 'Poison', 'Psychic', 'Radiant', 'Slashing', 'Thunder'];
+const splitSentences = (text) => String(text || '').split(/;|\.(?=\s|$)/).map((x) => x.trim()).filter(Boolean);
+// Features that are used (an action, a bonus action, a reaction): what they give is there only while they last.
+const ACTION_FEATURES = new Set(window.BG3_ACTIONS || []);
+// "Advantage against being Charmed" is no condition; "while raging" is.
+const SITUATION = /\b(while|when|whenever|after|until|if|as long as|once per)\b/i;
+
+// Every text the build owns at a level and with the gear of an act: [[source, text, kind]].
+function ownedTexts(b, act) {
+  const c = b.creation;
+  const out = [];
+  [[c.race, DATA.races[c.race]], [c.subrace, DATA.subraces[c.subrace]]].forEach(([name, d]) => (d && d.features || []).forEach(([n, text]) => out.push([name + ' · ' + n, n + ': ' + text, 'race'])));
+  [...new Set(allGains(b))].forEach((g) => { const text = featureText(g); if (text && !SPELL_BY_NAME.has(norm(g))) out.push([g, text, 'feature']); });
+  chosenOptions(b).forEach(([name, text]) => { if (text) out.push([name, text, 'choice']); });
+  allPicks(b).forEach((p) => {
+    const m = /^feat\s*:\s*([^(+]+)/i.exec(p.trim());
+    const feat = m && FEATS.find(([name]) => norm(name) === norm(m[1]));
+    if (feat) out.push([feat[0], feat[1], 'feat']);
+  });
+  Object.values(wornItems(b, act)).forEach((it) => effectTexts(it).forEach((text) => { if (text) out.push([it.n, text, 'item']); }));
+  const actNum = ACTS.findIndex(([k]) => k === act) + 1;
+  PERMANENT.forEach((p) => { if ((b.permanent || {})[p.n] && p.a <= actNum) out.push([p.n, p.x, 'permanent']); });
+  return out;
+}
+
+// Speed, senses, resistances, advantages, immunities and racial spells of the build.
+// Each entry is [what, source, conditional]; conditional ones depend on a situation the text describes.
+function traitsOf(b, act) {
+  const out = { speed: [], senses: [], resist: [], advantage: [], immune: [], spells: [] };
+  const c = b.creation;
+  const level = charLevel(b);
+  const push = (list, what, source, cond) => { if (!list.some((x) => norm(x[0]) === norm(what) && x[1] === source)) list.push([what, source, !!cond]); };
+  // base speed: the subrace's when it has one, else the race's
+  const base = (DATA.subraces[c.subrace] || {}).speed || (DATA.races[c.race] || {}).speed;
+  if (base) out.speed.push([base.split('/')[0].trim(), c.subrace && (DATA.subraces[c.subrace] || {}).speed ? c.subrace : c.race, false]);
+  ownedTexts(b, act).forEach(([source, text, kind]) => {
+    const used = kind === 'feature' && ACTION_FEATURES.has(source) && !/^Aura of/.test(source);  // an aura is always up
+    splitSentences(text).forEach((s) => {
+      const cond = used || SITUATION.test(s);
+      let m = /movement speed (?:is )?(?:increas\w+|\+)\D{0,12}(\d+(?:\.\d+)?) ?m\b/i.exec(s);
+      // the monk's own table says how much Unarmoured Movement gives at each level; Fleet of Foot is in the base speed
+      if (m && !/^Fleet of Foot/.test(s) && !/Unarmoured Movement/.test(source)) push(out.speed, '+' + m[1] + ' m', source, cond);
+      m = /see in the dark up to (\d+) ?m/i.exec(s);
+      if (m) push(out.senses, 'Darkvision ' + m[1] + ' m', source, false);
+      else if (/darkvision/i.test(s) && kind !== 'race') push(out.senses, 'Darkvision', source, cond);
+      if (/resistan(?:ce|t)\b/i.test(s) && !/ignore|cannot have|reduce[sd]? (?:its|their)/i.test(s)) {
+        const types = DAMAGE_WORDS.filter((d) => new RegExp('\\b' + d + '\\b').test(s));
+        if (/all damage/i.test(s)) push(out.resist, 'All damage', source, cond);
+        else if (/physical damage/i.test(s)) push(out.resist, 'Physical damage', source, cond);
+        else types.forEach((d) => push(out.resist, d, source, cond));
+      }
+      m = /advantage (?:on|against|in) ([^.;]+)/i.exec(s);
+      if (m && !/(?:enemies|attackers|foes|creatures) (?:also )?have advantage/i.test(s)) push(out.advantage, m[1].replace(/^being /i, '').trim(), source, cond);
+      m = /immun\w* to ([^.;]+)|can(?:'t|not) be (surprised|charmed|frightened|knocked prone|poisoned|put to sleep)/i.exec(s);
+      if (m && (m[1] || m[2]).trim().length > 3) push(out.immune, (m[1] || m[2]).trim(), source, cond);
+    });
+    // "Dancing Lights at level 1, Faerie Fire at level 3": spells a race hands out as the character levels
+    if (kind === 'race') for (const m of text.matchAll(/([A-Z][A-Za-z' ]+?) at level (\d+)/g)) out.spells.push([m[1].trim(), source.split(' · ')[1], Number(m[2]) > level, Number(m[2])]);
+  });
+  // monks move faster without armour: the class table says by how much
+  const monk = classLevels(b).Monk;
+  const move = monk ? classColumn('Monk', monk, /unarmoured movement/i) : '';
+  if (move) push(out.speed, move.split('/')[0].replace(/\s+/g, '').replace('m', ' m'), 'Unarmoured Movement', true);
+  if (c.cantrip) out.spells.unshift([c.cantrip, t('Racial cantrip'), false, 1]);
+  return out;
+}
+function traitsCard(b) {
+  const at = b.current && b.current < charLevel(b) ? b.current : 0;
+  const tr = traitsOf(at ? atLevel(b, at) : b, state.ui.act);
+  const chip = ([what, source, cond]) => `<span class="trait${cond ? ' cond' : ''}" title="${esc(source)}">${esc(what)}<i>${esc(source)}</i></span>`;
+  const row = (label, list) => (list.length ? `<div class="trait-row"><span class="lbl">${label}</span><div>${list.map(chip).join('')}</div></div>` : '');
+  const speed = tr.speed.filter((x) => !x[2]).reduce((a, x) => a + (parseFloat(x[0].replace('+', '')) || 0), 0);
+  const body = row(t('Movement speed') + (speed ? ' · ' + speed + ' m' : ''), tr.speed) + row(t('Senses'), tr.senses) + row(t('Resistances'), tr.resist)
+    + row(t('Advantage on'), tr.advantage) + row(t('Immunities'), tr.immune)
+    + row(t('Racial spells'), tr.spells.map(([n, source, later, lv]) => [n + (lv > 1 ? ' · ' + t('level {n}', { n: lv }) : ''), source, later]));
+  return `<section class="card">
+    <h2>${t('Traits')}</h2>
+    ${body || `<p class="muted">${t('Choose a race and a class to see speed, senses, resistances and advantages here.')}</p>`}
+    ${body ? `<p class="muted">${t('Read from the text of the race, class features, choices, feats, permanent bonuses and the gear of the act chosen in Final numbers. In italics: it depends on a situation, or it comes at a later level.')}</p>` : ''}
+  </section>`;
+}
+
+// ---------- situational bonuses that can be switched on ----------
+// What a text gives while it is active: { ac, attack, attackDice, damage, damageDice, saves, savesDice }.
+function textEffect(text) {
+  const fx = {};
+  splitSentences(text).forEach((s) => {
+    if (/\beach\b/i.test(s)) return;  // "each duplicate increases…": not one number
+    let m = /Armour Class by (\d)|\+(\d) (?:bonus )?to (?:its |your |their )?Armour Class/i.exec(s);
+    if (m) fx.ac = Number(m[1] || m[2]);
+    m = /(\dd\d+) bonus to Attack Rolls/i.exec(s);
+    if (m) { fx.attackDice = m[1]; if (/Attack Rolls and Saving Throws/i.test(s)) fx.savesDice = m[1]; }
+    m = /\+(\d) bonus to (?:their )?(Attack Rolls|Armour Class and Saving Throws)/i.exec(s);
+    if (m && /Attack/.test(m[2])) { fx.attack = Number(m[1]); if (/Attack Rolls and Damage Rolls/i.test(s)) fx.damage = Number(m[1]); }
+    if (m && /Saving/.test(m[2])) fx.saves = Number(m[1]);
+    m = /additional (\dd\d+)(?: ([A-Z][a-z]+))? damage/.exec(s);
+    if (m) { fx.damageDice = m[1]; fx.damageType = m[2] && m[2] !== 'Weapon' ? m[2] : ''; fx.melee = /^Melee weapon attacks/i.test(s); }
+  });
+  return Object.keys(fx).length ? fx : null;
+}
+// Everything the build could switch on, with the gear of an act: [{ key, label, hint, fx, scope }].
+// scope says which attacks it touches: 'melee' (and thrown and unarmed), 'ranged', 'finesse' (finesse or ranged), 'heavy'.
+function availableToggles(b, act) {
+  const out = [];
+  const levels = classLevels(b);
+  const gains = [...new Set(allGains(b))];
+  const pb = profBonus(charLevel(b));
+  const add = (key, label, hint, fx, scope) => { if (!out.some((x) => x.key === key)) out.push({ key, label, hint, fx, scope: scope || 'all' }); };
+  if (levels.Barbarian) add('rage', 'Rage', featureText('Rage'), { damage: Number(classColumn('Barbarian', levels.Barbarian, /rage damage/i)) || 0 }, 'melee');
+  if (levels.Rogue) add('sneak', 'Sneak Attack', featureText('Sneak Attack'), { damageDice: classColumn('Rogue', levels.Rogue, /sneak attack/i) }, 'finesse');
+  FEATS.forEach(([name, text]) => {
+    if (!/-5 penalty/.test(text) || !hasPick(b, new RegExp('^feat\\s*:\\s*' + escRe(name), 'i'))) return;
+    add('feat:' + name, name, text, { attack: -5, damage: 10 }, /ranged/i.test(text.split(';').find((x) => /-5 penalty/.test(x))) ? 'ranged' : 'heavy');
+  });
+  if (gains.includes("Hexblade's Curse")) add("Hexblade's Curse", "Hexblade's Curse", featureText("Hexblade's Curse"), { damage: pb });
+  // spells the build knows and features it has, when their text gives a bonus this planner can add
+  const names = [...new Set([...currentSpells(b).map((s) => s.name), ...gains])];
+  names.forEach((name) => {
+    if (/^(Rage|Sneak Attack|Improved Divine Smite)$/.test(name)) return;
+    const text = featureText(name);
+    const fx = text && textEffect(text);
+    if (fx) add('text:' + name, name, text, fx, fx.melee ? 'melee' : 'all');
+  });
+  // gear whose bonus depends on the situation
+  Object.values(wornItems(b, act)).forEach((it) => itemBonuses(it).filter((x) => x.when === 'situational').forEach((x) => {
+    const kind = { ac: 'ac', attack: 'attack', saves: 'saves', spellDc: 'dc', spellAttack: 'spellAttack', initiative: 'initiative' }[x.kind];
+    add('item:' + it.n + ':' + x.kind, it.n, x.text, { [kind]: x.n });
+  }));
+  return out;
+}
+// The toggles the build has switched on, and the bonuses that are always there but come from a feature's text:
+// a Paladin's Aura of Protection (Charisma to saving throws) and Improved Divine Smite (1d8 on melee hits).
+function activeEffects(b, act, mods) {
+  const on = b.active || [];
+  const list = availableToggles(b, act).filter((x) => on.includes(x.key));
+  const gains = allGains(b);
+  if (gains.includes('Aura of Protection') && mods.cha > 0) list.push({ key: '', label: 'Aura of Protection', fx: { saves: mods.cha }, scope: 'all' });
+  if (gains.includes('Improved Divine Smite')) list.push({ key: '', label: 'Improved Divine Smite', fx: textEffect(featureText('Improved Divine Smite')) || {}, scope: 'melee' });
+  return list;
+}
+// Whether an effect of that scope applies to an attack row.
+function effectHits(scope, row) {
+  const it = row.item;
+  const melee = row.slot === 'unarmed' || row.thrown || (it && it.s === 'melee');
+  if (scope === 'melee') return melee;
+  if (scope === 'ranged') return !!it && it.s === 'ranged' && row.proficient;
+  if (scope === 'finesse') return !!it && (it.s === 'ranged' || (it.pp || []).includes('Finesse'));
+  if (scope === 'heavy') return !!it && it.s === 'melee' && !row.thrown && row.proficient && (it.w === 'two' || row.twoHands);
+  return true;
+}
+function togglesRow(b) {
+  const list = availableToggles(b.current && b.current < charLevel(b) ? atLevel(b, b.current) : b, state.ui.act);
+  if (!list.length) return '';
+  const on = b.active || [];
+  return `<div class="toggles"><span class="lbl">${t('Switch on to see the numbers with it')}</span><div>${list.map((x) =>
+    `<button class="chip${on.includes(x.key) ? ' on' : ''}" data-act="toggle-active" data-k="${esc(x.key)}" title="${esc(x.hint || '')}">${esc(x.label)}</button>`).join('')}</div></div>`;
+}
+
+Object.assign(actions, {
+  'toggle-active'(el) {
+    const b = curBuild();
+    const i = b.active.indexOf(el.dataset.k);
+    if (i >= 0) b.active.splice(i, 1); else b.active.push(el.dataset.k);
+  },
+});
+</script>
+  <script>
+// Step-by-step character creation, in the order of the game's own screen: origin, race, subrace, class,
+// subclass, background, abilities, skills, the choices of level 1, and a summary. It edits the same build
+// the full planner shows; leaving it at any point keeps what was chosen.
+'use strict';
+
+// [key, title, hint, applies(b)]
+const WIZ_STEPS = [
+  ['origin', 'Origin', 'A custom character, or one of the origin characters with a fixed race and background.', () => true],
+  ['race', 'Race', 'The race sets movement speed, some proficiencies and features.', () => true],
+  ['subrace', 'Subrace', 'What the subrace adds on top of the race.', (b) => (RACES[b.creation.race] || []).length > 0],
+  ['class', 'Class', 'The class of level 1. It decides the saving throws, the starting proficiencies and the skill list.', () => true],
+  ['subclass', 'Subclass', 'This class chooses its subclass at level 1.', (b) => (CLASS_DATA[startingClass(b)] || {}).subclassLevel === 1],
+  ['background', 'Background', 'The background grants two skills.', () => true],
+  ['abilities', 'Abilities', 'Spend 27 points, then give +2 to one ability and +1 to another.', () => true],
+  ['skills', 'Skills', 'Skills granted by the choices so far are locked on; pick the rest from the class list.', () => true],
+  ['level1', 'Level 1 choices', 'What the class chooses at level 1: fighting style, cantrips, spells and the like.', (b) => !!startingClass(b)],
+  ['done', 'Summary', 'What is set and what is still open. The other 11 levels and the gear are planned in the Build Planner.', () => true],
+];
+const wizSteps = (b) => WIZ_STEPS.filter((s) => s[3](b));
+// Whether a step has what it asks for, to mark it in the step bar.
+function wizDone(b, key) {
+  const c = b.creation;
+  const st = skillState(b);
+  if (key === 'origin') return !!c.origin;
+  if (key === 'race') return !!DATA.races[c.race];
+  if (key === 'subrace') return !!c.subrace;
+  if (key === 'class') return !!startingClass(b);
+  if (key === 'subclass') return !!levelInfo(b)[0].sub;
+  if (key === 'background') return !!BACKGROUNDS[c.background];
+  if (key === 'abilities') return pointsUsed(b) === 27 && !!c.plus2 && !!c.plus1;
+  if (key === 'skills') return !st.missing.length && st.chosen.length >= st.max;
+  if (key === 'level1') {
+    const x = levelInfo(b)[0];
+    const learn = spellsAtLevel(x) || { spells: 0, cantrips: 0 };
+    const picks = b.levels[0].picks;
+    return levelChoices(x).every((ch) => chosenOf(b, x.cls, classChoices(b, x.cls).find((g) => g.name === ch.group.name) || ch.group).length >= ch.n)
+      && picks.filter((p) => /^(spell|cantrip)s?\s*:/i.test(p.trim())).length >= learn.spells + learn.cantrips
+      && (!grantsExpertise(x) || picks.some((p) => /^expertise\b/i.test(p.trim()))) && (!raceCantrips(b).length || !!c.cantrip);
+  }
+  return !buildIssues(b).some((x) => x.level === 'warn' && x.where === t('Character creation'));
+}
+
+const wizCard = (path, value, on, title, body) =>
+  `<button class="wiz-card${on ? ' on' : ''}" data-act="wiz-set" data-path="${path}" data-v="${esc(value)}"><strong>${esc(title)}</strong>${body}</button>`;
+const wizList = (items) => (items.length ? `<ul>${items.map((x) => `<li>${x}</li>`).join('')}</ul>` : '');
+const wizTraits = (d) => wizList([d.speed ? t('Speed') + ' ' + esc(d.speed) : '', (d.prof || []).length ? t('Proficiencies') + ': ' + esc(d.prof.join(', ')) : '',
+  (d.skills || []).length || d.skillNote ? t('Skills') + ': ' + esc([...(d.skills || []), d.skillNote].filter(Boolean).join(', ')) : '',
+  ...(d.features || []).map(([n, text]) => `<b>${esc(n)}</b> ${esc(text)}`), d.note ? esc(d.note) : ''].filter(Boolean));
+
+function wizBody(b, key) {
+  const c = b.creation;
+  if (key === 'origin') {
+    return `<div class="wiz-cards">${ORIGINS.map(([name]) => wizCard('creation.origin', name, c.origin === name, name,
+      `<small>${esc((DATA.origins[name] || {}).text || '')}</small>${(DATA.origins[name] || {}).cls ? `<small>${t('Default class')}: ${esc(DATA.origins[name].cls)}</small>` : ''}`)).join('')}</div>`;
+  }
+  if (key === 'race') {
+    return `<div class="wiz-cards">${Object.keys(RACES).map((name) => wizCard('creation.race', name, c.race === name, name, wizTraits(DATA.races[name] || {}))).join('')}</div>
+      <p class="muted">${t('Every race: +2 to one ability and +1 to another, your choice.')}</p>`;
+  }
+  if (key === 'subrace') {
+    return `<div class="wiz-cards">${(RACES[c.race] || []).map((name) => wizCard('creation.subrace', name, c.subrace === name, name, wizTraits(DATA.subraces[name] || {}))).join('')}</div>
+      ${raceCantrips(b).length ? `<div class="grid g4">${selectField(t('Racial cantrip'), 'creation.cantrip', c.cantrip, raceCantrips(b), t('— choose —'), 'data-rerender')}</div>` : ''}`;
+  }
+  if (key === 'class') {
+    return `<div class="wiz-cards">${CLASSES.map((name) => {
+      const ci = DATA.classes[name];
+      const gains = ((CLASS_DATA[name] || { levels: {} }).levels[1] || []).filter((g) => !GENERIC_GAIN.test(g));
+      return wizCard('class', name, startingClass(b) === name, name, wizList([
+        t('Hit points') + ': ' + t('{first} at level 1, then {next} per level, plus the Constitution modifier', { first: HIT_DIE[name], next: HIT_DIE[name] / 2 + 1 }),
+        t('Saving throws') + ': ' + ci.saves.map((x) => t(x)).join(', '),
+        t('Proficiencies') + ': ' + esc(profNames(CLASS_PROF[name].start)),
+        t('Skills') + ': ' + t('Choose {n} from: {list}', { n: ci.pick, list: ci.skills === 'any' ? t('any skill') : esc(ci.skills.join(', ')) }),
+        gains.length ? `<b>${t('Level 1')}</b> ${esc(gains.join(' · '))}` : '']));
+    }).join('')}</div>`;
+  }
+  if (key === 'subclass') {
+    const cls = startingClass(b);
+    const cur = levelInfo(b)[0].sub;
+    return `<div class="wiz-cards">${Object.keys(CLASS_DATA[cls].subclasses).map((name) => {
+      const gains = CLASS_DATA[cls].subclasses[name][1] || [];
+      return wizCard('subclass', subLabel(name), cur === name, subLabel(name), wizList(gains.map((g) => `<b>${esc(g)}</b> ${esc(featureText(g))}`)));
+    }).join('')}</div>`;
+  }
+  if (key === 'background') {
+    return `<div class="wiz-cards">${Object.keys(BACKGROUNDS).map((name) => wizCard('creation.background', name, c.background === name, name,
+      `<small>${esc(DATA.backgrounds[name] || '')}</small><small>${t('Skills')}: ${esc(BACKGROUNDS[name].join(', '))}</small>`)).join('')}</div>`;
+  }
+  if (key === 'abilities') {
+    return `<div class="abils">${ABILS.map(([ab, short, name]) => abilCard(b, ab, short, name)).join('')}</div>
+      <p class="points" data-d="points">${pointsText(b)}</p>
+      <p class="muted">${t('Base scores go from 8 to 15. The +2 and +1 buttons are the bonuses every race gives.')}</p>`;
+  }
+  if (key === 'skills') return skillsPicker(b);
+  if (key === 'level1') {
+    return `<div class="levels">${levelRows(b, 0)}</div>
+      ${raceCantrips(b).length ? `<div class="grid g4">${selectField(t('Racial cantrip'), 'creation.cantrip', c.cantrip, raceCantrips(b), t('— choose —'), 'data-rerender')}</div>` : ''}`;
+  }
+  const s = finalStats(b, 'act1', { level: 1 });
+  return `<label class="field"><span>${t('Build name')}</span><input type="text" data-path="name" value="${esc(b.name)}"></label>
+    <dl class="wiz-sum">${[[t('Origin'), c.origin], [t('Race'), raceText(c)], [t('Class'), splitText(atLevel(b, 1))], [t('Background'), c.background],
+      [t('Abilities'), abilLine(b)], [t('Skills'), [...Object.keys(skillState(b).granted), ...skillState(b).chosen].join(', ')],
+      [t('Hit points'), s.level ? s.hp : ''], [t('Armour Class'), s.level ? s.ac.act1 : '']].filter((x) => String(x[1]).trim())
+      .map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
+    <div id="check-live" class="check">${checkLive(b)}</div>`;
+}
+
+function wizardView(b) {
+  const steps = wizSteps(b);
+  let i = steps.findIndex((s) => s[0] === state.ui.wizard);
+  if (i < 0) i = 0;
+  const [key, title, hint] = steps[i];
+  return `<section class="card hero wiz">
+    <div class="wiz-bar">${steps.map((s, k) => `<button class="${k === i ? 'on' : ''}${wizDone(b, s[0]) ? ' done' : ''}" data-act="wiz-go" data-s="${s[0]}"><i>${k + 1}</i>${t(s[1])}</button>`).join('')}</div>
+    <h1>${t(title)}</h1><p class="muted">${t(hint)}</p>
+    ${wizBody(b, key)}
+    <div class="modal-btns wiz-nav">
+      <button class="btn" data-act="wiz-close">${t('Leave the step by step')}</button>
+      <span>${i > 0 ? `<button class="btn" data-act="wiz-go" data-s="${steps[i - 1][0]}">${t('← Back')}</button>` : ''}
+        ${i < steps.length - 1 ? `<button class="btn primary" data-act="wiz-go" data-s="${steps[i + 1][0]}">${t('Next')} →</button>`
+          : `<button class="btn primary" data-act="wiz-close">${t('Open in the Build Planner')}</button>`}</span>
+    </div>
+  </section>`;
+}
+
+Object.assign(actions, {
+  'wiz-new'() {
+    const b = blankBuild();
+    state.builds.push(b);
+    state.ui.buildId = b.id;
+    state.ui.tab = 'builds';
+    state.ui.wizard = 'origin';
+    state.ui.wizardFor = b.id;
+    return { top: true };
+  },
+  'wiz-open'() { state.ui.wizard = 'origin'; state.ui.wizardFor = curBuild().id; return { top: true }; },
+  'wiz-go'(el) { state.ui.wizard = el.dataset.s; return { top: true }; },
+  'wiz-close'() { state.ui.wizard = ''; return { top: true }; },
+  'wiz-set'(el) {
+    const b = curBuild();
+    const path = el.dataset.path;
+    const v = el.dataset.v;
+    if (path === 'class') {
+      // a new starting class: its level 1 choices and its subclass no longer apply
+      if (b.levels[0].cls !== v) Object.assign(b.levels[0], { cls: v, sub: '', picks: [] });
+    } else if (path === 'subclass') b.levels[0].sub = v;
+    else { setPath(b, path, v); creationChanged(b, path); }
+  },
+});
+</script>
+  <script>
 // The build check: every choice still to make and everything that does not add up, in one list.
 'use strict';
 
@@ -10866,10 +11390,14 @@ function buildIssues(b) {
         }
       });
     });
-    // a note, not an error: a replaced spell or one granted by race or feat may be written among the choices
+    // notes, not errors: a spell granted by race or feat may be written among the choices, and a planner
+    // does not have to list every spell a wizard will learn
     knownSpells(b).forEach((k) => {
-      if (k.maxCantrips && k.cantrips > k.maxCantrips) add('note', progression, t('{cls}: {n} cantrips chosen, the class knows {max} at this level', { cls: k.cls, n: k.cantrips, max: k.maxCantrips }));
-      if (k.maxSpells && k.spells > k.maxSpells && !PREPARES.includes(k.cls)) add('note', progression, t('{cls}: {n} spells chosen, the class knows {max} at this level', { cls: k.cls, n: k.spells, max: k.maxSpells }));
+      if (k.maxCantrips && k.cantrips > k.maxCantrips) add('note', progression, t('{cls}: {n} cantrips chosen, the class knows {max} at this level', { cls: k.label, n: k.cantrips, max: k.maxCantrips }));
+      else if (k.cantrips < k.maxCantrips) add('note', progression, t('{cls}: {n} of {max} cantrips chosen', { cls: k.label, n: k.cantrips, max: k.maxCantrips }));
+      if (k.maxSpells && k.spells > k.maxSpells && !PREPARES.includes(k.cls)) add('note', progression, t('{cls}: {n} spells chosen, the class knows {max} at this level', { cls: k.label, n: k.spells, max: k.maxSpells }));
+      else if (k.spells < k.maxSpells) add('note', progression, t('{cls}: {n} of {max} spells chosen', { cls: k.label, n: k.spells, max: k.maxSpells }));
+      if (k.schools && k.offSchool > k.maxAny) add('warn', progression, t('{cls}: {n} spells outside {schools}, and only {max} may be', { cls: k.label, n: k.offSchool, schools: k.schools.join(' / '), max: k.maxAny }));
     });
   }
 
@@ -11145,8 +11673,8 @@ Object.assign(actions, {
 Object.assign(actions, {
   tab(el) { state.ui.tab = el.dataset.tab; state.ui.fromParty = false; },
   lang(el) { state.ui.lang = el.dataset.lang; },
-  'build-select'(el) { state.ui.buildId = el.dataset.id; state.ui.fromParty = false; },
-  'build-new'() { const b = blankBuild(); state.builds.push(b); state.ui.buildId = b.id; state.ui.tab = 'builds'; },
+  'build-select'(el) { state.ui.buildId = el.dataset.id; state.ui.fromParty = false; state.ui.wizard = ''; },
+  'build-new'() { const b = blankBuild(); state.builds.push(b); state.ui.buildId = b.id; state.ui.tab = 'builds'; state.ui.wizard = ''; },
   'build-dup'() {
     const b = curBuild();
     if (!b) return;

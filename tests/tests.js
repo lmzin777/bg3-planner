@@ -87,6 +87,12 @@
     wm.levels[0].picks.push('Feat: Weapon Master (Longbows, Rapiers)');
     ok(proficiencies(wm).has('Longbows') && !proficiencies(wm).has('Greatswords'), 'Weapon Master');
   });
+  test('an item of unknown act is offered early only when it is ordinary gear with a source', () => {
+    eq([foundBy(item('Risky Ring'), 1), foundBy(item('Risky Ring'), 2)], [false, true], 'a known act decides');
+    ok(foundBy(item('Longsword +1'), 1), 'trader gear without an act');
+    ok(!foundBy(item('Half Plate Armour +2'), 1), 'rare gear without an act is not assumed to be there');
+    ok(!foundBy(item('Shield (Hope)'), 3), 'nor is an item the wiki gives no source for');
+  });
   test('an item is usable only with its proficiency', () => {
     const wizard = proficiencies(build(['Wizard']));
     const ranger = proficiencies(build(['Ranger']));

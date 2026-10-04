@@ -637,7 +637,7 @@ function partyNumbers(members) {
     [t('Armour Class'), stats.map((s) => s.ac[act]), true],
     [t('Initiative'), stats.map((s) => s.initiative), true, signed],
     [t('Main attack'), attacks.map((r) => (r ? r.attackTotal : null)), true, signed, attacks.map((r) => (r ? r.name : ''))],
-    [t('Damage per hit'), attacks.map((r) => (r ? avgDamage(r) : null)), true, (v) => v.toFixed(1), attacks.map((r) => (r ? r.dice + (r.damageTotal ? ' ' + signed(r.damageTotal) : '') : ''))],
+    [t('Damage per hit'), attacks.map((r) => (r ? avgDamage(r) : null)), true, (v) => v.toFixed(1), attacks.map((r) => (r ? damageText(r) : ''))],
     [t('Spell save DC'), stats.map((s) => (s.casting.length ? Math.max(...s.casting.map((c) => c.dc)) : null)), true],
     ...ABILS.map(([key, short]) => [t('{ab} save', { ab: short }), stats.map((s) => s.saves.find((k) => k.key === key).bonus), true, signed]),
   ];
