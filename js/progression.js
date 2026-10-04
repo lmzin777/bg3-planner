@@ -83,7 +83,8 @@ function levelNumbers(info) {
   return out;
 }
 
-function levelRows(b) {
+// With `only`, just that level's row (the step-by-step creation shows level 1 alone).
+function levelRows(b, only) {
   const info = levelInfo(b);
   const seen = {};
   const pending = {};  // per class: the choices still short of what the class should have made
@@ -121,13 +122,22 @@ function levelRows(b) {
             ${grantsFeat(x) ? `<button class="btn tiny gold" data-act="feat-open" data-l="${i}">${t('+ feat')}</button>` : ''}
             ${grantsExpertise(x) ? `<button class="btn tiny gold" data-act="expertise-open" data-l="${i}">${t('+ expertise')}</button>` : ''}
             ${choices}
-            ${l.cls && SPELLS.length ? `<button class="btn tiny" data-act="spell-open" data-l="${i}">${t('+ spell')}</button>` : ''}
+            ${l.cls && SPELLS.length ? spellButton(l, x, i) : ''}
             <button class="btn tiny" data-act="pick-add" data-l="${i}">${t('+ choice')}</button>
           </div>
         </div>
       </div>
     </div>${i === 0 || firstOfClass ? classNote(b, i, l.cls) : ''}`;
-  }).join('');
+  }).filter((row, i) => only == null || i === only).join('');
+}
+
+// "+ spell · 1/3": what the level has chosen out of the spells and cantrips it teaches; gold while short.
+function spellButton(l, x, i) {
+  const learn = spellsAtLevel(x);
+  const need = learn ? learn.spells + learn.cantrips : 0;
+  const have = l.picks.filter((p) => /^(spell|cantrip)s?\s*:/i.test(p.trim())).length;
+  const hint = need ? [learn.cantrips ? t('{n} cantrip(s)', { n: learn.cantrips }) : '', learn.spells ? t('{n} spell(s)', { n: learn.spells }) : ''].filter(Boolean).join(' + ') : '';
+  return `<button class="btn tiny${need && have < need ? ' gold' : ''}" data-act="spell-open" data-l="${i}"${hint ? ` title="${t('This level teaches {x}', { x: hint })}"` : ''}>${t('+ spell')}${need ? ` · ${have}/${need}` : ''}</button>`;
 }
 
 // Shown under the first level of each class: what that class grants there.
@@ -193,14 +203,16 @@ function expertiseStep() {
 function spellPickerList() {
   const q = norm(dlg.q);
   const tooHigh = (s) => dlg.max > 0 && s.lv > dlg.max;
-  const list = SPELLS.filter((s) => (!dlg.onlyClass || (s.cl || []).includes(dlg.cls) || (s.lr || []).some(([who]) => who === dlg.sub))
-    && (!dlg.reach || !tooHigh(s))
+  const offSchool = (s) => !!dlg.schools && s.lv > 0 && !dlg.schools.includes(s.sc);
+  const list = SPELLS.filter((s) => (!dlg.onlyClass || (s.cl || []).includes(dlg.list) || (s.lr || []).some(([who]) => who === dlg.sub))
+    && (!dlg.reach || !tooHigh(s)) && (!dlg.school || !offSchool(s))
     && (dlg.lv === '' || String(s.lv) === dlg.lv) && (!q || norm(s.n).includes(q) || norm(s.d).includes(q)));
   $('#dlg-count').textContent = t('{n} spells', { n: list.length });
   spellPickerKnown();
   return list.slice(0, 120).map((s) =>
     `<button class="pick-row${tooHigh(s) ? ' no' : ''}" data-act="spell-choose" data-n="${esc(s.n)}">${pic(s.i, 'pic small')}<b>${esc(s.n)}</b>
-      <span>${s.lv ? t('Level {n}', { n: s.lv }) : t('Cantrip')}${s.sc ? ' · ' + esc(s.sc) : ''}${tooHigh(s) ? ` · <em>${t('above what this level can learn')}</em>` : ''}</span>
+      <span>${s.lv ? t('Level {n}', { n: s.lv }) : t('Cantrip')}${s.sc ? ' · ' + esc(s.sc) : ''}${tooHigh(s) ? ` · <em>${t('above what this level can learn')}</em>` : ''}${
+        offSchool(s) ? ` · <em>${t('uses a free pick: outside {schools}', { schools: dlg.schools.join(', ') })}</em>` : ''}</span>
       <small class="fx">${esc(s.d || '')}</small>
       <small>${esc([s.rg, s.du, s.dm, s.co ? t('Concentration') : ''].filter(Boolean).join(' · '))}</small></button>`).join('')
     || `<p class="muted">${t('Nothing matches these filters.')}</p>`;
@@ -210,9 +222,19 @@ function spellPickerKnown() {
   const k = knownSpells(curBuild()).find((x) => x.cls === dlg.cls);
   const el = $('#dlg-known');
   if (!el) return;
-  el.innerHTML = k ? [k.maxCantrips ? `<b class="${k.cantrips > k.maxCantrips ? 'warn' : ''}">${t('{n} of {max} cantrips', { n: k.cantrips, max: k.maxCantrips })}</b>` : '',
-    k.maxSpells ? `<b class="${k.spells > k.maxSpells ? 'warn' : ''}">${t('{n} of {max} spells', { n: k.spells, max: k.maxSpells })}</b>` : ''].filter(Boolean).join(' · ') + ' ' + t('chosen for {cls} so far', { cls: dlg.cls }) : '';
+  const b = curBuild();
+  const learn = spellsAtLevel(levelInfo(b)[dlg.level]);
+  const here = b.levels[dlg.level].picks.filter((p) => /^(spell|cantrip)s?\s*:/i.test(p.trim())).length;
+  const teaches = learn && learn.spells + learn.cantrips ? t('This level teaches {x}', { x: [learn.cantrips ? t('{n} cantrip(s)', { n: learn.cantrips }) : '', learn.spells ? t('{n} spell(s)', { n: learn.spells }) : ''].filter(Boolean).join(' + ') })
+    + (learn.any ? ' ' + t('({n} of them free of the school limit)', { n: learn.any }) : '') + ' · ' + t('{n} chosen here', { n: here }) + '<br>' : '';
+  el.innerHTML = teaches + (k ? [k.maxCantrips ? `<b class="${k.cantrips > k.maxCantrips ? 'warn' : ''}">${t('{n} of {max} cantrips', { n: k.cantrips, max: k.maxCantrips })}</b>` : '',
+    k.maxSpells ? `<b class="${k.spells > k.maxSpells ? 'warn' : ''}">${t('{n} of {max} spells', { n: k.spells, max: k.maxSpells })}</b>` : ''].filter(Boolean).join(' · ') + ' ' + t('chosen for {cls} so far', { cls: k.label })
+    + (k.schools ? ` · <b class="${k.offSchool > k.maxAny ? 'warn' : ''}">${t('{n} of {max} free picks used', { n: k.offSchool, max: k.maxAny })}</b>` : '') : '');
+  const swap = $('#dlg-replace');
+  if (swap) swap.innerHTML = opt('', t('— nothing: learn a new spell —'), dlg.replace) + spellSwapOptions().map((n) => opt(n, n, dlg.replace)).join('');
 }
+// Spells of this class learned at earlier levels and still known: the ones a level up may swap out.
+const spellSwapOptions = () => currentSpells(curBuild()).filter((x) => x.cls === dlg.cls && !x.cantrip && x.level < dlg.level).map((x) => x.name);
 
 Object.assign(actions, {
   'gain-info'(el) {
@@ -267,15 +289,18 @@ Object.assign(actions, {
     const b = curBuild();
     const x = levelInfo(b)[level];
     const max = maxSpellLevel(b, level);
-    dlg = { kind: 'spell', level, q: '', lv: '', cls: x.cls, sub: subLabel(x.sub), max, reach: max > 0,
-      onlyClass: SPELLS.some((s) => (s.cl || []).includes(x.cls)),
+    const learn = spellsAtLevel(x) || { list: x.cls };
+    dlg = { kind: 'spell', level, q: '', lv: '', cls: x.cls, sub: subLabel(x.sub), list: learn.list, schools: learn.schools, school: !!learn.schools, replace: '', max, reach: max > 0,
+      onlyClass: SPELLS.some((s) => (s.cl || []).includes(learn.list)),
       refresh: () => { $('#dlg-list').innerHTML = spellPickerList(); } };
     openDialog(`<h2>${t('Spells')}</h2><p class="muted">${t('Click a spell to add it to level {n}. You can add several.', { n: level + 1 })}</p>
       <div class="picker-tools"><input type="text" data-dlg="q" placeholder="${t('Search by name or description…')}" autocomplete="off">
         <select data-dlg="lv">${opt('', t('Any level'), '')}${opt('0', t('Cantrip'), '')}${[1, 2, 3, 4, 5, 6].map((n) => opt(String(n), t('Level {n}', { n }), '')).join('')}</select></div>
-      <div class="picker-tools"><label class="chk"><input type="checkbox" data-dlg="onlyClass"${dlg.onlyClass ? ' checked' : ''}> ${t('Only {cls} spells', { cls: x.cls })}</label>
+      <div class="picker-tools"><label class="chk"><input type="checkbox" data-dlg="onlyClass"${dlg.onlyClass ? ' checked' : ''}> ${t('Only {cls} spells', { cls: learn.list })}</label>
         ${max > 0 ? `<label class="chk"><input type="checkbox" data-dlg="reach" checked> ${t('Only up to spell level {n}, the most {cls} {lv} can learn', { n: max, cls: x.cls, lv: x.n })}</label>` : ''}
+        ${learn.schools ? `<label class="chk"><input type="checkbox" data-dlg="school" checked> ${t('Only {schools}', { schools: learn.schools.join(', ') })}</label>` : ''}
         <span class="muted" id="dlg-count"></span></div>
+      ${learn.replace ? `<div class="picker-tools"><label class="field"><span>${t('The next spell replaces a known one (allowed once per level up)')}</span><select data-dlg="replace" id="dlg-replace"></select></label></div>` : ''}
       <p class="points" id="dlg-known"></p>
       <div class="picker-list" id="dlg-list"></div>
       <div class="modal-btns"><span></span><button class="btn primary" data-act="dialog-close">${t('Done')}</button></div>`, 'picker-box');
@@ -284,8 +309,10 @@ Object.assign(actions, {
   },
   'spell-choose'(el) {
     const s = SPELLS.find((x) => x.n === el.dataset.n);
-    curBuild().levels[dlg.level].picks.push((s.lv ? 'Spell: ' : 'Cantrip: ') + s.n);
-    toast(t('Added to level {n}: {x}', { n: dlg.level + 1, x: s.n }));
+    const swap = s.lv && dlg.replace ? ' (replaces ' + dlg.replace + ')' : '';
+    curBuild().levels[dlg.level].picks.push((s.lv ? 'Spell: ' : 'Cantrip: ') + s.n + swap);
+    toast(swap ? t('Level {n}: {x} replaces {y}', { n: dlg.level + 1, x: s.n, y: dlg.replace }) : t('Added to level {n}: {x}', { n: dlg.level + 1, x: s.n }));
+    if (swap) dlg.replace = '';
     spellPickerKnown();
   },
 });

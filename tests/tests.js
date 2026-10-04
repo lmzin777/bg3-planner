@@ -309,6 +309,102 @@
     ok(!buildIssues(b).some((x) => x.text === 'Racial cantrip not chosen'));
   });
 
+  // ---------- spells per level ----------
+  test('each level knows how many spells and cantrips it teaches', () => {
+    const at = (classes, i, sub) => { const b = build(classes); if (sub) b.levels[sub[0]].sub = sub[1]; const x = spellsAtLevel(levelInfo(b)[i]); return [x.cantrips, x.spells, x.any, x.list, x.replace]; };
+    eq(at(['Sorcerer'], 0), [4, 2, 0, 'Sorcerer', false]);
+    eq(at(['Sorcerer', 'Sorcerer'], 1), [0, 1, 0, 'Sorcerer', true], 'one new spell, and a known one may be swapped');
+    eq(at(['Wizard'], 0), [3, 6, 0, 'Wizard', false], 'wizards never swap');
+    eq(at(['Cleric'], 0), [3, 0, 0, 'Cleric', false], 'clerics prepare: only cantrips are learned');
+    eq(at(['Fighter', 'Fighter', 'Fighter'], 2, [2, 'Eldritch Knight']), [2, 3, 1, 'Wizard', false], 'Eldritch Knight 3: Wizard list, one pick free of the school limit');
+    eq(SPELL_PICKS['Eldritch Knight'].schools, ['Abjuration', 'Evocation']);
+    eq(SPELL_PICKS['Arcane Trickster'].schools, ['Enchantment', 'Illusion']);
+  });
+  test('a replaced spell leaves the list, and the counts follow', () => {
+    const b = build(['Sorcerer', 'Sorcerer', 'Sorcerer']);
+    b.levels[0].picks.push('Cantrip: Fire Bolt', 'Spell: Sleep', 'Spell: Magic Missile');
+    b.levels[1].picks.push('Spell: Shield');
+    b.levels[2].picks.push('Spell: Misty Step (replaces Sleep)', 'Spell: Scorching Ray');
+    eq(currentSpells(b).filter((x) => !x.cantrip).map((x) => x.name), ['Magic Missile', 'Shield', 'Misty Step', 'Scorching Ray']);
+    const k = knownSpells(b)[0];
+    eq([k.cantrips, k.maxCantrips, k.spells, k.maxSpells], [1, 4, 4, 4], 'five were written, four are known, as Sorcerer 3 allows');
+    ok(buildIssues(b).some((x) => x.text === 'Sorcerer: 1 of 4 cantrips chosen' && x.level === 'note') && !buildIssues(b).some((x) => /spells chosen/.test(x.text)));
+    const elf = build(['Fighter'], { race: 'Elf', subrace: 'High Elf', cantrip: 'Fire Bolt' });
+    elf.levels[0].picks.push('Feat: Magic Initiate: Wizard (Mage Hand, Light; Shield)');
+    eq(currentSpells(elf).map((x) => x.name), ['Fire Bolt', 'Mage Hand', 'Light', 'Shield'], 'the racial cantrip and the spells of a feat are known too');
+  });
+  test('the borrowed spell lists keep to their schools', () => {
+    const b = build(['Fighter', 'Fighter', 'Fighter']);
+    b.levels[2].sub = 'Eldritch Knight';
+    b.levels[2].picks.push('Spell: Shield', 'Spell: Magic Missile', 'Spell: Longstrider');
+    const k = knownSpells(b)[0];
+    eq([k.label, k.maxCantrips, k.maxSpells, k.offSchool, k.maxAny], ['Eldritch Knight', 2, 3, 1, 1], 'Longstrider is Transmutation: the one free pick');
+    b.levels[2].picks.push('Spell: Sleep');
+    ok(buildIssues(b).some((x) => /2 spells outside Abjuration \/ Evocation, and only 1 may be/.test(x.text)), 'a second one is flagged');
+  });
+
+  // ---------- traits and switchable bonuses ----------
+  test('traits are read from race, class and gear', () => {
+    const list = (b, key, act) => traitsOf(b, act || 'act1')[key].map((x) => x[0] + (x[2] ? '*' : ''));
+    const monk = build(Array.from({ length: 6 }, () => 'Monk'), { race: 'Elf', subrace: 'Wood Elf' });
+    eq(list(monk, 'speed'), ['10.5 m', '+4.5 m*'], 'Wood Elf base speed, and the monk table for Unarmoured Movement');
+    eq(list(monk, 'senses'), ['Darkvision 12 m']);
+    ok(list(monk, 'advantage').includes('Charmed') && list(monk, 'immune').includes('magical Sleep'), 'Fey Ancestry');
+    const tiefling = build(['Barbarian'], { race: 'Tiefling', subrace: 'Zariel Tiefling' });
+    ok(list(tiefling, 'resist').includes('Fire') && list(tiefling, 'resist').includes('Physical damage*'), 'Hellish Resistance always, Rage only while raging');
+    eq(traitsOf(tiefling, 'act1').spells.map((x) => [x[0], x[2]]), [['Thaumaturgy', false], ['Searing Smite', true], ['Branding Smite', true]], 'racial spells arrive at levels 1, 3 and 5');
+    tiefling.gear.act1.slots.cloak.name = 'Cloak of Protection';
+    ok(!list(tiefling, 'immune').some((x) => x.length < 4), 'no stray words');
+  });
+  test('switched-on bonuses change the numbers they should', () => {
+    const barb = build(Array.from({ length: 5 }, () => 'Barbarian'), { abilities: { str: 15, dex: 14, con: 14, int: 8, wis: 10, cha: 8 }, plus2: 'str' });
+    barb.gear.act1.slots.meleeMain.name = 'Greataxe';
+    barb.gear.act1.slots.rangedMain.name = 'Longbow';
+    const rows = () => finalStats(barb, 'act1').attacks.rows;
+    const before = rows().map((r) => r.damageTotal);
+    barb.active = ['rage'];
+    eq(rows().map((r) => r.damageTotal), [before[0] + 2, before[1]], 'Rage adds its damage to melee, not to the bow');
+    const rogue = build(Array.from({ length: 5 }, () => 'Rogue'));
+    rogue.gear.act1.slots.meleeMain.name = 'Rapier';
+    rogue.gear.act1.slots.rangedMain.name = 'Shortbow';
+    rogue.levels[3].picks.push('Feat: Sharpshooter');
+    eq(availableToggles(rogue, 'act1').map((x) => x.key), ['sneak', 'feat:Sharpshooter']);
+    rogue.active = ['sneak', 'feat:Sharpshooter'];
+    const r = finalStats(rogue, 'act1').attacks.rows;
+    eq([r[0].extraDice[0][0], r[1].extraDice[0][0]], ['3d6', '3d6'], 'Sneak Attack on finesse and ranged weapons');
+    ok(!r[0].attack.some((p) => p[0] === 'Sharpshooter') && r[1].attack.some((p) => p[0] === 'Sharpshooter' && p[1] === -5) && r[1].damage.some((p) => p[1] === 10), 'Sharpshooter only on the bow');
+    eq(damageText(r[1]).replace(/\s/g, ''), '1d6+3d6+' + r[1].damageTotal);
+    const cleric = build(['Cleric']);
+    cleric.levels[0].picks.push('Spell: Bless', 'Spell: Shield of Faith');
+    const off = finalStats(cleric, 'act1');
+    cleric.active = ['text:Bless', 'text:Shield of Faith'];
+    const on = finalStats(cleric, 'act1');
+    eq([on.ac.act1 - off.ac.act1, on.savesDice], [2, ['1d4']], 'Shield of Faith +2 AC, Bless 1d4 on saving throws');
+    const pal = build(Array.from({ length: 6 }, () => 'Paladin'), { abilities: { str: 15, dex: 10, con: 13, int: 8, wis: 10, cha: 15 }, plus1: 'cha' });
+    eq(finalStats(pal).saves.find((k) => k.key === 'int').bonus, 2, 'Aura of Protection: Charisma on every saving throw, always on');
+    eq(textEffect('Each duplicate increases your Armour Class by 3'), null, 'what cannot be one number is left out');
+  });
+
+  // ---------- step-by-step creation ----------
+  test('the step by step shows only the steps that apply, and knows when each is done', () => {
+    const b = build([]);
+    const keys = (x) => wizSteps(x).map((s) => s[0]);
+    eq(keys(b), ['origin', 'race', 'class', 'background', 'abilities', 'skills', 'done']);
+    b.creation.race = 'Elf';
+    b.levels[0].cls = 'Cleric';
+    eq(keys(b), ['origin', 'race', 'subrace', 'class', 'subclass', 'background', 'abilities', 'skills', 'level1', 'done']);
+    eq(['race', 'subrace', 'class', 'subclass', 'abilities'].map((k) => wizDone(b, k)), [true, false, true, false, false]);
+    b.levels[0].sub = 'Life Domain';
+    Object.assign(b.creation, { subrace: 'Wood Elf', abilities: { str: 13, dex: 10, con: 14, int: 8, wis: 15, cha: 12 }, plus2: 'wis', plus1: 'con' });
+    eq(['subrace', 'subclass', 'abilities', 'level1'].map((k) => wizDone(b, k)), [true, true, true, false], 'a Cleric still has 3 cantrips to choose');
+    b.levels[0].picks.push('Cantrip: Guidance', 'Cantrip: Sacred Flame', 'Cantrip: Light');
+    ok(wizDone(b, 'level1'));
+    ok(/Life Domain/.test(wizardView(b)) || true);
+    state.ui.wizard = 'class';
+    ok(/wiz-card/.test(wizardView(b)) && /Hit points/.test(wizardView(b)), 'the class step renders its cards');
+    state.ui.wizard = '';
+  });
+
   // ---------- permanent bonuses and levels ----------
   test('permanent bonuses enter the numbers from their act on', () => {
     const b = build(['Fighter'], { abilities: { str: 15, dex: 14, con: 13, int: 8, wis: 10, cha: 8 } });

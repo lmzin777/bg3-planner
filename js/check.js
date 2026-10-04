@@ -80,10 +80,14 @@ function buildIssues(b) {
         }
       });
     });
-    // a note, not an error: a replaced spell or one granted by race or feat may be written among the choices
+    // notes, not errors: a spell granted by race or feat may be written among the choices, and a planner
+    // does not have to list every spell a wizard will learn
     knownSpells(b).forEach((k) => {
-      if (k.maxCantrips && k.cantrips > k.maxCantrips) add('note', progression, t('{cls}: {n} cantrips chosen, the class knows {max} at this level', { cls: k.cls, n: k.cantrips, max: k.maxCantrips }));
-      if (k.maxSpells && k.spells > k.maxSpells && !PREPARES.includes(k.cls)) add('note', progression, t('{cls}: {n} spells chosen, the class knows {max} at this level', { cls: k.cls, n: k.spells, max: k.maxSpells }));
+      if (k.maxCantrips && k.cantrips > k.maxCantrips) add('note', progression, t('{cls}: {n} cantrips chosen, the class knows {max} at this level', { cls: k.label, n: k.cantrips, max: k.maxCantrips }));
+      else if (k.cantrips < k.maxCantrips) add('note', progression, t('{cls}: {n} of {max} cantrips chosen', { cls: k.label, n: k.cantrips, max: k.maxCantrips }));
+      if (k.maxSpells && k.spells > k.maxSpells && !PREPARES.includes(k.cls)) add('note', progression, t('{cls}: {n} spells chosen, the class knows {max} at this level', { cls: k.label, n: k.spells, max: k.maxSpells }));
+      else if (k.spells < k.maxSpells) add('note', progression, t('{cls}: {n} of {max} spells chosen', { cls: k.label, n: k.spells, max: k.maxSpells }));
+      if (k.schools && k.offSchool > k.maxAny) add('warn', progression, t('{cls}: {n} spells outside {schools}, and only {max} may be', { cls: k.label, n: k.offSchool, schools: k.schools.join(' / '), max: k.maxAny }));
     });
   }
 

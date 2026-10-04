@@ -19,6 +19,9 @@ FEATURE_TEMPLATE = re.compile(
 # The wiki page behind each feature name, collected while the names are read; used to fetch the descriptions.
 PAGE_OF = {}
 RESOURCES = {}
+# Features that are used (actions, bonus actions, reactions) rather than always on, by the template the wiki shows them with.
+ACTIONS = set()
+ACTION_TEMPLATE = re.compile(r"\{\{\s*(?:Lg|Md|Sm)?(?:SAI|Spell action|Action|Reaction)\s*\|([^{}|]+)(?:\|([^{}|=]+)(?=\||\}\}))?", re.I)
 
 
 def sections(text, level):
@@ -76,6 +79,8 @@ def feature_sub(m):
 
 def plain(text):
     """Icon templates carry a file name first; keep only the label a reader would see."""
+    for m in ACTION_TEMPLATE.finditer(text):
+        ACTIONS.add(tidy(m.group(2) or m.group(1)))
     text = re.sub(r"\[\[File:[^\]]*\]\]", "", text, flags=re.I)
     text = re.sub(r"\{\{\s*(?:Icon|DieIcon|SpellSlot)\s*\|[^{}]*\}\}", "", text, flags=re.I)
     text = re.sub(r"\{\{\s*(?:Sm|Md|Lg)?Icon ?link\s*\|([^{}]*)\}\}", icon_link, text, flags=re.I)
@@ -342,10 +347,12 @@ def main():
           "// BG3_CLASSES[class] = { levels: {class level: [features]}, subclassLevel, subclasses: {name: {class level: [features]}},\n"
           "//   cols: [names of the number columns], table: {class level: [value per column]}, slots: {class level: [slots per spell level]} }\n"
           "// BG3_FEATS = [[name, what it does], ...] · BG3_FEATURES = {feature name: what it does}\n"
+          "// BG3_ACTIONS = [features that are used as an action, bonus action or reaction, rather than always on]\n"
           f"window.BG3_CLASSES_DATE = {json.dumps(time.strftime('%Y-%m-%d'))};\n"
           "window.BG3_CLASSES = " + json.dumps(data, ensure_ascii=False, indent=1) + ";\n"
           "window.BG3_FEATS = [\n" + ",\n".join("  " + row(f) for f in feat_list) + "\n];\n"
-          "window.BG3_FEATURES = {\n" + ",\n".join("  " + json.dumps(k, ensure_ascii=False) + ":" + json.dumps(v, ensure_ascii=False) for k, v in features.items()) + "\n};\n")
+          "window.BG3_FEATURES = {\n" + ",\n".join("  " + json.dumps(k, ensure_ascii=False) + ":" + json.dumps(v, ensure_ascii=False) for k, v in features.items()) + "\n};\n"
+          "window.BG3_ACTIONS = " + json.dumps(sorted(n for n in ACTIONS if n in features), ensure_ascii=False) + ";\n")
     io.open(OUT, "w", encoding="utf-8", newline="\n").write(js)
 
     print(f"Wrote {OUT} ({len(js) // 1024} KB): {len(feat_list)} feats, {len(features)} feature descriptions")

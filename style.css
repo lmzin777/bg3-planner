@@ -723,3 +723,33 @@ button.chip:hover { border-color: var(--gold); color: var(--text); }
 .chip-s { display: inline-block; font-size: 12px; margin: 2px 4px 2px 0; padding: 2px 9px; border: 1px solid var(--gold); border-radius: 999px; color: var(--gold-hi); }
 .chip-s.got { opacity: .6; text-decoration: line-through; }
 .ptable td small { display: block; color: var(--muted); font-size: 11px; font-weight: 400; }
+
+/* ---------- traits, switchable bonuses, step-by-step creation ---------- */
+.trait-row { display: grid; grid-template-columns: minmax(120px, 190px) minmax(0, 1fr); gap: 6px 14px; padding: 7px 0; border-top: 1px solid var(--line-soft); align-items: start; }
+.trait-row:first-of-type { border-top: 0; }
+.trait-row .lbl, .toggles .lbl { font: 700 10.5px var(--sans); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); padding-top: 4px; }
+.trait-row > div { display: flex; flex-wrap: wrap; gap: 5px; }
+.trait { font-size: 12.5px; background: var(--field); border: 1px solid var(--line-soft); border-radius: 999px; padding: 3px 10px; color: var(--text); }
+.trait i { font-style: normal; color: var(--muted); font-size: 11px; margin-left: 6px; }
+.trait.cond { font-style: italic; color: var(--muted); border-style: dashed; }
+@container (max-width: 400px) { .trait-row { grid-template-columns: minmax(0, 1fr); } }
+.toggles { margin: 0 0 12px; }
+.toggles > div { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+.wiz-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 14px; }
+.wiz-bar button { cursor: pointer; display: inline-flex; align-items: center; gap: 6px; background: var(--field); color: var(--muted); border: 1px solid var(--line-soft); border-radius: 999px; padding: 4px 11px 4px 5px; font: 600 12px var(--sans); }
+.wiz-bar button i { font-style: normal; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--panel-2); border: 1px solid var(--line); font-size: 11px; }
+.wiz-bar button.done i { background: var(--ok); border-color: var(--ok); color: #0e0c0a; }
+.wiz-bar button.on { color: var(--gold-hi); border-color: var(--gold); }
+.wiz-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr)); gap: 8px; margin-bottom: 10px; }
+.wiz-card { cursor: pointer; text-align: left; font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line-soft); border-radius: 10px; padding: 11px 13px; display: grid; gap: 4px; align-content: start; }
+.wiz-card:hover { border-color: var(--line); }
+.wiz-card.on { border-color: var(--gold); background: rgba(201, 162, 77, .1); }
+.wiz-card strong { font: 600 16px var(--serif); color: var(--gold-hi); }
+.wiz-card small, .wiz-card li { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+.wiz-card ul { margin: 0; padding-left: 16px; display: grid; gap: 2px; }
+.wiz-card li b { color: var(--text); font-weight: 600; }
+.wiz-nav { justify-content: space-between; margin-top: 14px; }
+.wiz-nav span { display: flex; gap: 8px; }
+.wiz-sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: 8px 18px; margin: 12px 0; }
+.wiz-sum dt { font: 700 10.5px var(--sans); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+.wiz-sum dd { margin: 0; }

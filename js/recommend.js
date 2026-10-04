@@ -66,7 +66,7 @@ function buildProfile(b, act) {
   const topCaster = Object.keys(levels).filter((c) => CASTING_ABILITY[c]).sort((a, c) => levels[c] - levels[a])[0];
   const main = style === 'ranged' ? 'dex' : style === 'caster' ? (CASTING_ABILITY[topCaster] || 'cha')
     : style === 'thrown' ? 'str' : (stats.scores.str >= stats.scores.dex ? 'str' : 'dex');
-  const known = allPicks(b).map((p) => /^(?:spell|cantrip)\s*:\s*([^(]+)/i.exec(p.trim())).filter(Boolean).map((m) => SPELLS.find((s) => norm(s.n) === norm(m[1]))).filter(Boolean);
+  const known = currentSpells(b).map((x) => SPELL_BY_NAME.get(norm(x.name))).filter(Boolean);
   // damage types the build deals: from its spells and from choices that name one (not from resistances)
   const dealing = allPicks(b).filter((x) => !/resist|wanderer|ward/i.test(x)).join(' | ');
   const elements = new Set(ELEMENTS.filter((e) => new RegExp('\\b' + e + '\\b', 'i').test(dealing) || known.some((s) => (s.dm || '').includes(e))));

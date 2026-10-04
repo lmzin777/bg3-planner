@@ -12,6 +12,7 @@ const CONSUMABLES = window.BG3_CONSUMABLES || [];
 const CHOICES = window.BG3_CHOICES || [];
 const FEAT_OPTIONS = window.BG3_FEAT_OPTIONS || {};
 const PERMANENT = window.BG3_PERMANENT || [];
+const SPELL_PICKS = window.BG3_SPELL_PICKS || {};
 const DATA = window.BG3_DATA || { races: {}, subraces: {}, backgrounds: {}, origins: {}, classes: {} };
 
 // UI text is written in English and passed through t(); other languages live in i18n.js.
@@ -145,6 +146,8 @@ function blankBuild() {
     permanent: {},
     // the level the character is at in the playthrough; 0 means "show the finished build"
     current: 0,
+    // situational bonuses switched on in Final numbers (Rage, Bless, a ring that works only in shadow…)
+    active: [],
     variants: '',
     notes: '',
   };
@@ -192,6 +195,7 @@ function normalizeBuild(src) {
     Object.keys(s.permanent).forEach((k) => { const v = s.permanent[k]; if (v && v.on) b.permanent[k] = { on: true, ab: v.ab || '', extra: !!v.extra, got: !!v.got }; });
   }
   b.current = Math.max(0, Math.min(12, Number(s.current) || 0));
+  b.active = Array.isArray(s.active) ? s.active.map(String) : [];
   // The elixir the build keeps active. Builds saved before this field existed take the strongest
   // ability elixir from their consumables list, which is what those builds were planned around.
   if (typeof s.elixir === 'string') b.elixir = s.elixir;

@@ -27,15 +27,14 @@ function sheetHtml(b) {
         ...(b.elixir ? [[t('Elixir kept active'), esc(b.elixir)]] : []),
         ...(PERMANENT.some((p) => (b.permanent || {})[p.n]) ? [[t('Permanent bonuses'), PERMANENT.filter((p) => (b.permanent || {})[p.n]).map((p) => esc(p.n)
           + (b.permanent[p.n].ab ? ' (' + abilityShort(b.permanent[p.n].ab) + ')' : '') + (b.permanent[p.n].got ? ' ✓' : '')).join(' · ')]] : []),
-        ...fin.attacks.rows.map((r) => [esc(r.name), t('Attack') + ' ' + signedParts(r.attackTotal, r.attack) + ' · ' + t('Damage') + ' ' + esc(r.dice) + (r.damageTotal ? ' ' + (r.damageTotal > 0 ? '+ ' : '− ') + Math.abs(r.damageTotal) : '') + ' ' + esc(r.type)]),
+        ...fin.attacks.rows.map((r) => [esc(r.name), t('Attack') + ' ' + signedParts(r.attackTotal, r.attack) + ' · ' + t('Damage') + ' ' + esc(damageText(r)) + ' ' + esc(r.type)]),
         ...fin.casting.map((c) => [esc(c.label) + ' (' + abilityShort(c.ability) + ')', t('Spell save DC') + ' ' + c.dc + ' · ' + t('Spell attack') + ' ' + signed(c.attack)]),
         ...(fin.slots.length ? [[t('Spell slots'), fin.slots.map((n, i) => t('Level {n}', { n: i + 1 }) + ' ×' + n).join(' · ')]] : []),
         ...(fin.pact ? [[t('Pact Magic slots'), t('{n} of level {lv}, back on a Short Rest', { n: fin.pact.n, lv: fin.pact.level })]] : []),
         ...(fin.resources.length ? [[t('Class resources'), fin.resources.map(([n, v]) => esc(n) + ' ' + esc(v)).join(' · ')]] : [])]
         .map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>
       <p class="sh-skills">${fin.skills.map((k) => `<span class="${k.proficient ? 'prof' : ''}">${esc(k.name)} <b>${signed(k.bonus)}</b>${k.expert ? '★' : ''}</span>`).join(' · ')}</p></section>` : '';
-  const known = [...new Set(allPicks(b).map((p) => /^(?:spell|cantrip)\s*:\s*([^(]+)/i.exec(p.trim())).filter(Boolean).map((m) => norm(m[1])))]
-    .map((n) => SPELLS.find((s) => norm(s.n) === n)).filter(Boolean);
+  const known = [...new Set(currentSpells(b).map((x) => norm(x.name)))].map((n) => SPELL_BY_NAME.get(n)).filter(Boolean);
   const spells = known.length ? `<section><h2>${t('Spells')}</h2><ul>${known.map((s) => `<li><b>${esc(s.n)}</b> — ${s.lv ? t('Level {n}', { n: s.lv }) : t('Cantrip')}${
     [s.rg, s.du, s.dm, s.co ? t('Concentration') : ''].filter(Boolean).map((x) => ' · ' + esc(x)).join('')}. ${esc(s.d || '')}</li>`).join('')}</ul></section>` : '';
   const count = {};

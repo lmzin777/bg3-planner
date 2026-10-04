@@ -17,7 +17,8 @@ function renderBuilds() {
   return `<div class="layout">
     <aside class="side">
       <div class="side-actions">
-        <button class="btn primary wide" data-act="build-new">${t('+ New blank build')}</button>
+        <button class="btn primary wide" data-act="wiz-new" title="${t('Create a character one choice at a time, as in the game')}">${t('+ New build, step by step')}</button>
+        <button class="btn wide" data-act="build-new">${t('+ New blank build')}</button>
         <button class="btn" data-act="build-dup"${dis}>${t('Duplicate')}</button>
         <button class="btn" data-act="export-open"${dis}>${t('Export')}</button>
         <button class="btn danger wide" data-act="build-del"${dis}>${t('Delete this build')}</button>
@@ -27,7 +28,7 @@ function renderBuilds() {
       ${state.trash.length ? `<button class="btn tiny wide" data-act="trash-open">${t('Recently deleted ({n})', { n: state.trash.length })}</button>` : ''}
       <p class="hint">${t('To start a variation, duplicate a build and edit the copy. Everything is saved automatically in this browser.')}</p>
     </aside>
-    <div class="content" data-scope="build">${b ? buildEditor(b) : emptyBuilds()}</div>
+    <div class="content" data-scope="build">${b ? (state.ui.wizard && state.ui.wizardFor === b.id ? wizardView(b) : buildEditor(b)) : emptyBuilds()}</div>
   </div>`;
 }
 
@@ -59,7 +60,8 @@ function buildEditor(b) {
     ${checkCard(b)}
 
     <section class="card">
-      <h2>${t('Character creation')}</h2>
+      <div class="check-head"><h2>${t('Character creation')}</h2><span></span>
+        <button class="btn tiny" data-act="wiz-open">${t('Do it step by step')}</button></div>
       <div class="grid g4">
         ${selectField(t('Origin'), 'creation.origin', c.origin, ORIGINS.map((o) => o[0]), choose, 'data-rerender')}
         ${selectField(t('Race'), 'creation.race', c.race, Object.keys(RACES), choose, 'data-rerender')}
@@ -83,6 +85,8 @@ function buildEditor(b) {
     </section>
 
     ${statsCard(b)}
+
+    ${traitsCard(b)}
 
     ${permanentCard(b)}
 

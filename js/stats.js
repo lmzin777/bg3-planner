@@ -283,7 +283,7 @@ function attackRows(b, act, ab, pb, swap) {
       const m = new RegExp('additional damage equal to your (' + ABILITY_WORDS + ') modifier', 'i').exec(s);
       if (m && !CONDITIONAL.test(s)) damage.push([abilityShort(abilityKey(m[1])) + ' · ' + it.n, mods[abilityKey(m[1])]]);
     });
-    rows.push({ slot, name: it.n, item: it, proficient, attack, attackTotal: attack.reduce((a, p) => a + p[1], 0),
+    rows.push({ slot, name: it.n, item: it, proficient, twoHands: !!twoHands, attack, attackTotal: attack.reduce((a, p) => a + p[1], 0),
       dice: dmg.dice, type, damage, damageTotal: damage.reduce((a, p) => a + p[1], 0) });
     // thrown, for builds that throw: Strength on the attack roll, the weapon's melee damage, and Tavern Brawler
     // adding Strength once more to both (the wiki's Attacks and Throw pages)
@@ -306,14 +306,7 @@ function attackRows(b, act, ab, pb, swap) {
     rows.push({ slot: 'unarmed', name: t('Unarmed strike'), proficient: true, attack, attackTotal: attack.reduce((a, p) => a + p[1], 0),
       dice: die || '1', type: 'Bludgeoning', damage, damageTotal: damage.reduce((a, p) => a + p[1], 0) });
   }
-  // what can be added on top, depending on the fight
-  const levels = classLevels(b);
-  const extras = [];
-  if (levels.Barbarian) extras.push('Rage ' + classColumn('Barbarian', levels.Barbarian, /rage damage/i));
-  if (levels.Rogue) extras.push('Sneak Attack ' + classColumn('Rogue', levels.Rogue, /sneak attack/i));
-  if (hasPick(b, /sharpshooter/i)) extras.push('Sharpshooter −5 / +10');
-  if (hasPick(b, /great weapon master/i)) extras.push('Great Weapon Master −5 / +10');
-  return { rows, extras, situational: gearAttack.situational };
+  return { rows, extras: [], situational: gearAttack.situational };
 }
 
 // ---------- spellcasting ----------
@@ -392,16 +385,70 @@ function classResources(b) {
   Object.keys(counters).forEach((k) => out.push([k, counters[k]]));
   return out;
 }
+// Spells and cantrips written in the levels: [{ name, cantrip, level (row), cls, replaces }].
+// "Spell: Misty Step (replaces Sleep)" learns one and gives up another, as the game allows at a level up.
+function spellPicks(b) {
+  const info = levelInfo(b);
+  const out = [];
+  b.levels.forEach((l, i) => l.picks.forEach((p) => {
+    const m = /^(spell|cantrip)s?\s*:\s*([^(]+?)\s*(?:\((.*)\))?\s*$/i.exec(p.trim());
+    if (!m) return;
+    const rep = /replaces\s+(.+)/i.exec(m[3] || '');
+    out.push({ name: m[2].trim(), cantrip: /^cantrip/i.test(m[1]), level: i, cls: info[i].cls, replaces: rep ? rep[1].trim() : '' });
+  }));
+  return out;
+}
+// The spells the build knows in the end: what was learned, minus what was swapped out later, plus the cantrips
+// and spells that come with the race, a subclass choice or a feat.
+function currentSpells(b) {
+  const out = [];
+  spellPicks(b).forEach((p) => {
+    if (p.replaces) { const i = out.findIndex((x) => norm(x.name) === norm(p.replaces) && x.cls === p.cls); if (i >= 0) out.splice(i, 1); }
+    out.push({ name: p.name, cantrip: p.cantrip, cls: p.cls, level: p.level });
+  });
+  const extra = (name, source) => { const s = SPELL_BY_NAME.get(norm(name)); if (s && !out.some((x) => norm(x.name) === norm(name))) out.push({ name: s.n, cantrip: !s.lv, cls: '', source }); };
+  if (b.creation.cantrip) extra(b.creation.cantrip, b.creation.subrace || b.creation.race);
+  allPicks(b).forEach((p) => {
+    const m = /^(bonus cantrip|feat)\s*:\s*(.+)$/i.exec(p.trim());
+    if (m) m[2].split(/[(),;]/).forEach((x) => extra(x.trim(), /^feat/i.test(m[1]) ? 'Feat' : 'Bonus Cantrip'));
+  });
+  return out;
+}
+// What a build level teaches its class: { cantrips, spells, any, list (whose spell list), schools, replace }.
+// Classes read their table ("Spells Known" grows by one); Eldritch Knights and Arcane Tricksters borrow the
+// Wizard list, limited to two schools except for the picks marked as free.
+function spellsAtLevel(info) {
+  if (!info || !info.cls) return null;
+  const borrowed = SPELL_PICKS[info.sub];
+  if (borrowed) {
+    const at = borrowed.at[info.n] || {};
+    return { cantrips: at.cantrips || 0, spells: (at.school || 0) + (at.any || 0), any: at.any || 0, list: borrowed.list, schools: borrowed.schools, replace: info.n > 3 };
+  }
+  const grow = (re) => (Number(classColumn(info.cls, info.n, re)) || 0) - (info.n > 1 ? Number(classColumn(info.cls, info.n - 1, re)) || 0 : 0);
+  const swaps = (CLASS_DATA[info.cls].cols || []).some((c) => /spells known/i.test(c));
+  return { cantrips: grow(/cantrips known/i), spells: grow(/spells (known|learned)/i), any: 0, list: info.cls, schools: null,
+    replace: swaps && info.n > 1 && (Number(classColumn(info.cls, info.n - 1, /spells known/i)) || 0) > 0 };
+}
 // How many cantrips and spells each class lets the build know, next to how many it has chosen in that class's levels.
+// For the borrowed lists it also counts the spells outside the subclass's schools against the free picks.
 function knownSpells(b) {
   const levels = classLevels(b);
   const info = levelInfo(b);
+  const current = currentSpells(b);
   return Object.keys(levels).map((cls) => {
-    const picks = b.levels.filter((l, i) => info[i].cls === cls).flatMap((l) => l.picks);
-    const count = (re) => picks.filter((p) => re.test(p.trim())).length;
-    return { cls, cantrips: count(/^cantrips?\s*:/i), spells: count(/^spells?\s*:/i),
-      maxCantrips: Number(classColumn(cls, levels[cls], /cantrips known/i)) || 0,
-      maxSpells: Number(classColumn(cls, levels[cls], /spells (known|learned)/i)) || 0 };
+    const sub = (info.find((x) => x.cls === cls && x.sub) || {}).sub;
+    const borrowed = SPELL_PICKS[sub];
+    const mine = current.filter((x) => x.cls === cls);
+    const sum = (k) => Object.keys(borrowed.at).reduce((a, lv) => a + (Number(lv) <= levels[cls] ? borrowed.at[lv][k] || 0 : 0), 0);
+    const out = { cls, label: borrowed ? subLabel(sub) : cls, cantrips: mine.filter((x) => x.cantrip).length, spells: mine.filter((x) => !x.cantrip).length,
+      maxCantrips: borrowed ? sum('cantrips') : Number(classColumn(cls, levels[cls], /cantrips known/i)) || 0,
+      maxSpells: borrowed ? sum('school') + sum('any') : Number(classColumn(cls, levels[cls], /spells (known|learned)/i)) || 0 };
+    if (borrowed) {
+      out.schools = borrowed.schools;
+      out.maxAny = sum('any');
+      out.offSchool = mine.filter((x) => !x.cantrip && SPELL_BY_NAME.get(norm(x.name)) && !borrowed.schools.includes(SPELL_BY_NAME.get(norm(x.name)).sc)).length;
+    }
+    return out;
   }).filter((x) => x.maxCantrips || x.maxSpells);
 }
 
@@ -455,12 +502,31 @@ function finalStats(b, act, opts) {
     prepared: PREPARES.includes(c.cls) ? Math.max(1, mods[c.ab] + levels[c.cls]) : 0,
   }));
   const acInfo = Object.fromEntries(ACTS.map(([k]) => [k, armourClassInfo(b, k, k === act && !swap ? mods : null, k === act ? swap : null)]));
+  const attacks = level ? attackRows(b, act, ab, pb, swap) : { rows: [], extras: [], situational: [] };
+  // what is switched on, and what a feature's text always gives, on top of everything above
+  const savesDice = [];
+  (level ? activeEffects(b, act, mods) : []).forEach((x) => {
+    const fx = x.fx;
+    if (fx.ac) { acInfo[act].parts.push([x.label, fx.ac]); acInfo[act].total += fx.ac; }
+    if (fx.saves) saves.forEach((k) => { k.bonus += fx.saves; });
+    if (fx.savesDice) savesDice.push(fx.savesDice);
+    if (fx.initiative) initiative.push([x.label, fx.initiative]);
+    if (fx.dc) casting.forEach((c) => { c.dc += fx.dc; });
+    if (fx.spellAttack) casting.forEach((c) => { c.attack += fx.spellAttack; });
+    attacks.rows.forEach((r) => {
+      if (!effectHits(x.scope, r)) return;
+      if (fx.attack) { r.attack.push([x.label, fx.attack]); r.attackTotal += fx.attack; }
+      if (fx.attackDice) (r.attackDice = r.attackDice || []).push(fx.attackDice);
+      if (fx.damage) { r.damage.push([x.label, fx.damage]); r.damageTotal += fx.damage; }
+      if (fx.damageDice) (r.extraDice = r.extraDice || []).push([fx.damageDice, fx.damageType || '', x.label]);
+    });
+  });
   return {
-    act, level, feats, scores, mods, sources: ab.sources, pb, skills, saves,
+    act, level, feats, scores, mods, sources: ab.sources, pb, skills, saves, savesDice,
     hp: hitPoints(b, mods.con),
     initiative: initiative.reduce((a, p) => a + p[1], 0), initiativeParts: initiative,
     ac: Object.fromEntries(ACTS.map(([k]) => [k, acInfo[k].total])), acInfo,
-    attacks: level ? attackRows(b, act, ab, pb, swap) : { rows: [], extras: [], situational: [] },
+    attacks,
     casting, castingGear: [...dc.parts, ...sa.parts.filter((p) => !dc.parts.some((q) => q[0] === p[0] && q[1] === p[1]))], castingSituational: [...dc.situational, ...sa.situational],
     slots: spellSlots(b), pact: pactSlots(b), resources: classResources(b), known: knownSpells(b),
   };
@@ -491,8 +557,9 @@ function statsLive(b) {
   const box = (label, value, hint) => `<div class="stat"><span>${label}</span><b>${value}</b>${hint ? `<small>${hint}</small>` : ''}</div>`;
   const attacks = s.attacks.rows.map((r) => `<div class="atk">
       <div class="atk-name">${r.item ? pic(r.item.i, 'pic small') : ''}<b>${esc(r.name)}</b><small>${r.slot === 'unarmed' ? '' : t(SLOT_LABEL[r.slot])}${r.proficient ? '' : ` · <em>${t('not proficient')}</em>`}</small></div>
-      <div class="atk-num"><span>${t('Attack')}</span><b>${signed(r.attackTotal)}</b><small>${partsText(r.attack)}</small></div>
-      <div class="atk-num"><span>${t('Damage')}</span><b>${esc(r.dice)}${r.damageTotal ? ' ' + (r.damageTotal > 0 ? '+ ' : '− ') + Math.abs(r.damageTotal) : ''}</b><small>${esc(r.type)}${r.damage.length ? ' · ' + partsText(r.damage) : ''}</small></div>
+      <div class="atk-num"><span>${t('Attack')}</span><b>${signed(r.attackTotal)}${(r.attackDice || []).map((d) => ' + ' + esc(d)).join('')}</b><small>${partsText(r.attack)}</small></div>
+      <div class="atk-num"><span>${t('Damage')}</span><b>${esc(damageText(r))}</b><small>${esc(r.type)}${r.damage.length ? ' · ' + partsText(r.damage) : ''}${
+        (r.extraDice || []).map((d) => ' · ' + esc(d[0] + (d[1] ? ' ' + d[1] : '') + ' ' + d[2])).join('')}</small></div>
     </div>`).join('');
   const casting = s.casting.map((c) => `<div class="atk">
       <div class="atk-name"><b>${esc(c.label)}</b><small>${abilityShort(c.ability)} ${signed(s.mods[c.ability])}</small></div>
@@ -501,7 +568,7 @@ function statsLive(b) {
     </div>`).join('');
   const slots = s.slots.length ? `<p class="points"><b>${t('Spell slots')}</b> ${s.slots.map((n, i) => `<span class="slot-n" title="${t('Level {n}', { n: i + 1 })}">${i + 1}<i>×${n}</i></span>`).join('')}</p>` : '';
   const pact = s.pact ? `<p class="points"><b>${t('Pact Magic slots')}</b> ${t('{n} of level {lv}, back on a Short Rest', { n: s.pact.n, lv: s.pact.level })}</p>` : '';
-  const known = s.known.map((k) => `${esc(k.cls)}: ${[k.maxCantrips ? t('{n} of {max} cantrips', { n: k.cantrips, max: k.maxCantrips }) : '', k.maxSpells ? t('{n} of {max} spells', { n: k.spells, max: k.maxSpells }) : ''].filter(Boolean).join(', ')}`).join(' · ');
+  const known = s.known.map((k) => `${esc(k.label)}: ${[k.maxCantrips ? t('{n} of {max} cantrips', { n: k.cantrips, max: k.maxCantrips }) : '', k.maxSpells ? t('{n} of {max} spells', { n: k.spells, max: k.maxSpells }) : ''].filter(Boolean).join(', ')}`).join(' · ');
   return `${nextLevelText(b)}<div class="stat-row">
       ${box(t('Level'), s.level, at ? esc(splitText(atLevel(b, at))) : '')}${box(t('Proficiency bonus'), signed(s.pb))}${box(t('Hit points'), s.hp)}${box(t('Initiative'), signed(s.initiative), s.initiativeParts.length > 1 ? partsText(s.initiativeParts) : '')}
       ${ACTS.map(([k, l]) => acBox(t('AC · {act}', { act: t(l) }), s.acInfo[k])).join('')}
@@ -510,7 +577,7 @@ function statsLive(b) {
       <div class="abil-final"><b>${s.scores[ab]}</b><i>${signed(s.mods[ab])}</i></div>
       <small>${finalOf(b, ab)}${s.feats[ab] ? ' ' + t('+{n} feats', { n: s.feats[ab] }) : ''}${s.sources[ab].map((x) => '<br>' + esc(x)).join('')}</small></div>`).join('')}</div>
     <h3 class="group">${t('Saving throws')}</h3>
-    <div class="skill-final">${s.saves.map((k) => `<span class="${k.proficient ? 'prof' : ''}" title="${k.proficient ? t('Proficient') : ''}">${k.short} <b>${signed(k.bonus)}</b></span>`).join('')}</div>
+    <div class="skill-final">${s.saves.map((k) => `<span class="${k.proficient ? 'prof' : ''}" title="${k.proficient ? t('Proficient') : ''}">${k.short} <b>${signed(k.bonus)}${s.savesDice.map((d) => ' + ' + esc(d)).join('')}</b></span>`).join('')}</div>
     ${attacks ? `<h3 class="group">${t('Attacks')}</h3><div class="atks">${attacks}</div>
       ${s.attacks.extras.length ? `<p class="muted">${t('On top, when it applies: {list}', { list: esc(s.attacks.extras.join(' · ')) })}</p>` : ''}
       ${s.attacks.situational.map((x) => `<p class="muted">${esc(x)}</p>`).join('')}` : ''}
@@ -537,6 +604,7 @@ function statsCard(b) {
         elixirs.map((c) => opt(c.n, c.n + (elixirAbility(c.n) ? ' ★' : ''), b.elixir)).join('')}${b.elixir && !elixirs.some((c) => c.n === b.elixir) ? opt(b.elixir, b.elixir, b.elixir) : ''}</select></label>` : ''}
     </div>
     ${b.elixir && CONSUMABLE_BY_NAME.get(norm(b.elixir)) ? `<p class="muted">${esc(CONSUMABLE_BY_NAME.get(norm(b.elixir)).x)}</p>` : ''}
+    ${togglesRow(b)}
     <div id="stats-live">${statsLive(b)}</div>
     <h3 class="group">${t('Other ability bonuses')}</h3>
     <p class="muted">${t('Only for what the planner does not read by itself. Gear in the slots and the elixir above are already counted.')}</p>
@@ -553,7 +621,9 @@ function mainAttack(s, style) {
   const want = style === 'unarmed' ? (r) => r.slot === 'unarmed' : style === 'thrown' ? (r) => r.thrown : style === 'ranged' ? (r) => r.slot === 'rangedMain' : (r) => r.slot === 'meleeMain' && !r.thrown;
   return rows.find(want) || rows.find((r) => r.slot === 'meleeMain' && !r.thrown) || rows[0] || null;
 }
-const avgDamage = (r) => (r ? avgDice(r.dice) + r.damageTotal : 0);
+const avgDamage = (r) => (r ? avgDice(r.dice) + r.damageTotal + (r.extraDice || []).reduce((a, d) => a + avgDice(d[0]), 0) : 0);
+// "1d8 + 1d6 + 4": the weapon die, the dice switched on, and the flat part.
+const damageText = (r) => [r.dice, ...(r.extraDice || []).map((d) => d[0])].filter(Boolean).join(' + ') + (r.damageTotal ? ' ' + (r.damageTotal > 0 ? '+ ' : '− ') + Math.abs(r.damageTotal) : '');
 // Level, hit points, armour class, initiative, main attack and spell save DC of every member, side by side.
 function partyNumbers(members) {
   const active = members.filter((m) => m.build && charLevel(m.build));

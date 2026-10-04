@@ -7,8 +7,8 @@
 Object.assign(actions, {
   tab(el) { state.ui.tab = el.dataset.tab; state.ui.fromParty = false; },
   lang(el) { state.ui.lang = el.dataset.lang; },
-  'build-select'(el) { state.ui.buildId = el.dataset.id; state.ui.fromParty = false; },
-  'build-new'() { const b = blankBuild(); state.builds.push(b); state.ui.buildId = b.id; state.ui.tab = 'builds'; },
+  'build-select'(el) { state.ui.buildId = el.dataset.id; state.ui.fromParty = false; state.ui.wizard = ''; },
+  'build-new'() { const b = blankBuild(); state.builds.push(b); state.ui.buildId = b.id; state.ui.tab = 'builds'; state.ui.wizard = ''; },
   'build-dup'() {
     const b = curBuild();
     if (!b) return;
