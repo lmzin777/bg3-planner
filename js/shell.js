@@ -45,15 +45,36 @@ function refreshDerived() {
   SKILLS.forEach(([ab]) => set('skab-' + ab, signed(abilityMod(b, ab.toLowerCase()))));
 }
 
-// Keep dependent creation fields consistent after one of them changes.
-function creationChanged(b, path) {
+// Keep dependent creation fields consistent after one of them changes. `before` is what the field held.
+function creationChanged(b, path, before) {
   const c = b.creation;
+  const lockOf = (name) => (ORIGINS.find((o) => o[0] === name) || [])[1];
   if (path === 'creation.origin') {
-    const locked = (ORIGINS.find((o) => o[0] === c.origin) || [])[1];
+    // what the previous origin had fixed leaves with it: race, subrace, background, and its default
+    // class and ability scores when they were not touched since
+    const old = before && before !== c.origin ? lockOf(before) : null;
+    if (old) {
+      Object.keys(old).forEach((k) => { if (c[k] === old[k]) c[k] = ''; });
+      if (!c.race) c.cantrip = '';
+      const d = DATA.origins[before] || {};
+      if (d.abilities && ABILS.every(([ab]) => Number(c.abilities[ab]) === d.abilities[ab]) && c.plus2 === d.plus2 && c.plus1 === d.plus1) {
+        Object.assign(c, { abilities: blankBuild().creation.abilities, plus2: '', plus1: '' });
+      }
+      const first = b.levels[0];
+      if (d.cls && first.cls === d.cls && !first.picks.length && b.levels.slice(1).every((l) => !l.cls)) Object.assign(first, { cls: '', sub: '' });
+    }
+    const locked = lockOf(c.origin);
     if (locked) {
       Object.assign(c, locked);
       toast(locked.race ? t("{name}'s race and background filled in", { name: c.origin }) : t('Background set to {bg}', { bg: locked.background }));
-    }
+    } else if (old) toast(t("{name}'s choices cleared", { name: before }));
+  }
+  // an origin character with another race, subrace or background is no longer that character
+  const field = /^creation\.(race|subrace|background)$/.exec(path);
+  const fixed = field && lockOf(c.origin);
+  if (fixed && fixed[field[1]] != null && c[field[1]] !== fixed[field[1]]) {
+    toast(t('No longer {name}: the origin is now Custom', { name: c.origin }));
+    c.origin = ORIGINS[0][0];
   }
   if (path === 'creation.race' && !(RACES[c.race] || []).includes(c.subrace)) c.subrace = '';
 }

@@ -126,6 +126,21 @@ Object.assign(actions, {
     c[key] = c[key] === el.dataset.ab ? '' : el.dataset.ab;
     if (c[key] && c[other] === c[key]) c[other] = '';
   },
+  // the − and + of a number: a base ability score, a manual bonus, the enemy Armour Class
+  step(el) {
+    const clamp = (n) => Math.max(+el.dataset.min, Math.min(+el.dataset.max, n));
+    const d = +el.dataset.d;
+    if (el.dataset.ui) { state.ui[el.dataset.ui] = clamp((Number(state.ui[el.dataset.ui]) || +el.dataset.v || 0) + d); return; }
+    const b = curBuild();
+    setPath(b, el.dataset.path, clamp((Number(getPath(b, el.dataset.path)) || 0) + d));
+  },
+  'abil-reset'() { Object.assign(curBuild().creation, { abilities: blankBuild().creation.abilities, plus2: '', plus1: '' }); },
+  // the class of a level goes down to the empty levels right below it
+  'fill-down'(el) {
+    const b = curBuild();
+    const i = +el.dataset.l;
+    for (let k = i + 1; k < b.levels.length && !b.levels[k].cls; k++) b.levels[k].cls = b.levels[i].cls;
+  },
   skill(el) {
     const c = curBuild().creation;
     const list = skillList(c.skills);
@@ -283,8 +298,9 @@ document.addEventListener('input', (e) => {
   const target = inParty ? curParty() : curBuild();
   if (!target) return;
   const value = el.type === 'checkbox' ? el.checked : el.type === 'number' ? (el.value === '' ? '' : Number(el.value)) : el.value;
+  const before = getPath(target, el.dataset.path);
   setPath(target, el.dataset.path, value);
-  if (!inParty && el.dataset.path.startsWith('creation.')) creationChanged(target, el.dataset.path);
+  if (!inParty && el.dataset.path.startsWith('creation.')) creationChanged(target, el.dataset.path, before);
   save();
   if (el.classList.contains('wiki-name')) suggest(el);
   if (el.hasAttribute('data-rerender')) render();

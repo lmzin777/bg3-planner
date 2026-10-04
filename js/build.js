@@ -89,8 +89,7 @@ function buildEditor(b) {
       ${raceCantrips(b).length ? `<div class="grid g4">${selectField(t('Racial cantrip'), 'creation.cantrip', c.cantrip, raceCantrips(b), choose, 'data-rerender')}</div>` : ''}
       ${creationInfo(b)}
       <h3 class="group">${t('Ability scores')}</h3>
-      <div class="abils">${ABILS.map(([ab, short, name]) => abilCard(b, ab, short, name)).join('')}</div>
-      <p class="points" data-d="points">${pointsText(b)}</p>
+      ${abilitiesBlock(b)}
       <h3 class="group">${t('Skills')}</h3>
       ${skillsPicker(b)}
       <h3 class="group">${t('Equipment proficiencies')}</h3>
@@ -134,12 +133,21 @@ function buildEditor(b) {
     </section>`)}`;
 }
 
+// The six ability cards with the points spent and a way back to the start.
+const abilitiesBlock = (b) => `<div class="abils">${ABILS.map(([ab, short, name]) => abilCard(b, ab, short, name)).join('')}</div>
+  <div class="points-row"><p class="points" data-d="points">${pointsText(b)}</p>
+    <button class="btn tiny" data-act="abil-reset">${t('Reset scores')}</button></div>`;
 function abilCard(b, ab, short, name) {
   const f = finalOf(b, ab);
+  const base = Number(b.creation.abilities[ab]) || 8;
+  const used = pointsUsed(b);
+  const cost = (POINT_COST[base + 1] || 0) - (POINT_COST[base] || 0);
+  const short27 = used != null && base < 15 && used + cost > 27;  // the next point does not fit in the 27
   return `<div class="abil">
     <div class="abil-name">${short}<small>${t(name)}</small></div>
     <div class="abil-final"><b data-d="final-${ab}">${f}</b><i data-d="mod-${ab}">${modText(f)}</i></div>
-    <label class="abil-base">${t('base')} <input type="number" min="8" max="15" data-path="creation.abilities.${ab}" value="${esc(b.creation.abilities[ab])}"></label>
+    <div class="abil-base">${t('base')} ${stepper(base, `data-path="creation.abilities.${ab}"`, 8, 15,
+      { off: short27, title: base >= 15 ? '' : short27 ? t('Not enough points left') : t('Costs {n} point(s)', { n: cost }) })}</div>
     <div class="bonus">
       <button class="${b.creation.plus2 === ab ? 'on' : ''}" data-act="bonus" data-ab="${ab}" data-n="2">+2</button>
       <button class="${b.creation.plus1 === ab ? 'on' : ''}" data-act="bonus" data-ab="${ab}" data-n="1">+1</button>

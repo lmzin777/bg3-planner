@@ -658,7 +658,7 @@ function statsCard(b) {
       <div><span class="lbl">${t('At level')}</span><div class="acts lvls">${Array.from({ length: charLevel(b) }, (x, i) => i + 1).map((n) =>
         `<button class="${(b.current && b.current < charLevel(b) ? b.current : charLevel(b)) === n ? 'on' : ''}" data-act="stat-level" data-n="${n}">${n}</button>`).join('')}</div></div>
       <div><span class="lbl">${t('With the gear of')}</span>${actTabs(state.ui.act, 'act')}</div>
-      <label class="field ac-field"><span>${t('Enemy Armour Class')}</span><input type="number" min="5" max="30" data-ui="targetAc" value="${Number(state.ui.targetAc) || 16}"></label>
+      <div class="field ac-field"><span>${t('Enemy Armour Class')}</span>${stepper(Number(state.ui.targetAc) || 16, 'data-ui="targetAc" data-v="16"', 5, 30)}</div>
       ${elixirs.length ? `<label class="field"><span>${t('Elixir kept active')}</span><select data-path="elixir" data-rerender>${opt('', t('— none —'), b.elixir)}${
         elixirs.map((c) => opt(c.n, c.n + (elixirAbility(c.n) ? ' ★' : ''), b.elixir)).join('')}${b.elixir && !elixirs.some((c) => c.n === b.elixir) ? opt(b.elixir, b.elixir, b.elixir) : ''}</select></label>` : ''}
     </div>
@@ -667,7 +667,7 @@ function statsCard(b) {
     <div id="stats-live">${statsLive(b)}</div>
     <h3 class="group">${t('Other ability bonuses')}</h3>
     <p class="muted">${t('Only for what the planner does not read by itself. Gear in the slots and the elixir above are already counted.')}</p>
-    <div class="extra-row">${ABILS.map(([ab, short]) => `<label>${short} <input type="number" min="-10" max="20" data-path="creation.extra.${ab}" value="${esc(extra[ab] || 0)}"></label>`).join('')}</div>
+    <div class="extra-row">${ABILS.map(([ab, short]) => `<span>${short} ${stepper(Number(extra[ab]) || 0, `data-path="creation.extra.${ab}"`, -10, 20)}</span>`).join('')}</div>
   </section>`;
 }
 

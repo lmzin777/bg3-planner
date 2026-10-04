@@ -2,7 +2,7 @@
 // The scripts are plain (not modules) so the planner also runs from a file opened directly; they share the global scope.
 'use strict';
 
-const APP_VERSION = '1.4';
+const APP_VERSION = '1.5';
 const STORE_KEY = 'bg3planner.v1';
 const PRESETS = window.BG3_PRESETS || [];
 const I18N = window.BG3_I18N || {};
@@ -278,6 +278,11 @@ function actProgress(b, act) {
 }
 
 // ---------- small render pieces ----------
+// A number changed by a − and a + button. `target` is the attribute saying what it changes (data-path or data-ui);
+// `up` can switch the + off and give it a tooltip.
+const stepper = (value, target, min, max, up) => `<span class="stepper">
+  <button data-act="step" ${target} data-d="-1" data-min="${min}" data-max="${max}"${value <= min ? ' disabled' : ''} aria-label="${t('Decrease')}">−</button><b>${value}</b>
+  <button data-act="step" ${target} data-d="1" data-min="${min}" data-max="${max}"${value >= max || (up && up.off) ? ' disabled' : ''} aria-label="${t('Increase')}"${up && up.title ? ` title="${up.title}"` : ''}>+</button></span>`;
 const opt = (v, label, cur) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(label)}</option>`;
 const field = (label, path, value, ph, extra) =>
   `<label class="field"><span>${label}</span><input type="text" data-path="${path}" value="${esc(value)}" placeholder="${esc(ph || '')}" ${extra || ''}></label>`;

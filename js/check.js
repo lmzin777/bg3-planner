@@ -30,7 +30,8 @@ function levelPending(b, i) {
     const feat = m && FEATS.find(([name]) => norm(name) === norm(m[1]));
     if (feat && featParts(feat[0], feat[1], b).length) out.push(t('{feat}: options not chosen', { feat: feat[0] }));
   });
-  if (grantsExpertise(x) && !l.picks.some((p) => /^expertise\b/i.test(p.trim()))) out.push(t('Expertise not chosen'));
+  const expert = levelSlots(b, i).expertise;
+  if (expert && expert.values.length < 2) out.push(expert.j < 0 ? t('Expertise not chosen') : 'Expertise: ' + t('{n} of {max}', { n: expert.values.length, max: 2 }));
   levelChoices(x).forEach((c) => {
     const have = chosenOf(b, x.cls, c.group, i).length;
     if (have < c.n) out.push(c.group.name + ': ' + t('{n} of {max}', { n: have, max: c.n }));

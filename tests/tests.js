@@ -588,6 +588,108 @@
     ok(base.base.turn > 0 && gearDelta(archer, 'act3', 'ring1', null, base.base, base.p.style, 0).turn < 0, 'taking the Risky Ring off lowers the damage per turn');
   });
 
+  // ---------- choices as selects, − and + buttons, origin reset ----------
+  test('a level shows its choices as selects and writes them back as lines', () => {
+    const b = build(['Ranger', 'Ranger']);
+    b.levels[0].picks.push('Favoured Enemy: Ranger Knight (or Keeper of the Veil)', 'Hunting notes', 'Favoured Enemy: Bounty Hunter');
+    const s = levelSlots(b, 0);
+    eq(s.choices.map((x) => [x.c.group.name, x.entries.map((e) => e.value)]), [['Favoured Enemy', ['Ranger Knight']], ['Natural Explorer', []]]);
+    eq([[...s.owned], s.choices[0].entries[0].note], [[0], '(or Keeper of the Veil)'], 'a second line of the same choice stays as text, to be removed by hand');
+    const g = (name, lv) => levelSlots(b, lv).choices.find((x) => x.c.group.name === name).c.i;
+    writeSlot(b, 0, 'choice', ['Urban Tracker'], g('Natural Explorer', 0));
+    writeSlot(b, 0, 'choice', ['Ranger Knight'], g('Favoured Enemy', 0));
+    eq(b.levels[0].picks[0], 'Favoured Enemy: Ranger Knight (or Keeper of the Veil)', 'an untouched choice keeps its note');
+    writeSlot(b, 0, 'choice', ['Mage Breaker'], g('Favoured Enemy', 0));
+    eq(b.levels[0].picks, ['Favoured Enemy: Mage Breaker', 'Hunting notes', 'Favoured Enemy: Bounty Hunter', 'Natural Explorer: Urban Tracker']);
+    writeSlot(b, 1, 'choice', ['Archery'], g('Fighting Style', 1));
+    writeSlot(b, 1, 'choice', ['Defence'], g('Fighting Style', 1));
+    eq(b.levels[1].picks, ['Fighting Style: Defence'], 'choosing again replaces, it never adds');
+    const html = levelRows(b, 1);
+    ok(/data-slot="choice"/.test(html) && /<option value="Defence" selected>/.test(html) && !/choice-open|data-path="levels\.1\.picks\.0"/.test(html), 'a select in place of the text line and the add button');
+    writeSlot(b, 1, 'choice', [''], g('Fighting Style', 1));
+    eq([b.levels[1].picks, levelPending(b, 1).includes('Fighting Style: 0 of 1')], [[], true]);
+
+    const f = build(['Fighter', 'Fighter', 'Fighter', 'Fighter']);
+    f.levels[2].sub = 'Battle Master';
+    const m = levelSlots(f, 2).choices.find((x) => x.c.group.name === 'Manoeuvre');
+    eq(m.c.n, 3);
+    writeSlot(f, 2, 'choice', ['Riposte', '', 'Riposte'], m.c.i);
+    eq(f.levels[2].picks, ['Manoeuvre: Riposte'], 'the same option is not taken twice');
+    f.levels[2].picks = ['Riposte'];
+    eq(levelSlots(f, 2).choices.find((x) => x.c.group.name === 'Manoeuvre').entries.map((e) => e.value), ['Riposte'], 'an option written on its own is read too');
+    writeSlot(f, 3, 'feat', ['Tough']);
+    writeSlot(f, 3, 'feat', ['Alert']);
+    eq(f.levels[3].picks, ['Feat: Alert'], 'one feat per level that grants one');
+    writeSlot(f, 3, 'feat', ['Skilled']);
+    eq([f.levels[3].picks, levelSlots(f, 3).feat.name, levelPending(f, 3)], [['Feat: Skilled'], 'Skilled', ['Skilled: options not chosen']]);
+    f.levels[3].picks = ['Feat: Ability Improvement +2 DEX'];
+    eq([levelSlots(f, 3).feat.name, levelSlots(f, 3).feat.rest], ['Ability Improvement', '+2 DEX'], 'a feat line from a ready-made build');
+    writeSlot(f, 3, 'feat', ['']);
+    eq(f.levels[3].picks, []);
+
+    const r = build(['Rogue'], { background: 'Sage' });
+    writeSlot(r, 0, 'expertise', ['Arcana', 'History']);
+    eq([r.levels[0].picks, levelSlots(r, 0).expertise.values, levelPending(r, 0).some((x) => /Expertise/.test(x))], [['Expertise: Arcana + History'], ['Arcana', 'History'], false]);
+    ok(expertiseSkills(r).has('History'));
+    writeSlot(r, 0, 'expertise', ['Arcana', '']);
+    ok(levelPending(r, 0).includes('Expertise: 1 of 2'), String(levelPending(r, 0)));
+  });
+  test('a level holds no more new spells than it teaches', () => {
+    const info = (cls, n, sub) => ({ cls, n, sub: sub || '' });
+    const cap = (cls, n, cantrip, sub) => spellCap(info(cls, n, sub), spellsAtLevel(info(cls, n, sub)), cantrip);
+    eq([cap('Sorcerer', 1, true), cap('Sorcerer', 1, false), cap('Ranger', 2, false), cap('Ranger', 4, false)], [4, 2, 2, 0]);
+    eq([cap('Cleric', 1, true), cap('Cleric', 1, false), cap('Wizard', 1, false)], [3, null, null], 'classes that prepare, and the Wizard with scrolls, add freely');
+    eq([cap('Fighter', 3, true, 'Eldritch Knight'), cap('Fighter', 3, false, 'Eldritch Knight')], [2, 3]);
+  });
+  test('base scores move with − and + and stay inside the 27 points', () => {
+    const b = build(['Fighter'], { abilities: { str: 15, dex: 15, con: 14, int: 8, wis: 8, cha: 8 } });
+    const off = (ab, d) => new RegExp('data-d="' + d + '"[^>]*disabled').test(abilCard(b, ab, ab, ab));
+    eq([off('int', '-1'), off('int', '1'), off('str', '1'), off('con', '1')], [true, false, true, false], '25 points used');
+    b.creation.abilities.con = 15;
+    eq([pointsUsed(b), off('int', '1'), off('con', '-1')], [27, true, false], 'no points left for another +');
+    state.builds.push(b);
+    const was = state.ui.buildId;
+    state.ui.buildId = b.id;
+    const press = (path, d, min, max) => actions.step({ dataset: { path, d: String(d), min: String(min), max: String(max) } });
+    press('creation.abilities.con', -1, 8, 15);
+    press('creation.abilities.int', -1, 8, 15);
+    press('creation.extra.str', -1, -10, 20);
+    eq([b.creation.abilities.con, b.creation.abilities.int, b.creation.extra.str], [14, 8, -1]);
+    actions.step({ dataset: { ui: 'targetAc', v: '16', d: '1', min: '5', max: '30' } });
+    eq(state.ui.targetAc, 17);
+    delete state.ui.targetAc;
+    actions['abil-reset']();
+    eq([pointsUsed(b), b.creation.plus2], [0, '']);
+    b.levels[1].cls = 'Fighter';
+    b.levels[4].cls = 'Rogue';
+    actions['fill-down']({ dataset: { l: '1' } });
+    eq(b.levels.map((l) => l.cls).slice(0, 7), ['Fighter', 'Fighter', 'Fighter', 'Fighter', 'Rogue', '', ''], 'down to the next level that has a class');
+    state.builds = state.builds.filter((x) => x !== b);
+    state.ui.buildId = was;
+  });
+  test('leaving an origin character clears what it had fixed', () => {
+    const b = build(['Barbarian']);
+    const c = b.creation;
+    const set = (key, value) => { const before = c[key]; c[key] = value; creationChanged(b, 'creation.' + key, before); };
+    set('origin', 'Karlach');
+    eq([c.race, c.subrace, c.background], ['Tiefling', 'Zariel Tiefling', 'Outlander']);
+    set('origin', 'Custom (Tav)');
+    eq([c.race, c.subrace, c.background, b.levels[0].cls], ['', '', '', ''], "back to a blank character, Karlach's default class included");
+    b.levels[0].cls = 'Barbarian';
+    set('origin', 'Karlach');
+    set('race', 'Elf');
+    eq([c.origin, c.race, c.subrace, c.background], ['Custom (Tav)', 'Elf', '', 'Outlander'], 'Karlach as an elf is a custom character');
+    set('origin', 'The Dark Urge');
+    eq([c.race, c.background], ['Elf', 'Haunted One'], 'the Dark Urge only fixes the background');
+    set('background', 'Sage');
+    eq(c.origin, 'Custom (Tav)');
+    set('origin', 'Karlach');
+    Object.assign(c, { abilities: Object.assign({}, DATA.origins.Karlach.abilities), plus2: DATA.origins.Karlach.plus2, plus1: DATA.origins.Karlach.plus1 });
+    b.levels[0].picks.push('Rage');
+    set('origin', 'Gale');
+    eq([c.race, c.background, c.abilities.str, c.plus2, b.levels[0].cls], ['Human', 'Sage', 8, '', 'Barbarian'], 'a class with choices already made is kept');
+  });
+
   // ---------- build check ----------
   test('the build check lists what is missing and what does not fit', () => {
     const texts = (b) => buildIssues(b).map((x) => x.text).join(' | ');

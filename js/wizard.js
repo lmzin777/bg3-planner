@@ -93,8 +93,7 @@ function wizBody(b, key) {
       `<small>${esc(DATA.backgrounds[name].text || '')}</small><small>${t('Skills')}: ${esc(BACKGROUNDS[name].join(', '))}</small>`)).join('')}</div>`;
   }
   if (key === 'abilities') {
-    return `<div class="abils">${ABILS.map(([ab, short, name]) => abilCard(b, ab, short, name)).join('')}</div>
-      <p class="points" data-d="points">${pointsText(b)}</p>
+    return `${abilitiesBlock(b)}
       <p class="muted">${t('Base scores go from 8 to 15. The +2 and +1 buttons are the bonuses every race gives.')}</p>`;
   }
   if (key === 'skills') return skillsPicker(b);
@@ -178,6 +177,6 @@ Object.assign(actions, {
       // a new starting class: its level 1 choices and its subclass no longer apply
       if (b.levels[0].cls !== v) Object.assign(b.levels[0], { cls: v, sub: '', picks: [] });
     } else if (path === 'subclass') b.levels[0].sub = v;
-    else { setPath(b, path, v); creationChanged(b, path); }
+    else { const before = getPath(b, path); setPath(b, path, v); creationChanged(b, path, before); }
   },
 });

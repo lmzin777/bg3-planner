@@ -87,14 +87,18 @@ function levelNumbers(info) {
 function levelRows(b, only) {
   const info = levelInfo(b);
   const seen = {};
-  const pending = {};  // per class: the choices still short of what the class should have made
-  Object.keys(classLevels(b)).forEach((cls) => { pending[cls] = classChoices(b, cls).filter((g) => chosenOf(b, cls, g).length < g.need).map((g) => g.name); });
   const current = b.current && b.current < charLevel(b) ? b.current : 0;
   return b.levels.map((l, i) => {
     const x = info[i];
     const firstOfClass = l.cls && !seen[l.cls];
     if (l.cls) seen[l.cls] = true;
-    const picks = l.picks.map((p, j) =>
+    // the choices the level grants are selects; every other line is free text
+    const slots = levelSlots(b, i);
+    const cells = slotCells(b, i, slots);
+    const free = l.picks.filter((p, j) => !slots.owned.has(j));
+    const fill = l.cls && i < b.levels.length - 1 && !b.levels[i + 1].cls
+      ? `<button class="btn tiny fill" data-act="fill-down" data-l="${i}" title="${t('Use {cls} for the empty levels below', { cls: l.cls })}">↓ ${t('same class below')}</button>` : '';
+    const picks = l.picks.map((p, j) => slots.owned.has(j) ? '' :
       `<div class="pick"><input type="text" data-path="levels.${i}.picks.${j}" value="${esc(p)}" placeholder="${t('Feature, spell, feat…')}">
         <button class="icon" data-act="wiki" title="${t('Search the wiki')}">↗</button>
         <button class="icon x" data-act="pick-del" data-l="${i}" data-i="${j}" title="${t('Remove')}">×</button></div>`).join('');
@@ -106,24 +110,22 @@ function levelRows(b, only) {
         l.sub && !subs.includes(l.sub) ? opt(l.sub, l.sub, l.sub) : ''}</select>` : '';
     // each gain opens its description; the ones the wiki describes carry it as a tooltip too
     const gain = (g) => { const text = featureText(g); return `<button class="gain${text ? '' : ' plain'}" data-act="gain-info" data-n="${esc(g)}"${text ? ` title="${esc(text)}"` : ''}>${esc(g)}</button>`; };
-    const choices = levelChoices(x).map((c) => `<button class="btn tiny${(pending[x.cls] || []).includes(c.group.name) ? ' gold' : ''}" data-act="choice-open" data-l="${i}" data-g="${c.i}">+ ${esc(c.group.name.toLowerCase())}${c.n > 1 ? ' ×' + c.n : ''}</button>`).join('');
     return `<div class="lvl${l.sub.trim() ? ' has-sub' : ''}${current === i + 1 ? ' cur' : ''}${current && i + 1 > current ? ' later' : ''}">
       <div class="lvl-n">${i + 1}${current === i + 1 ? `<small>${t('now')}</small>` : ''}</div>
       <div class="lvl-cls">
         <select data-path="levels.${i}.cls" data-rerender aria-label="${t('Class for level {n}', { n: i + 1 })}">${opt('', t('— class —'), l.cls)}${CLASSES.map((c) => opt(c, c, l.cls)).join('')}</select>
         <small>${l.cls ? esc(l.cls) + ' ' + x.n : ''}</small>
         ${subSelect}
+        ${fill}
       </div>
       <div class="lvl-body">
         ${gains.length ? `<p class="lvl-gains"><b>${t('Gains')}</b> ${gains.map(gain).join('')}</p>` : ''}
         ${numbers.length ? `<p class="lvl-nums"><b>${t('Now')}</b> ${numbers.map(esc).join(' · ')}</p>` : ''}
-        <div class="picks${l.picks.some((p) => p.length > 34) ? ' one' : ''}">${picks}
+        ${cells ? `<div class="lslots">${cells}</div>` : ''}
+        <div class="picks${free.some((p) => p.length > 34) ? ' one' : ''}">${picks}
           <div class="pick-btns">
-            ${grantsFeat(x) ? `<button class="btn tiny gold" data-act="feat-open" data-l="${i}">${t('+ feat')}</button>` : ''}
-            ${grantsExpertise(x) ? `<button class="btn tiny gold" data-act="expertise-open" data-l="${i}">${t('+ expertise')}</button>` : ''}
-            ${choices}
             ${l.cls && SPELLS.length ? spellButton(l, x, i) : ''}
-            <button class="btn tiny" data-act="pick-add" data-l="${i}">${t('+ choice')}</button>
+            <button class="btn tiny" data-act="pick-add" data-l="${i}" title="${t('A line of free text: a reminder, a feature to keep in mind…')}">${t('+ note')}</button>
           </div>
         </div>
       </div>
@@ -140,6 +142,16 @@ function spellButton(l, x, i) {
   if (!learn || !SPELLS.some((s) => (s.cl || []).includes(learn.list))) return '';
   const hint = need ? [learn.cantrips ? t('{n} cantrip(s)', { n: learn.cantrips }) : '', learn.spells ? t('{n} spell(s)', { n: learn.spells }) : ''].filter(Boolean).join(' + ') : '';
   return `<button class="btn tiny${need && have < need ? ' gold' : ''}" data-act="spell-open" data-l="${i}"${hint ? ` title="${t('This level teaches {x}', { x: hint })}"` : ''}>${t('+ spell')}${need ? ` · ${have}/${need}` : ''}</button>`;
+}
+
+// How many new cantrips or spells a level may hold, or null when the class is free to add: classes that prepare
+// from their whole list, and the Wizard, who also learns spells from scrolls.
+function spellCap(info, learn, cantrip) {
+  if (!learn) return null;
+  if (SPELL_PICKS[info.sub]) return cantrip ? learn.cantrips : learn.spells;
+  const cols = (CLASS_DATA[info.cls] || {}).cols || [];
+  if (cantrip) return cols.some((c) => /cantrips known/i.test(c)) ? learn.cantrips : null;
+  return info.cls !== 'Wizard' && cols.some((c) => /spells known/i.test(c)) ? learn.spells : null;
 }
 
 // Shown under the first level of each class: what that class grants there.
@@ -165,7 +177,7 @@ function classNote(b, i, cls) {
   </dl></div>`;
 }
 
-// ---------- feat picker ----------
+// ---------- feats ----------
 // Abilities a feat lets you raise by 1; Ability Improvement is handled as +2 to one or +1 to two.
 function featAbilities(name, desc) {
   if (name === 'Ability Improvement') return ABILS.map((a) => a[1]);
@@ -174,33 +186,6 @@ function featAbilities(name, desc) {
   const named = ABILS.filter((a) => sentence.includes(a[2])).map((a) => a[1]);
   return named.length ? named : ABILS.map((a) => a[1]);
 }
-function featList() {
-  const q = norm(dlg.q);
-  return FEATS.filter(([n, d]) => !q || norm(n).includes(q) || norm(d).includes(q)).map(([n, d]) =>
-    `<button class="pick-row" data-act="feat-choose" data-n="${esc(n)}"><b>${esc(n)}</b><small class="fx">${esc(d)}</small></button>`).join('')
-    || `<p class="muted">${t('Nothing matches these filters.')}</p>`;
-}
-function addFeat(level, text, name) {
-  curBuild().levels[level].picks.push(text);
-  closeDialog();
-  toast(t('Added to level {n}: {x}', { n: level + 1, x: name }));
-}
-
-// ---------- Expertise picker ----------
-function expertiseStep() {
-  const b = curBuild();
-  const st = skillState(b);
-  const picked = pickedSkills(b);
-  const have = expertiseSkills(b);
-  const options = ALL_SKILLS.filter((x) => (st.granted[x] || st.chosen.includes(x) || picked.has(x)) && !have.has(x));
-  return `<h2>${t('Expertise')}</h2>
-    <p class="muted">${esc(featureText('Expertise'))}</p>
-    ${options.length >= 2 ? `<div class="lib-row">${options.map((x) => `<button class="chip${dlg.chosen.includes(x) ? ' on' : ''}" data-act="expertise-pick" data-s="${esc(x)}">${esc(x)}</button>`).join('')}</div>`
-      : `<p class="skill-lock">${t('Expertise needs two skills the build is proficient in. Choose the skills in Character creation first.')}</p>`}
-    <div class="modal-btns"><button class="btn" data-act="dialog-close">${t('Cancel')}</button>
-      <button class="btn primary" data-act="expertise-confirm"${dlg.chosen.length === 2 ? '' : ' disabled'}>${t('Add Expertise')}</button></div>`;
-}
-
 // ---------- spell picker ----------
 function spellPickerList() {
   const q = norm(dlg.q);
@@ -248,44 +233,6 @@ Object.assign(actions, {
         <button class="btn primary" data-act="dialog-close">${t('Close')}</button></div>`);
     return false;
   },
-  'feat-open'(el) {
-    const level = +el.dataset.l;
-    dlg = { kind: 'feat', level, q: '', refresh: () => { $('#dlg-list').innerHTML = featList(); } };
-    openDialog(`<h2>${t('Feats')}</h2><p class="muted">${t('Choose the feat for level {n}.', { n: level + 1 })}</p>
-      <div class="picker-tools"><input type="text" data-dlg="q" placeholder="${t('Search by name or effect…')}" autocomplete="off"></div>
-      <div class="picker-list" id="dlg-list">${featList()}</div>
-      <div class="modal-btns"><span></span><button class="btn" data-act="dialog-close">${t('Close')}</button></div>`, 'picker-box');
-    return false;
-  },
-  'feat-choose'(el) {
-    const feat = FEATS.find(([n]) => n === el.dataset.n);
-    const level = dlg.level;
-    const parts = featParts(feat[0], feat[1], curBuild());
-    if (!parts.length) { addFeat(level, featText(feat[0], feat[1], []), feat[0]); return; }
-    openChooser(feat[0], esc(feat[1]), parts, (done) => {
-      curBuild().levels[level].picks.push(featText(feat[0], feat[1], done));
-      toast(t('Added to level {n}: {x}', { n: level + 1, x: feat[0] }));
-    });
-    return false;
-  },
-  'expertise-open'(el) {
-    dlg = { kind: 'expertise', level: +el.dataset.l, chosen: [] };
-    openDialog(expertiseStep());
-    return false;
-  },
-  'expertise-pick'(el) {
-    const i = dlg.chosen.indexOf(el.dataset.s);
-    if (i >= 0) dlg.chosen.splice(i, 1);
-    else { if (dlg.chosen.length >= 2) dlg.chosen.shift(); dlg.chosen.push(el.dataset.s); }
-    $('#dialog-box').innerHTML = expertiseStep();
-    return false;
-  },
-  'expertise-confirm'() {
-    const level = dlg.level;
-    curBuild().levels[level].picks.push('Expertise: ' + dlg.chosen.join(' + '));
-    closeDialog();
-    toast(t('Added to level {n}: {x}', { n: level + 1, x: 'Expertise' }));
-  },
   'spell-open'(el) {
     const level = +el.dataset.l;
     const b = curBuild();
@@ -312,6 +259,16 @@ Object.assign(actions, {
   'spell-choose'(el) {
     const s = SPELLS.find((x) => x.n === el.dataset.n);
     const swap = s.lv && dlg.replace ? ' (replaces ' + dlg.replace + ')' : '';
+    // a level cannot hold more new cantrips or spells than it teaches
+    const b = curBuild();
+    const learn = spellsAtLevel(levelInfo(b)[dlg.level]);
+    const cap = swap ? null : spellCap(levelInfo(b)[dlg.level], learn, !s.lv);
+    if (cap != null && spellPicks(b).filter((p) => p.level === dlg.level && !p.replaces && p.cantrip === !s.lv).length >= cap) {
+      toast(!s.lv ? (cap ? t('This level already has its {max} cantrip(s). Remove one to change it.', { max: cap }) : t('This level learns no new cantrips.'))
+        : cap ? t('This level already has its {max} spell(s). Remove one to change it.', { max: cap })
+          : learn.replace ? t('This level learns no new spells. To change one, choose above the known spell it replaces.') : t('This level learns no new spells.'));
+      return false;
+    }
     curBuild().levels[dlg.level].picks.push((s.lv ? 'Spell: ' : 'Cantrip: ') + s.n + swap);
     toast(swap ? t('Level {n}: {x} replaces {y}', { n: dlg.level + 1, x: s.n, y: dlg.replace }) : t('Added to level {n}: {x}', { n: dlg.level + 1, x: s.n }));
     if (swap) dlg.replace = '';

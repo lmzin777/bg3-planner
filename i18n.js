@@ -718,6 +718,27 @@ window.BG3_I18N = {
     'Permanent': 'Permanentes',
     'Notes': 'Anotações',
 
+    // choices as selects, − and + buttons, origin reset
+    'Decrease': 'Diminuir',
+    'Increase': 'Aumentar',
+    'Not enough points left': 'Pontos insuficientes',
+    'Costs {n} point(s)': 'Custa {n} ponto(s)',
+    'Reset scores': 'Zerar atributos',
+    'options': 'opções',
+    'Feat': 'Feat',
+    '+ note': '+ anotação',
+    'A line of free text: a reminder, a feature to keep in mind…': 'Uma linha de texto livre: um lembrete, uma feature para ter em mente…',
+    'Use {cls} for the empty levels below': 'Usar {cls} nos níveis vazios abaixo',
+    'same class below': 'mesma classe abaixo',
+    'Only skills the build is proficient in. Choose them in Character creation first.': 'Só perícias em que a build é proficiente. Escolha-as antes na Criação de personagem.',
+    'This level already has its {max} cantrip(s). Remove one to change it.': 'Este nível já tem o(s) {max} cantrip(s) que ensina. Remova um para trocar.',
+    'This level already has its {max} spell(s). Remove one to change it.': 'Este nível já tem a(s) {max} spell(s) que ensina. Remova uma para trocar.',
+    'This level learns no new cantrips.': 'Este nível não ensina cantrips novos.',
+    'This level learns no new spells.': 'Este nível não ensina spells novas.',
+    'This level learns no new spells. To change one, choose above the known spell it replaces.': 'Este nível não ensina spells novas. Para trocar uma, escolha acima a spell conhecida que ela substitui.',
+    '{name}\'s choices cleared': 'Escolhas de {name} apagadas',
+    'No longer {name}: the origin is now Custom': 'Deixou de ser {name}: a origem agora é Custom',
+
     // dialogs and toasts
     'Cancel': 'Cancelar',
     'Confirm': 'Confirmar',

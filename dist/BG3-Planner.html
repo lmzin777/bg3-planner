@@ -792,6 +792,33 @@ button.chip:hover { border-color: var(--gold); color: var(--text); }
 .turn { margin: 2px 0 12px; padding: 9px 12px; border-left: 2px solid var(--gold); background: var(--field); border-radius: 6px; font-size: 13px; }
 .turn b { color: var(--gold-hi); font: 600 17px var(--serif); margin-right: 6px; }
 .stat-tools input[type="number"] { width: 70px; }
+
+/* ---------- − value + buttons ---------- */
+.stepper { display: inline-flex; align-items: stretch; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--field); vertical-align: middle; }
+.stepper button { cursor: pointer; width: 28px; min-height: 30px; padding: 0; background: none; border: 0; color: var(--gold-hi); font: 600 18px/1 var(--sans); }
+.stepper button:hover:not(:disabled) { background: var(--panel); }
+.stepper button:disabled { opacity: .28; cursor: default; }
+.stepper b { min-width: 30px; display: grid; place-items: center; font: 600 14px var(--sans); font-variant-numeric: tabular-nums; color: var(--text); }
+.abil-base .stepper { width: 104px; max-width: 100%; }
+.abil-base .stepper b { flex: 1; min-width: 0; }
+.abil-base .stepper button { width: 28px; flex: none; }
+.points-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 12px; }
+.points-row .points { margin: 0; flex: 1; min-width: 200px; }
+.extra-row > span { font: 700 11px var(--sans); letter-spacing: .1em; color: var(--gold); display: flex; align-items: center; gap: 6px; }
+.ac-field { display: grid; gap: 4px; }
+.ac-field .stepper { justify-self: start; }
+
+/* ---------- the choices of a level, as selects ---------- */
+.lslots { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); gap: 8px 10px; }
+.lslot { display: grid; gap: 3px; align-content: start; min-width: 0; }
+.lslot-l { font: 700 10.5px var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.lslot select { width: 100%; min-width: 0; }
+.lslot.open .lslot-l { color: var(--gold); }
+.lslot.open select { border-color: var(--gold); }
+.lslot small { color: var(--muted); font-size: 11.5px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.lslot-row { display: flex; gap: 4px; min-width: 0; }
+.lslot-row select { flex: 1; }
+.lvl-cls .fill { grid-column: 1 / -1; justify-self: start; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -1600,6 +1627,27 @@ window.BG3_I18N = {
     'Numbers': 'Números',
     'Permanent': 'Permanentes',
     'Notes': 'Anotações',
+
+    // choices as selects, − and + buttons, origin reset
+    'Decrease': 'Diminuir',
+    'Increase': 'Aumentar',
+    'Not enough points left': 'Pontos insuficientes',
+    'Costs {n} point(s)': 'Custa {n} ponto(s)',
+    'Reset scores': 'Zerar atributos',
+    'options': 'opções',
+    'Feat': 'Feat',
+    '+ note': '+ anotação',
+    'A line of free text: a reminder, a feature to keep in mind…': 'Uma linha de texto livre: um lembrete, uma feature para ter em mente…',
+    'Use {cls} for the empty levels below': 'Usar {cls} nos níveis vazios abaixo',
+    'same class below': 'mesma classe abaixo',
+    'Only skills the build is proficient in. Choose them in Character creation first.': 'Só perícias em que a build é proficiente. Escolha-as antes na Criação de personagem.',
+    'This level already has its {max} cantrip(s). Remove one to change it.': 'Este nível já tem o(s) {max} cantrip(s) que ensina. Remova um para trocar.',
+    'This level already has its {max} spell(s). Remove one to change it.': 'Este nível já tem a(s) {max} spell(s) que ensina. Remova uma para trocar.',
+    'This level learns no new cantrips.': 'Este nível não ensina cantrips novos.',
+    'This level learns no new spells.': 'Este nível não ensina spells novas.',
+    'This level learns no new spells. To change one, choose above the known spell it replaces.': 'Este nível não ensina spells novas. Para trocar uma, escolha acima a spell conhecida que ela substitui.',
+    '{name}\'s choices cleared': 'Escolhas de {name} apagadas',
+    'No longer {name}: the origin is now Custom': 'Deixou de ser {name}: a origem agora é Custom',
 
     // dialogs and toasts
     'Cancel': 'Cancelar',
@@ -8965,7 +9013,7 @@ window.BG3_IMAGES_LOCAL = false;
 // The scripts are plain (not modules) so the planner also runs from a file opened directly; they share the global scope.
 'use strict';
 
-const APP_VERSION = '1.4';
+const APP_VERSION = '1.5';
 const STORE_KEY = 'bg3planner.v1';
 const PRESETS = window.BG3_PRESETS || [];
 const I18N = window.BG3_I18N || {};
@@ -9241,6 +9289,11 @@ function actProgress(b, act) {
 }
 
 // ---------- small render pieces ----------
+// A number changed by a − and a + button. `target` is the attribute saying what it changes (data-path or data-ui);
+// `up` can switch the + off and give it a tooltip.
+const stepper = (value, target, min, max, up) => `<span class="stepper">
+  <button data-act="step" ${target} data-d="-1" data-min="${min}" data-max="${max}"${value <= min ? ' disabled' : ''} aria-label="${t('Decrease')}">−</button><b>${value}</b>
+  <button data-act="step" ${target} data-d="1" data-min="${min}" data-max="${max}"${value >= max || (up && up.off) ? ' disabled' : ''} aria-label="${t('Increase')}"${up && up.title ? ` title="${up.title}"` : ''}>+</button></span>`;
 const opt = (v, label, cur) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(label)}</option>`;
 const field = (label, path, value, ph, extra) =>
   `<label class="field"><span>${label}</span><input type="text" data-path="${path}" value="${esc(value)}" placeholder="${esc(ph || '')}" ${extra || ''}></label>`;
@@ -9349,8 +9402,7 @@ function buildEditor(b) {
       ${raceCantrips(b).length ? `<div class="grid g4">${selectField(t('Racial cantrip'), 'creation.cantrip', c.cantrip, raceCantrips(b), choose, 'data-rerender')}</div>` : ''}
       ${creationInfo(b)}
       <h3 class="group">${t('Ability scores')}</h3>
-      <div class="abils">${ABILS.map(([ab, short, name]) => abilCard(b, ab, short, name)).join('')}</div>
-      <p class="points" data-d="points">${pointsText(b)}</p>
+      ${abilitiesBlock(b)}
       <h3 class="group">${t('Skills')}</h3>
       ${skillsPicker(b)}
       <h3 class="group">${t('Equipment proficiencies')}</h3>
@@ -9394,12 +9446,21 @@ function buildEditor(b) {
     </section>`)}`;
 }
 
+// The six ability cards with the points spent and a way back to the start.
+const abilitiesBlock = (b) => `<div class="abils">${ABILS.map(([ab, short, name]) => abilCard(b, ab, short, name)).join('')}</div>
+  <div class="points-row"><p class="points" data-d="points">${pointsText(b)}</p>
+    <button class="btn tiny" data-act="abil-reset">${t('Reset scores')}</button></div>`;
 function abilCard(b, ab, short, name) {
   const f = finalOf(b, ab);
+  const base = Number(b.creation.abilities[ab]) || 8;
+  const used = pointsUsed(b);
+  const cost = (POINT_COST[base + 1] || 0) - (POINT_COST[base] || 0);
+  const short27 = used != null && base < 15 && used + cost > 27;  // the next point does not fit in the 27
   return `<div class="abil">
     <div class="abil-name">${short}<small>${t(name)}</small></div>
     <div class="abil-final"><b data-d="final-${ab}">${f}</b><i data-d="mod-${ab}">${modText(f)}</i></div>
-    <label class="abil-base">${t('base')} <input type="number" min="8" max="15" data-path="creation.abilities.${ab}" value="${esc(b.creation.abilities[ab])}"></label>
+    <div class="abil-base">${t('base')} ${stepper(base, `data-path="creation.abilities.${ab}"`, 8, 15,
+      { off: short27, title: base >= 15 ? '' : short27 ? t('Not enough points left') : t('Costs {n} point(s)', { n: cost }) })}</div>
     <div class="bonus">
       <button class="${b.creation.plus2 === ab ? 'on' : ''}" data-act="bonus" data-ab="${ab}" data-n="2">+2</button>
       <button class="${b.creation.plus1 === ab ? 'on' : ''}" data-act="bonus" data-ab="${ab}" data-n="1">+1</button>
@@ -9761,15 +9822,36 @@ function refreshDerived() {
   SKILLS.forEach(([ab]) => set('skab-' + ab, signed(abilityMod(b, ab.toLowerCase()))));
 }
 
-// Keep dependent creation fields consistent after one of them changes.
-function creationChanged(b, path) {
+// Keep dependent creation fields consistent after one of them changes. `before` is what the field held.
+function creationChanged(b, path, before) {
   const c = b.creation;
+  const lockOf = (name) => (ORIGINS.find((o) => o[0] === name) || [])[1];
   if (path === 'creation.origin') {
-    const locked = (ORIGINS.find((o) => o[0] === c.origin) || [])[1];
+    // what the previous origin had fixed leaves with it: race, subrace, background, and its default
+    // class and ability scores when they were not touched since
+    const old = before && before !== c.origin ? lockOf(before) : null;
+    if (old) {
+      Object.keys(old).forEach((k) => { if (c[k] === old[k]) c[k] = ''; });
+      if (!c.race) c.cantrip = '';
+      const d = DATA.origins[before] || {};
+      if (d.abilities && ABILS.every(([ab]) => Number(c.abilities[ab]) === d.abilities[ab]) && c.plus2 === d.plus2 && c.plus1 === d.plus1) {
+        Object.assign(c, { abilities: blankBuild().creation.abilities, plus2: '', plus1: '' });
+      }
+      const first = b.levels[0];
+      if (d.cls && first.cls === d.cls && !first.picks.length && b.levels.slice(1).every((l) => !l.cls)) Object.assign(first, { cls: '', sub: '' });
+    }
+    const locked = lockOf(c.origin);
     if (locked) {
       Object.assign(c, locked);
       toast(locked.race ? t("{name}'s race and background filled in", { name: c.origin }) : t('Background set to {bg}', { bg: locked.background }));
-    }
+    } else if (old) toast(t("{name}'s choices cleared", { name: before }));
+  }
+  // an origin character with another race, subrace or background is no longer that character
+  const field = /^creation\.(race|subrace|background)$/.exec(path);
+  const fixed = field && lockOf(c.origin);
+  if (fixed && fixed[field[1]] != null && c[field[1]] !== fixed[field[1]]) {
+    toast(t('No longer {name}: the origin is now Custom', { name: c.origin }));
+    c.origin = ORIGINS[0][0];
   }
   if (path === 'creation.race' && !(RACES[c.race] || []).includes(c.subrace)) c.subrace = '';
 }
@@ -10878,14 +10960,18 @@ function levelNumbers(info) {
 function levelRows(b, only) {
   const info = levelInfo(b);
   const seen = {};
-  const pending = {};  // per class: the choices still short of what the class should have made
-  Object.keys(classLevels(b)).forEach((cls) => { pending[cls] = classChoices(b, cls).filter((g) => chosenOf(b, cls, g).length < g.need).map((g) => g.name); });
   const current = b.current && b.current < charLevel(b) ? b.current : 0;
   return b.levels.map((l, i) => {
     const x = info[i];
     const firstOfClass = l.cls && !seen[l.cls];
     if (l.cls) seen[l.cls] = true;
-    const picks = l.picks.map((p, j) =>
+    // the choices the level grants are selects; every other line is free text
+    const slots = levelSlots(b, i);
+    const cells = slotCells(b, i, slots);
+    const free = l.picks.filter((p, j) => !slots.owned.has(j));
+    const fill = l.cls && i < b.levels.length - 1 && !b.levels[i + 1].cls
+      ? `<button class="btn tiny fill" data-act="fill-down" data-l="${i}" title="${t('Use {cls} for the empty levels below', { cls: l.cls })}">↓ ${t('same class below')}</button>` : '';
+    const picks = l.picks.map((p, j) => slots.owned.has(j) ? '' :
       `<div class="pick"><input type="text" data-path="levels.${i}.picks.${j}" value="${esc(p)}" placeholder="${t('Feature, spell, feat…')}">
         <button class="icon" data-act="wiki" title="${t('Search the wiki')}">↗</button>
         <button class="icon x" data-act="pick-del" data-l="${i}" data-i="${j}" title="${t('Remove')}">×</button></div>`).join('');
@@ -10897,24 +10983,22 @@ function levelRows(b, only) {
         l.sub && !subs.includes(l.sub) ? opt(l.sub, l.sub, l.sub) : ''}</select>` : '';
     // each gain opens its description; the ones the wiki describes carry it as a tooltip too
     const gain = (g) => { const text = featureText(g); return `<button class="gain${text ? '' : ' plain'}" data-act="gain-info" data-n="${esc(g)}"${text ? ` title="${esc(text)}"` : ''}>${esc(g)}</button>`; };
-    const choices = levelChoices(x).map((c) => `<button class="btn tiny${(pending[x.cls] || []).includes(c.group.name) ? ' gold' : ''}" data-act="choice-open" data-l="${i}" data-g="${c.i}">+ ${esc(c.group.name.toLowerCase())}${c.n > 1 ? ' ×' + c.n : ''}</button>`).join('');
     return `<div class="lvl${l.sub.trim() ? ' has-sub' : ''}${current === i + 1 ? ' cur' : ''}${current && i + 1 > current ? ' later' : ''}">
       <div class="lvl-n">${i + 1}${current === i + 1 ? `<small>${t('now')}</small>` : ''}</div>
       <div class="lvl-cls">
         <select data-path="levels.${i}.cls" data-rerender aria-label="${t('Class for level {n}', { n: i + 1 })}">${opt('', t('— class —'), l.cls)}${CLASSES.map((c) => opt(c, c, l.cls)).join('')}</select>
         <small>${l.cls ? esc(l.cls) + ' ' + x.n : ''}</small>
         ${subSelect}
+        ${fill}
       </div>
       <div class="lvl-body">
         ${gains.length ? `<p class="lvl-gains"><b>${t('Gains')}</b> ${gains.map(gain).join('')}</p>` : ''}
         ${numbers.length ? `<p class="lvl-nums"><b>${t('Now')}</b> ${numbers.map(esc).join(' · ')}</p>` : ''}
-        <div class="picks${l.picks.some((p) => p.length > 34) ? ' one' : ''}">${picks}
+        ${cells ? `<div class="lslots">${cells}</div>` : ''}
+        <div class="picks${free.some((p) => p.length > 34) ? ' one' : ''}">${picks}
           <div class="pick-btns">
-            ${grantsFeat(x) ? `<button class="btn tiny gold" data-act="feat-open" data-l="${i}">${t('+ feat')}</button>` : ''}
-            ${grantsExpertise(x) ? `<button class="btn tiny gold" data-act="expertise-open" data-l="${i}">${t('+ expertise')}</button>` : ''}
-            ${choices}
             ${l.cls && SPELLS.length ? spellButton(l, x, i) : ''}
-            <button class="btn tiny" data-act="pick-add" data-l="${i}">${t('+ choice')}</button>
+            <button class="btn tiny" data-act="pick-add" data-l="${i}" title="${t('A line of free text: a reminder, a feature to keep in mind…')}">${t('+ note')}</button>
           </div>
         </div>
       </div>
@@ -10931,6 +11015,16 @@ function spellButton(l, x, i) {
   if (!learn || !SPELLS.some((s) => (s.cl || []).includes(learn.list))) return '';
   const hint = need ? [learn.cantrips ? t('{n} cantrip(s)', { n: learn.cantrips }) : '', learn.spells ? t('{n} spell(s)', { n: learn.spells }) : ''].filter(Boolean).join(' + ') : '';
   return `<button class="btn tiny${need && have < need ? ' gold' : ''}" data-act="spell-open" data-l="${i}"${hint ? ` title="${t('This level teaches {x}', { x: hint })}"` : ''}>${t('+ spell')}${need ? ` · ${have}/${need}` : ''}</button>`;
+}
+
+// How many new cantrips or spells a level may hold, or null when the class is free to add: classes that prepare
+// from their whole list, and the Wizard, who also learns spells from scrolls.
+function spellCap(info, learn, cantrip) {
+  if (!learn) return null;
+  if (SPELL_PICKS[info.sub]) return cantrip ? learn.cantrips : learn.spells;
+  const cols = (CLASS_DATA[info.cls] || {}).cols || [];
+  if (cantrip) return cols.some((c) => /cantrips known/i.test(c)) ? learn.cantrips : null;
+  return info.cls !== 'Wizard' && cols.some((c) => /spells known/i.test(c)) ? learn.spells : null;
 }
 
 // Shown under the first level of each class: what that class grants there.
@@ -10956,7 +11050,7 @@ function classNote(b, i, cls) {
   </dl></div>`;
 }
 
-// ---------- feat picker ----------
+// ---------- feats ----------
 // Abilities a feat lets you raise by 1; Ability Improvement is handled as +2 to one or +1 to two.
 function featAbilities(name, desc) {
   if (name === 'Ability Improvement') return ABILS.map((a) => a[1]);
@@ -10965,33 +11059,6 @@ function featAbilities(name, desc) {
   const named = ABILS.filter((a) => sentence.includes(a[2])).map((a) => a[1]);
   return named.length ? named : ABILS.map((a) => a[1]);
 }
-function featList() {
-  const q = norm(dlg.q);
-  return FEATS.filter(([n, d]) => !q || norm(n).includes(q) || norm(d).includes(q)).map(([n, d]) =>
-    `<button class="pick-row" data-act="feat-choose" data-n="${esc(n)}"><b>${esc(n)}</b><small class="fx">${esc(d)}</small></button>`).join('')
-    || `<p class="muted">${t('Nothing matches these filters.')}</p>`;
-}
-function addFeat(level, text, name) {
-  curBuild().levels[level].picks.push(text);
-  closeDialog();
-  toast(t('Added to level {n}: {x}', { n: level + 1, x: name }));
-}
-
-// ---------- Expertise picker ----------
-function expertiseStep() {
-  const b = curBuild();
-  const st = skillState(b);
-  const picked = pickedSkills(b);
-  const have = expertiseSkills(b);
-  const options = ALL_SKILLS.filter((x) => (st.granted[x] || st.chosen.includes(x) || picked.has(x)) && !have.has(x));
-  return `<h2>${t('Expertise')}</h2>
-    <p class="muted">${esc(featureText('Expertise'))}</p>
-    ${options.length >= 2 ? `<div class="lib-row">${options.map((x) => `<button class="chip${dlg.chosen.includes(x) ? ' on' : ''}" data-act="expertise-pick" data-s="${esc(x)}">${esc(x)}</button>`).join('')}</div>`
-      : `<p class="skill-lock">${t('Expertise needs two skills the build is proficient in. Choose the skills in Character creation first.')}</p>`}
-    <div class="modal-btns"><button class="btn" data-act="dialog-close">${t('Cancel')}</button>
-      <button class="btn primary" data-act="expertise-confirm"${dlg.chosen.length === 2 ? '' : ' disabled'}>${t('Add Expertise')}</button></div>`;
-}
-
 // ---------- spell picker ----------
 function spellPickerList() {
   const q = norm(dlg.q);
@@ -11039,44 +11106,6 @@ Object.assign(actions, {
         <button class="btn primary" data-act="dialog-close">${t('Close')}</button></div>`);
     return false;
   },
-  'feat-open'(el) {
-    const level = +el.dataset.l;
-    dlg = { kind: 'feat', level, q: '', refresh: () => { $('#dlg-list').innerHTML = featList(); } };
-    openDialog(`<h2>${t('Feats')}</h2><p class="muted">${t('Choose the feat for level {n}.', { n: level + 1 })}</p>
-      <div class="picker-tools"><input type="text" data-dlg="q" placeholder="${t('Search by name or effect…')}" autocomplete="off"></div>
-      <div class="picker-list" id="dlg-list">${featList()}</div>
-      <div class="modal-btns"><span></span><button class="btn" data-act="dialog-close">${t('Close')}</button></div>`, 'picker-box');
-    return false;
-  },
-  'feat-choose'(el) {
-    const feat = FEATS.find(([n]) => n === el.dataset.n);
-    const level = dlg.level;
-    const parts = featParts(feat[0], feat[1], curBuild());
-    if (!parts.length) { addFeat(level, featText(feat[0], feat[1], []), feat[0]); return; }
-    openChooser(feat[0], esc(feat[1]), parts, (done) => {
-      curBuild().levels[level].picks.push(featText(feat[0], feat[1], done));
-      toast(t('Added to level {n}: {x}', { n: level + 1, x: feat[0] }));
-    });
-    return false;
-  },
-  'expertise-open'(el) {
-    dlg = { kind: 'expertise', level: +el.dataset.l, chosen: [] };
-    openDialog(expertiseStep());
-    return false;
-  },
-  'expertise-pick'(el) {
-    const i = dlg.chosen.indexOf(el.dataset.s);
-    if (i >= 0) dlg.chosen.splice(i, 1);
-    else { if (dlg.chosen.length >= 2) dlg.chosen.shift(); dlg.chosen.push(el.dataset.s); }
-    $('#dialog-box').innerHTML = expertiseStep();
-    return false;
-  },
-  'expertise-confirm'() {
-    const level = dlg.level;
-    curBuild().levels[level].picks.push('Expertise: ' + dlg.chosen.join(' + '));
-    closeDialog();
-    toast(t('Added to level {n}: {x}', { n: level + 1, x: 'Expertise' }));
-  },
   'spell-open'(el) {
     const level = +el.dataset.l;
     const b = curBuild();
@@ -11103,6 +11132,16 @@ Object.assign(actions, {
   'spell-choose'(el) {
     const s = SPELLS.find((x) => x.n === el.dataset.n);
     const swap = s.lv && dlg.replace ? ' (replaces ' + dlg.replace + ')' : '';
+    // a level cannot hold more new cantrips or spells than it teaches
+    const b = curBuild();
+    const learn = spellsAtLevel(levelInfo(b)[dlg.level]);
+    const cap = swap ? null : spellCap(levelInfo(b)[dlg.level], learn, !s.lv);
+    if (cap != null && spellPicks(b).filter((p) => p.level === dlg.level && !p.replaces && p.cantrip === !s.lv).length >= cap) {
+      toast(!s.lv ? (cap ? t('This level already has its {max} cantrip(s). Remove one to change it.', { max: cap }) : t('This level learns no new cantrips.'))
+        : cap ? t('This level already has its {max} spell(s). Remove one to change it.', { max: cap })
+          : learn.replace ? t('This level learns no new spells. To change one, choose above the known spell it replaces.') : t('This level learns no new spells.'));
+      return false;
+    }
     curBuild().levels[dlg.level].picks.push((s.lv ? 'Spell: ' : 'Cantrip: ') + s.n + swap);
     toast(swap ? t('Level {n}: {x} replaces {y}', { n: dlg.level + 1, x: s.n, y: dlg.replace }) : t('Added to level {n}: {x}', { n: dlg.level + 1, x: s.n }));
     if (swap) dlg.replace = '';
@@ -11771,7 +11810,7 @@ function statsCard(b) {
       <div><span class="lbl">${t('At level')}</span><div class="acts lvls">${Array.from({ length: charLevel(b) }, (x, i) => i + 1).map((n) =>
         `<button class="${(b.current && b.current < charLevel(b) ? b.current : charLevel(b)) === n ? 'on' : ''}" data-act="stat-level" data-n="${n}">${n}</button>`).join('')}</div></div>
       <div><span class="lbl">${t('With the gear of')}</span>${actTabs(state.ui.act, 'act')}</div>
-      <label class="field ac-field"><span>${t('Enemy Armour Class')}</span><input type="number" min="5" max="30" data-ui="targetAc" value="${Number(state.ui.targetAc) || 16}"></label>
+      <div class="field ac-field"><span>${t('Enemy Armour Class')}</span>${stepper(Number(state.ui.targetAc) || 16, 'data-ui="targetAc" data-v="16"', 5, 30)}</div>
       ${elixirs.length ? `<label class="field"><span>${t('Elixir kept active')}</span><select data-path="elixir" data-rerender>${opt('', t('— none —'), b.elixir)}${
         elixirs.map((c) => opt(c.n, c.n + (elixirAbility(c.n) ? ' ★' : ''), b.elixir)).join('')}${b.elixir && !elixirs.some((c) => c.n === b.elixir) ? opt(b.elixir, b.elixir, b.elixir) : ''}</select></label>` : ''}
     </div>
@@ -11780,7 +11819,7 @@ function statsCard(b) {
     <div id="stats-live">${statsLive(b)}</div>
     <h3 class="group">${t('Other ability bonuses')}</h3>
     <p class="muted">${t('Only for what the planner does not read by itself. Gear in the slots and the elixir above are already counted.')}</p>
-    <div class="extra-row">${ABILS.map(([ab, short]) => `<label>${short} <input type="number" min="-10" max="20" data-path="creation.extra.${ab}" value="${esc(extra[ab] || 0)}"></label>`).join('')}</div>
+    <div class="extra-row">${ABILS.map(([ab, short]) => `<span>${short} ${stepper(Number(extra[ab]) || 0, `data-path="creation.extra.${ab}"`, -10, 20)}</span>`).join('')}</div>
   </section>`;
 }
 
@@ -12158,6 +12197,162 @@ function chosenOptions(b) {
   return out;
 }
 
+// ---------- the choices of a level, as selects ----------
+// A level shows one select for each thing it lets the build choose: its guided choices, its feat, its Expertise.
+// The lines of the level those selects stand for ("Fighting Style: Archery") are not shown as text; a line beyond
+// what the level grants stays as text, to be removed by hand.
+// { choices: [{ c, lines: [index], entries: [{ value, note, raw }] }], feat: { j, name, rest } | null,
+//   expertise: { j, values } | null, owned: Set of line indexes }
+function levelSlots(b, i) {
+  const l = b.levels[i];
+  const x = levelInfo(b)[i];
+  const out = { choices: [], feat: null, expertise: null, owned: new Set() };
+  if (!l.cls) return out;
+  levelChoices(x).forEach((c) => {
+    const g = c.group;
+    const prefix = prefixRe(g.name);
+    const slot = { c, lines: [], entries: [] };
+    l.picks.forEach((p, j) => {
+      const text = p.trim();
+      if (out.owned.has(j) || slot.entries.length >= c.n) return;
+      const bare = !g.join && g.options.find((o) => norm(o[0]) === norm(text.replace(/\(.*$/, '')));
+      if (!prefix.test(text) && !bare) return;
+      out.owned.add(j);
+      slot.lines.push(j);
+      if (bare && !prefix.test(text)) { slot.entries.push({ value: bare[0], note: '', raw: p }); return; }
+      const rest = text.replace(prefix, '').trim();
+      const named = g.options.map((o) => [o[0], rest.search(namesRe(o[0]))]).filter((y) => y[1] >= 0).sort((p1, p2) => p1[1] - p2[1]).map((y) => y[0]);
+      if (g.join && named.length) named.forEach((value) => slot.entries.push({ value, note: '' }));
+      else slot.entries.push({ value: named[0] || '', note: named[0] ? rest.replace(new RegExp(escRe(named[0]), 'i'), '').replace(/^[\s:,;-]+/, '').trim() : rest, raw: p });
+    });
+    out.choices.push(slot);
+  });
+  if (grantsFeat(x)) {
+    const j = l.picks.findIndex((p, k) => !out.owned.has(k) && /^feats?\s*:/i.test(p.trim()));
+    out.feat = { j, name: '', rest: '' };
+    if (j >= 0) {
+      out.owned.add(j);
+      const text = l.picks[j].trim().replace(/^feats?\s*:\s*/i, '');
+      const name = FEATS.map((f) => f[0]).filter((n) => new RegExp('^' + escRe(n) + '(?![a-z])', 'i').test(text)).sort((p, q) => q.length - p.length)[0];
+      Object.assign(out.feat, { name: name || '', rest: name ? text.slice(name.length).trim() : text });
+    }
+  }
+  if (grantsExpertise(x)) {
+    const j = l.picks.findIndex((p, k) => !out.owned.has(k) && /^expertise\b/i.test(p.trim()));
+    out.expertise = { j, values: [] };
+    if (j >= 0) {
+      out.owned.add(j);
+      l.picks[j].trim().replace(/^expertise\s*:?\s*/i, '').split(/\s*(?:\+|,|&|\band\b)\s*/i).forEach((s) => {
+        const skill = ALL_SKILLS.find((k) => norm(k) === norm(s));
+        if (skill && !out.expertise.values.includes(skill)) out.expertise.values.push(skill);
+      });
+    }
+  }
+  return out;
+}
+// The selects of a level, as cells of a grid. An empty one is marked in gold.
+function slotCells(b, i, slots) {
+  const x = levelInfo(b)[i];
+  const none = (cur) => `<option value=""${cur ? '' : ' selected'}>${t('— choose —')}</option>`;
+  const option = (name, cur, off) => `<option value="${esc(name)}"${name === cur ? ' selected' : ''}${off ? ' disabled' : ''}>${esc(name)}</option>`;
+  const cell = (label, control, text, open) => `<div class="lslot${open ? ' open' : ''}"><span class="lslot-l">${esc(label)}</span>${control}${
+    text ? `<small title="${esc(text)}">${esc(text)}</small>` : ''}</div>`;
+  const out = [];
+  slots.choices.forEach(({ c, entries }) => {
+    const g = c.group;
+    const merged = classChoices(b, x.cls).find((y) => y.name === g.name) || g;
+    const taken = g.repeat ? [] : chosenOf(b, x.cls, merged);
+    for (let k = 0; k < c.n; k++) {
+      const e = entries[k] || { value: '', note: '' };
+      const list = g.options.filter((o) => !o[2] || o[2] <= x.n || o[0] === e.value);
+      const o = g.options.find((y) => y[0] === e.value);
+      out.push(cell(g.name + (c.n > 1 ? ' ' + (k + 1) : ''),
+        `<select data-slot="choice" data-l="${i}" data-g="${c.i}" aria-label="${esc(g.name)}">${none(e.value)}${
+          list.map((y) => option(y[0], e.value, y[0] !== e.value && taken.includes(y[0]))).join('')}</select>`,
+        [e.note, o && o[1]].filter(Boolean).join(' · '), !e.value));
+    }
+  });
+  if (slots.feat) {
+    const f = slots.feat;
+    const feat = FEATS.find(([n]) => n === f.name);
+    const hasParts = feat && featParts(feat[0], feat[1], b).length;
+    out.push(cell(t('Feat'),
+      `<span class="lslot-row"><select data-slot="feat" data-l="${i}" aria-label="${t('Feat')}">${none(f.name || f.rest)}${
+        !feat && f.rest ? `<option selected>${esc(f.rest)}</option>` : ''}${FEATS.map(([n]) => option(n, f.name)).join('')}</select>${
+        hasParts ? `<button class="btn tiny${f.rest ? '' : ' gold'}" data-act="feat-options" data-l="${i}">${t('options')}</button>` : ''}</span>`,
+      feat ? [f.rest, feat[1]].filter(Boolean).join(' · ') : '', !f.name && !f.rest));
+  }
+  if (slots.expertise) {
+    const st = skillState(b);
+    const picked = pickedSkills(b);
+    const have = expertiseSkills(b);
+    const mine = slots.expertise.values;
+    const proficient = ALL_SKILLS.filter((s) => st.granted[s] || st.chosen.includes(s) || picked.has(s));
+    for (let k = 0; k < 2; k++) {
+      const v = mine[k] || '';
+      out.push(cell('Expertise ' + (k + 1),
+        `<select data-slot="expertise" data-l="${i}" aria-label="Expertise">${none(v)}${
+          proficient.filter((s) => s === v || !have.has(s)).map((s) => option(s, v)).join('')}</select>`,
+        proficient.length < 2 ? t('Only skills the build is proficient in. Choose them in Character creation first.') : '', !v));
+    }
+  }
+  return out.join('');
+}
+// Writes what the selects of one choice of a level say back into its lines. `values` is one per select.
+function writeSlot(b, i, kind, values, g) {
+  const l = b.levels[i];
+  const slots = levelSlots(b, i);
+  const put = (lines, fresh) => {
+    const at = lines.length ? Math.min(...lines) : l.picks.length;
+    lines.slice().sort((p, q) => q - p).forEach((j) => l.picks.splice(j, 1));
+    l.picks.splice(at, 0, ...fresh);
+  };
+  if (kind === 'choice') {
+    const slot = slots.choices.find((s) => s.c.i === g);
+    if (!slot) return;
+    const group = slot.c.group;
+    const vals = values.map((v, k) => [v, k]).filter(([v, k]) => v && (group.repeat || values.indexOf(v) === k));
+    put(slot.lines, group.join ? (vals.length ? [group.name + ': ' + vals.map((y) => y[0]).join(group.join)] : [])
+      // a choice left as it was keeps its line, with whatever was noted on it
+      : vals.map(([v, k]) => { const e = slot.entries[k]; return e && e.value === v && e.raw ? e.raw : group.name + ': ' + v; }));
+  } else if (kind === 'feat' && slots.feat) {
+    const feat = FEATS.find(([n]) => n === values[0]);
+    put(slots.feat.j >= 0 ? [slots.feat.j] : [], feat ? [featParts(feat[0], feat[1], b).length ? 'Feat: ' + feat[0] : featText(feat[0], feat[1], [])] : []);
+  } else if (kind === 'expertise' && slots.expertise) {
+    const vals = [...new Set(values.filter(Boolean))];
+    put(slots.expertise.j >= 0 ? [slots.expertise.j] : [], vals.length ? ['Expertise: ' + vals.join(' + ')] : []);
+  }
+}
+// The choices inside the feat of a level (which ability, which skills…), written into its line when confirmed.
+function openFeatOptions(level) {
+  const b = curBuild();
+  const f = levelSlots(b, level).feat;
+  const feat = f && FEATS.find(([n]) => n === f.name);
+  if (!feat) return;
+  // what this feat already chose must not count as taken while choosing again
+  const probe = clone(b);
+  probe.levels[level].picks[f.j] = 'Feat: ' + feat[0];
+  const parts = featParts(feat[0], feat[1], probe);
+  if (!parts.length) return;
+  openChooser(feat[0], esc(feat[1]), parts, (done) => {
+    const now = curBuild();
+    const cur = levelSlots(now, level).feat;
+    const text = featText(feat[0], feat[1], done);
+    if (cur && cur.j >= 0) now.levels[level].picks[cur.j] = text; else now.levels[level].picks.push(text);
+  });
+}
+document.addEventListener('change', (e) => {
+  const el = e.target;
+  const b = curBuild();
+  if (!el.dataset || !el.dataset.slot || !b) return;
+  const i = +el.dataset.l;
+  const kind = el.dataset.slot;
+  writeSlot(b, i, kind, $$(`select[data-slot="${kind}"][data-l="${i}"]${kind === 'choice' ? `[data-g="${el.dataset.g}"]` : ''}`).map((s) => s.value), +el.dataset.g);
+  save();
+  render();
+  if (kind === 'feat' && el.value) openFeatOptions(i);
+});
+
 // ---------- the chooser: a dialog that picks n options out of one or more lists ----------
 // dlg.parts = [{ label, n, min, options: [[name, description]], chosen: [], off: [names that cannot be taken] }]
 function chooserList() {
@@ -12185,7 +12380,7 @@ function openChooser(title, hint, parts, done) {
     ${parts.some((p) => p.options.length > 12) ? `<div class="picker-tools"><input type="text" data-dlg="q" placeholder="${t('Search by name or effect…')}" autocomplete="off"></div>` : ''}
     <div class="picker-list" id="dlg-list">${chooserList()}</div>
     <div class="modal-btns"><button class="btn" data-act="dialog-close">${t('Cancel')}</button>
-      <button class="btn primary" id="choose-ok" data-act="choose-confirm" disabled>${t('Add')}</button></div>`, 'picker-box');
+      <button class="btn primary" id="choose-ok" data-act="choose-confirm" disabled>${t('Confirm')}</button></div>`, 'picker-box');
   chooserSync();
 }
 
@@ -12309,23 +12504,7 @@ document.addEventListener('change', (e) => {
 
 Object.assign(actions, {
   'perm-toggle'() { state.ui.permOpen = !state.ui.permOpen; },
-  'choice-open'(el) {
-    const level = +el.dataset.l;
-    const b = curBuild();
-    const x = levelInfo(b)[level];
-    const group = CHOICES[+el.dataset.g];
-    const merged = classChoices(b, x.cls).find((g) => g.name === group.name) || group;
-    const taken = chosenOf(b, x.cls, merged);
-    const part = { label: t('Choose {n}', { n: group.at[x.n] }), n: group.at[x.n], min: 1, off: group.repeat ? [] : taken,
-      options: group.options.filter((o) => !o[2] || o[2] <= x.n).map((o) => [o[0], o[1]]) };
-    openChooser(group.name, t('{cls} level {n} · {have} of {need} chosen so far', { cls: x.cls, n: x.n, have: taken.length, need: merged.need }), [part], (parts) => {
-      const chosen = parts[0].chosen;
-      const lines = group.join ? [group.name + ': ' + chosen.join(group.join)] : chosen.map((name) => group.name + ': ' + name);
-      curBuild().levels[level].picks.push(...lines);
-      toast(t('Added to level {n}: {x}', { n: level + 1, x: chosen.join(', ') }));
-    });
-    return false;
-  },
+  'feat-options'(el) { openFeatOptions(+el.dataset.l); return false; },
   'choose-toggle'(el) {
     const p = dlg.parts[+el.dataset.p];
     const i = p.chosen.indexOf(el.dataset.n);
@@ -12729,8 +12908,7 @@ function wizBody(b, key) {
       `<small>${esc(DATA.backgrounds[name].text || '')}</small><small>${t('Skills')}: ${esc(BACKGROUNDS[name].join(', '))}</small>`)).join('')}</div>`;
   }
   if (key === 'abilities') {
-    return `<div class="abils">${ABILS.map(([ab, short, name]) => abilCard(b, ab, short, name)).join('')}</div>
-      <p class="points" data-d="points">${pointsText(b)}</p>
+    return `${abilitiesBlock(b)}
       <p class="muted">${t('Base scores go from 8 to 15. The +2 and +1 buttons are the bonuses every race gives.')}</p>`;
   }
   if (key === 'skills') return skillsPicker(b);
@@ -12814,7 +12992,7 @@ Object.assign(actions, {
       // a new starting class: its level 1 choices and its subclass no longer apply
       if (b.levels[0].cls !== v) Object.assign(b.levels[0], { cls: v, sub: '', picks: [] });
     } else if (path === 'subclass') b.levels[0].sub = v;
-    else { setPath(b, path, v); creationChanged(b, path); }
+    else { const before = getPath(b, path); setPath(b, path, v); creationChanged(b, path, before); }
   },
 });
 </script>
@@ -12851,7 +13029,8 @@ function levelPending(b, i) {
     const feat = m && FEATS.find(([name]) => norm(name) === norm(m[1]));
     if (feat && featParts(feat[0], feat[1], b).length) out.push(t('{feat}: options not chosen', { feat: feat[0] }));
   });
-  if (grantsExpertise(x) && !l.picks.some((p) => /^expertise\b/i.test(p.trim()))) out.push(t('Expertise not chosen'));
+  const expert = levelSlots(b, i).expertise;
+  if (expert && expert.values.length < 2) out.push(expert.j < 0 ? t('Expertise not chosen') : 'Expertise: ' + t('{n} of {max}', { n: expert.values.length, max: 2 }));
   levelChoices(x).forEach((c) => {
     const have = chosenOf(b, x.cls, c.group, i).length;
     if (have < c.n) out.push(c.group.name + ': ' + t('{n} of {max}', { n: have, max: c.n }));
@@ -13331,6 +13510,21 @@ Object.assign(actions, {
     c[key] = c[key] === el.dataset.ab ? '' : el.dataset.ab;
     if (c[key] && c[other] === c[key]) c[other] = '';
   },
+  // the − and + of a number: a base ability score, a manual bonus, the enemy Armour Class
+  step(el) {
+    const clamp = (n) => Math.max(+el.dataset.min, Math.min(+el.dataset.max, n));
+    const d = +el.dataset.d;
+    if (el.dataset.ui) { state.ui[el.dataset.ui] = clamp((Number(state.ui[el.dataset.ui]) || +el.dataset.v || 0) + d); return; }
+    const b = curBuild();
+    setPath(b, el.dataset.path, clamp((Number(getPath(b, el.dataset.path)) || 0) + d));
+  },
+  'abil-reset'() { Object.assign(curBuild().creation, { abilities: blankBuild().creation.abilities, plus2: '', plus1: '' }); },
+  // the class of a level goes down to the empty levels right below it
+  'fill-down'(el) {
+    const b = curBuild();
+    const i = +el.dataset.l;
+    for (let k = i + 1; k < b.levels.length && !b.levels[k].cls; k++) b.levels[k].cls = b.levels[i].cls;
+  },
   skill(el) {
     const c = curBuild().creation;
     const list = skillList(c.skills);
@@ -13488,8 +13682,9 @@ document.addEventListener('input', (e) => {
   const target = inParty ? curParty() : curBuild();
   if (!target) return;
   const value = el.type === 'checkbox' ? el.checked : el.type === 'number' ? (el.value === '' ? '' : Number(el.value)) : el.value;
+  const before = getPath(target, el.dataset.path);
   setPath(target, el.dataset.path, value);
-  if (!inParty && el.dataset.path.startsWith('creation.')) creationChanged(target, el.dataset.path);
+  if (!inParty && el.dataset.path.startsWith('creation.')) creationChanged(target, el.dataset.path, before);
   save();
   if (el.classList.contains('wiki-name')) suggest(el);
   if (el.hasAttribute('data-rerender')) render();

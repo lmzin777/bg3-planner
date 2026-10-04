@@ -785,3 +785,30 @@ button.chip:hover { border-color: var(--gold); color: var(--text); }
 .turn { margin: 2px 0 12px; padding: 9px 12px; border-left: 2px solid var(--gold); background: var(--field); border-radius: 6px; font-size: 13px; }
 .turn b { color: var(--gold-hi); font: 600 17px var(--serif); margin-right: 6px; }
 .stat-tools input[type="number"] { width: 70px; }
+
+/* ---------- − value + buttons ---------- */
+.stepper { display: inline-flex; align-items: stretch; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--field); vertical-align: middle; }
+.stepper button { cursor: pointer; width: 28px; min-height: 30px; padding: 0; background: none; border: 0; color: var(--gold-hi); font: 600 18px/1 var(--sans); }
+.stepper button:hover:not(:disabled) { background: var(--panel); }
+.stepper button:disabled { opacity: .28; cursor: default; }
+.stepper b { min-width: 30px; display: grid; place-items: center; font: 600 14px var(--sans); font-variant-numeric: tabular-nums; color: var(--text); }
+.abil-base .stepper { width: 104px; max-width: 100%; }
+.abil-base .stepper b { flex: 1; min-width: 0; }
+.abil-base .stepper button { width: 28px; flex: none; }
+.points-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 12px; }
+.points-row .points { margin: 0; flex: 1; min-width: 200px; }
+.extra-row > span { font: 700 11px var(--sans); letter-spacing: .1em; color: var(--gold); display: flex; align-items: center; gap: 6px; }
+.ac-field { display: grid; gap: 4px; }
+.ac-field .stepper { justify-self: start; }
+
+/* ---------- the choices of a level, as selects ---------- */
+.lslots { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); gap: 8px 10px; }
+.lslot { display: grid; gap: 3px; align-content: start; min-width: 0; }
+.lslot-l { font: 700 10.5px var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.lslot select { width: 100%; min-width: 0; }
+.lslot.open .lslot-l { color: var(--gold); }
+.lslot.open select { border-color: var(--gold); }
+.lslot small { color: var(--muted); font-size: 11.5px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.lslot-row { display: flex; gap: 4px; min-width: 0; }
+.lslot-row select { flex: 1; }
+.lvl-cls .fill { grid-column: 1 / -1; justify-self: start; color: var(--muted); }

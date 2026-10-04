@@ -62,6 +62,162 @@ function chosenOptions(b) {
   return out;
 }
 
+// ---------- the choices of a level, as selects ----------
+// A level shows one select for each thing it lets the build choose: its guided choices, its feat, its Expertise.
+// The lines of the level those selects stand for ("Fighting Style: Archery") are not shown as text; a line beyond
+// what the level grants stays as text, to be removed by hand.
+// { choices: [{ c, lines: [index], entries: [{ value, note, raw }] }], feat: { j, name, rest } | null,
+//   expertise: { j, values } | null, owned: Set of line indexes }
+function levelSlots(b, i) {
+  const l = b.levels[i];
+  const x = levelInfo(b)[i];
+  const out = { choices: [], feat: null, expertise: null, owned: new Set() };
+  if (!l.cls) return out;
+  levelChoices(x).forEach((c) => {
+    const g = c.group;
+    const prefix = prefixRe(g.name);
+    const slot = { c, lines: [], entries: [] };
+    l.picks.forEach((p, j) => {
+      const text = p.trim();
+      if (out.owned.has(j) || slot.entries.length >= c.n) return;
+      const bare = !g.join && g.options.find((o) => norm(o[0]) === norm(text.replace(/\(.*$/, '')));
+      if (!prefix.test(text) && !bare) return;
+      out.owned.add(j);
+      slot.lines.push(j);
+      if (bare && !prefix.test(text)) { slot.entries.push({ value: bare[0], note: '', raw: p }); return; }
+      const rest = text.replace(prefix, '').trim();
+      const named = g.options.map((o) => [o[0], rest.search(namesRe(o[0]))]).filter((y) => y[1] >= 0).sort((p1, p2) => p1[1] - p2[1]).map((y) => y[0]);
+      if (g.join && named.length) named.forEach((value) => slot.entries.push({ value, note: '' }));
+      else slot.entries.push({ value: named[0] || '', note: named[0] ? rest.replace(new RegExp(escRe(named[0]), 'i'), '').replace(/^[\s:,;-]+/, '').trim() : rest, raw: p });
+    });
+    out.choices.push(slot);
+  });
+  if (grantsFeat(x)) {
+    const j = l.picks.findIndex((p, k) => !out.owned.has(k) && /^feats?\s*:/i.test(p.trim()));
+    out.feat = { j, name: '', rest: '' };
+    if (j >= 0) {
+      out.owned.add(j);
+      const text = l.picks[j].trim().replace(/^feats?\s*:\s*/i, '');
+      const name = FEATS.map((f) => f[0]).filter((n) => new RegExp('^' + escRe(n) + '(?![a-z])', 'i').test(text)).sort((p, q) => q.length - p.length)[0];
+      Object.assign(out.feat, { name: name || '', rest: name ? text.slice(name.length).trim() : text });
+    }
+  }
+  if (grantsExpertise(x)) {
+    const j = l.picks.findIndex((p, k) => !out.owned.has(k) && /^expertise\b/i.test(p.trim()));
+    out.expertise = { j, values: [] };
+    if (j >= 0) {
+      out.owned.add(j);
+      l.picks[j].trim().replace(/^expertise\s*:?\s*/i, '').split(/\s*(?:\+|,|&|\band\b)\s*/i).forEach((s) => {
+        const skill = ALL_SKILLS.find((k) => norm(k) === norm(s));
+        if (skill && !out.expertise.values.includes(skill)) out.expertise.values.push(skill);
+      });
+    }
+  }
+  return out;
+}
+// The selects of a level, as cells of a grid. An empty one is marked in gold.
+function slotCells(b, i, slots) {
+  const x = levelInfo(b)[i];
+  const none = (cur) => `<option value=""${cur ? '' : ' selected'}>${t('— choose —')}</option>`;
+  const option = (name, cur, off) => `<option value="${esc(name)}"${name === cur ? ' selected' : ''}${off ? ' disabled' : ''}>${esc(name)}</option>`;
+  const cell = (label, control, text, open) => `<div class="lslot${open ? ' open' : ''}"><span class="lslot-l">${esc(label)}</span>${control}${
+    text ? `<small title="${esc(text)}">${esc(text)}</small>` : ''}</div>`;
+  const out = [];
+  slots.choices.forEach(({ c, entries }) => {
+    const g = c.group;
+    const merged = classChoices(b, x.cls).find((y) => y.name === g.name) || g;
+    const taken = g.repeat ? [] : chosenOf(b, x.cls, merged);
+    for (let k = 0; k < c.n; k++) {
+      const e = entries[k] || { value: '', note: '' };
+      const list = g.options.filter((o) => !o[2] || o[2] <= x.n || o[0] === e.value);
+      const o = g.options.find((y) => y[0] === e.value);
+      out.push(cell(g.name + (c.n > 1 ? ' ' + (k + 1) : ''),
+        `<select data-slot="choice" data-l="${i}" data-g="${c.i}" aria-label="${esc(g.name)}">${none(e.value)}${
+          list.map((y) => option(y[0], e.value, y[0] !== e.value && taken.includes(y[0]))).join('')}</select>`,
+        [e.note, o && o[1]].filter(Boolean).join(' · '), !e.value));
+    }
+  });
+  if (slots.feat) {
+    const f = slots.feat;
+    const feat = FEATS.find(([n]) => n === f.name);
+    const hasParts = feat && featParts(feat[0], feat[1], b).length;
+    out.push(cell(t('Feat'),
+      `<span class="lslot-row"><select data-slot="feat" data-l="${i}" aria-label="${t('Feat')}">${none(f.name || f.rest)}${
+        !feat && f.rest ? `<option selected>${esc(f.rest)}</option>` : ''}${FEATS.map(([n]) => option(n, f.name)).join('')}</select>${
+        hasParts ? `<button class="btn tiny${f.rest ? '' : ' gold'}" data-act="feat-options" data-l="${i}">${t('options')}</button>` : ''}</span>`,
+      feat ? [f.rest, feat[1]].filter(Boolean).join(' · ') : '', !f.name && !f.rest));
+  }
+  if (slots.expertise) {
+    const st = skillState(b);
+    const picked = pickedSkills(b);
+    const have = expertiseSkills(b);
+    const mine = slots.expertise.values;
+    const proficient = ALL_SKILLS.filter((s) => st.granted[s] || st.chosen.includes(s) || picked.has(s));
+    for (let k = 0; k < 2; k++) {
+      const v = mine[k] || '';
+      out.push(cell('Expertise ' + (k + 1),
+        `<select data-slot="expertise" data-l="${i}" aria-label="Expertise">${none(v)}${
+          proficient.filter((s) => s === v || !have.has(s)).map((s) => option(s, v)).join('')}</select>`,
+        proficient.length < 2 ? t('Only skills the build is proficient in. Choose them in Character creation first.') : '', !v));
+    }
+  }
+  return out.join('');
+}
+// Writes what the selects of one choice of a level say back into its lines. `values` is one per select.
+function writeSlot(b, i, kind, values, g) {
+  const l = b.levels[i];
+  const slots = levelSlots(b, i);
+  const put = (lines, fresh) => {
+    const at = lines.length ? Math.min(...lines) : l.picks.length;
+    lines.slice().sort((p, q) => q - p).forEach((j) => l.picks.splice(j, 1));
+    l.picks.splice(at, 0, ...fresh);
+  };
+  if (kind === 'choice') {
+    const slot = slots.choices.find((s) => s.c.i === g);
+    if (!slot) return;
+    const group = slot.c.group;
+    const vals = values.map((v, k) => [v, k]).filter(([v, k]) => v && (group.repeat || values.indexOf(v) === k));
+    put(slot.lines, group.join ? (vals.length ? [group.name + ': ' + vals.map((y) => y[0]).join(group.join)] : [])
+      // a choice left as it was keeps its line, with whatever was noted on it
+      : vals.map(([v, k]) => { const e = slot.entries[k]; return e && e.value === v && e.raw ? e.raw : group.name + ': ' + v; }));
+  } else if (kind === 'feat' && slots.feat) {
+    const feat = FEATS.find(([n]) => n === values[0]);
+    put(slots.feat.j >= 0 ? [slots.feat.j] : [], feat ? [featParts(feat[0], feat[1], b).length ? 'Feat: ' + feat[0] : featText(feat[0], feat[1], [])] : []);
+  } else if (kind === 'expertise' && slots.expertise) {
+    const vals = [...new Set(values.filter(Boolean))];
+    put(slots.expertise.j >= 0 ? [slots.expertise.j] : [], vals.length ? ['Expertise: ' + vals.join(' + ')] : []);
+  }
+}
+// The choices inside the feat of a level (which ability, which skills…), written into its line when confirmed.
+function openFeatOptions(level) {
+  const b = curBuild();
+  const f = levelSlots(b, level).feat;
+  const feat = f && FEATS.find(([n]) => n === f.name);
+  if (!feat) return;
+  // what this feat already chose must not count as taken while choosing again
+  const probe = clone(b);
+  probe.levels[level].picks[f.j] = 'Feat: ' + feat[0];
+  const parts = featParts(feat[0], feat[1], probe);
+  if (!parts.length) return;
+  openChooser(feat[0], esc(feat[1]), parts, (done) => {
+    const now = curBuild();
+    const cur = levelSlots(now, level).feat;
+    const text = featText(feat[0], feat[1], done);
+    if (cur && cur.j >= 0) now.levels[level].picks[cur.j] = text; else now.levels[level].picks.push(text);
+  });
+}
+document.addEventListener('change', (e) => {
+  const el = e.target;
+  const b = curBuild();
+  if (!el.dataset || !el.dataset.slot || !b) return;
+  const i = +el.dataset.l;
+  const kind = el.dataset.slot;
+  writeSlot(b, i, kind, $$(`select[data-slot="${kind}"][data-l="${i}"]${kind === 'choice' ? `[data-g="${el.dataset.g}"]` : ''}`).map((s) => s.value), +el.dataset.g);
+  save();
+  render();
+  if (kind === 'feat' && el.value) openFeatOptions(i);
+});
+
 // ---------- the chooser: a dialog that picks n options out of one or more lists ----------
 // dlg.parts = [{ label, n, min, options: [[name, description]], chosen: [], off: [names that cannot be taken] }]
 function chooserList() {
@@ -89,7 +245,7 @@ function openChooser(title, hint, parts, done) {
     ${parts.some((p) => p.options.length > 12) ? `<div class="picker-tools"><input type="text" data-dlg="q" placeholder="${t('Search by name or effect…')}" autocomplete="off"></div>` : ''}
     <div class="picker-list" id="dlg-list">${chooserList()}</div>
     <div class="modal-btns"><button class="btn" data-act="dialog-close">${t('Cancel')}</button>
-      <button class="btn primary" id="choose-ok" data-act="choose-confirm" disabled>${t('Add')}</button></div>`, 'picker-box');
+      <button class="btn primary" id="choose-ok" data-act="choose-confirm" disabled>${t('Confirm')}</button></div>`, 'picker-box');
   chooserSync();
 }
 
@@ -213,23 +369,7 @@ document.addEventListener('change', (e) => {
 
 Object.assign(actions, {
   'perm-toggle'() { state.ui.permOpen = !state.ui.permOpen; },
-  'choice-open'(el) {
-    const level = +el.dataset.l;
-    const b = curBuild();
-    const x = levelInfo(b)[level];
-    const group = CHOICES[+el.dataset.g];
-    const merged = classChoices(b, x.cls).find((g) => g.name === group.name) || group;
-    const taken = chosenOf(b, x.cls, merged);
-    const part = { label: t('Choose {n}', { n: group.at[x.n] }), n: group.at[x.n], min: 1, off: group.repeat ? [] : taken,
-      options: group.options.filter((o) => !o[2] || o[2] <= x.n).map((o) => [o[0], o[1]]) };
-    openChooser(group.name, t('{cls} level {n} · {have} of {need} chosen so far', { cls: x.cls, n: x.n, have: taken.length, need: merged.need }), [part], (parts) => {
-      const chosen = parts[0].chosen;
-      const lines = group.join ? [group.name + ': ' + chosen.join(group.join)] : chosen.map((name) => group.name + ': ' + name);
-      curBuild().levels[level].picks.push(...lines);
-      toast(t('Added to level {n}: {x}', { n: level + 1, x: chosen.join(', ') }));
-    });
-    return false;
-  },
+  'feat-options'(el) { openFeatOptions(+el.dataset.l); return false; },
   'choose-toggle'(el) {
     const p = dlg.parts[+el.dataset.p];
     const i = p.chosen.indexOf(el.dataset.n);
