@@ -1,9 +1,11 @@
 // Level progression: what each class and subclass grants per level (from classes.js), the level table
-// of the Build Planner, and the feat and spell pickers that add choices to a level.
+// of the Build Planner, and the feat, spell and Expertise pickers that add choices to a level.
 'use strict';
 
 const CLASS_DATA = window.BG3_CLASSES || {};
 const FEATS = window.BG3_FEATS || [];
+const FEATURES = window.BG3_FEATURES || {};
+const SPELL_BY_NAME = new Map(SPELLS.map((s) => [norm(s.n), s]));
 // Entries of the class table that only announce a choice; the planner shows controls for them instead.
 const GENERIC_GAIN = /^(feats?|choose a subclass|subclass features?)$/i;
 const SUB_NOISE = new Set(['of', 'the', 'way', 'oath', 'college', 'circle', 'domain', 'school', 'magic', 'sorcery', 'bloodline', 'subclass']);
@@ -50,6 +52,36 @@ function levelGains(info) {
 }
 const grantsFeat = (info) => ((CLASS_DATA[info.cls] || { levels: {} }).levels[info.n] || []).some((g) => /^feats?$/i.test(g));
 const picksSubclass = (info) => !!CLASS_DATA[info.cls] && CLASS_DATA[info.cls].subclassLevel === info.n;
+const grantsExpertise = (info) => levelGains(info).some((g) => /^expertise\b/i.test(g));
+
+// What a feature does: its description from the wiki, else that of the spell or feat of the same name.
+function featureText(name) {
+  const base = name.replace(/\s*\([^)]*\)$/, '').replace(/: \d+$/, '');
+  const spell = SPELL_BY_NAME.get(norm(name)) || SPELL_BY_NAME.get(norm(base));
+  const feat = FEATS.find(([n]) => n === name);
+  return FEATURES[name] || FEATURES[base] || (spell && spell.d) || (feat && feat[1]) || '';
+}
+const slotsText = (row) => { const r = (row || []).slice(); while (r.length && !r[r.length - 1]) r.pop(); return r.join(' / '); };
+// The numbers of the class table that change at this class level: "Rage Charges 3", "Spell slots 4 / 2".
+function levelNumbers(info) {
+  const d = CLASS_DATA[info.cls];
+  if (!d) return [];
+  const out = [];
+  const now = (d.table || {})[info.n] || [];
+  const before = (d.table || {})[info.n - 1] || [];
+  (d.cols || []).forEach((col, i) => { if (now[i] && now[i] !== before[i]) out.push(col + ' ' + now[i]); });
+  let slots = (d.slots || {})[info.n];
+  let prev = (d.slots || {})[info.n - 1];
+  // Eldritch Knights and Arcane Tricksters count a third of their level towards the shared slot table
+  if (!slots && CAST_SUBCLASS[info.sub] && info.sub !== 'Way of the Four Elements' && info.n >= 3) {
+    slots = ESL_SLOTS[Math.ceil(info.n / 3)];
+    prev = info.n > 3 ? ESL_SLOTS[Math.ceil((info.n - 1) / 3)] : null;
+  }
+  if (slots && slots.some(Boolean) && JSON.stringify(slots) !== JSON.stringify(prev)) {
+    if (info.cls === 'Warlock') { const i = slots.findIndex((x) => x > 0); out.push(t('Pact slots: {n} of level {lv}', { n: slots[i], lv: i + 1 })); } else out.push(t('Spell slots') + ' ' + slotsText(slots));
+  }
+  return out;
+}
 
 function levelRows(b) {
   const info = levelInfo(b);
@@ -63,10 +95,13 @@ function levelRows(b) {
         <button class="icon" data-act="wiki" title="${t('Search the wiki')}">↗</button>
         <button class="icon x" data-act="pick-del" data-l="${i}" data-i="${j}" title="${t('Remove')}">×</button></div>`).join('');
     const gains = levelGains(x);
+    const numbers = levelNumbers(x);
     const subs = Object.keys((CLASS_DATA[l.cls] || {}).subclasses || {}).map(subLabel);
     const subSelect = picksSubclass(x) || l.sub.trim()
       ? `<select class="sub" data-path="levels.${i}.sub" data-rerender aria-label="${t('Subclass')}">${opt('', t('— subclass —'), l.sub)}${subs.map((s) => opt(s, s, l.sub)).join('')}${
         l.sub && !subs.includes(l.sub) ? opt(l.sub, l.sub, l.sub) : ''}</select>` : '';
+    // each gain opens its description; the ones the wiki describes carry it as a tooltip too
+    const gain = (g) => { const text = featureText(g); return `<button class="gain${text ? '' : ' plain'}" data-act="gain-info" data-n="${esc(g)}"${text ? ` title="${esc(text)}"` : ''}>${esc(g)}</button>`; };
     return `<div class="lvl${l.sub.trim() ? ' has-sub' : ''}">
       <div class="lvl-n">${i + 1}</div>
       <div class="lvl-cls">
@@ -75,10 +110,12 @@ function levelRows(b) {
         ${subSelect}
       </div>
       <div class="lvl-body">
-        ${gains.length ? `<p class="lvl-gains"><b>${t('Gains')}</b> ${gains.map(esc).join(' · ')}</p>` : ''}
+        ${gains.length ? `<p class="lvl-gains"><b>${t('Gains')}</b> ${gains.map(gain).join('')}</p>` : ''}
+        ${numbers.length ? `<p class="lvl-nums"><b>${t('Now')}</b> ${numbers.map(esc).join(' · ')}</p>` : ''}
         <div class="picks${l.picks.some((p) => p.length > 34) ? ' one' : ''}">${picks}
           <div class="pick-btns">
             ${grantsFeat(x) ? `<button class="btn tiny gold" data-act="feat-open" data-l="${i}">${t('+ feat')}</button>` : ''}
+            ${grantsExpertise(x) ? `<button class="btn tiny gold" data-act="expertise-open" data-l="${i}">${t('+ expertise')}</button>` : ''}
             ${l.cls && SPELLS.length ? `<button class="btn tiny" data-act="spell-open" data-l="${i}">${t('+ spell')}</button>` : ''}
             <button class="btn tiny" data-act="pick-add" data-l="${i}">${t('+ choice')}</button>
           </div>
@@ -106,6 +143,8 @@ function classNote(b, i, cls) {
   }
   return `<div class="lvl-note"><h4>${t('Multiclass · {cls}', { cls })}</h4><dl>
     ${row(t('Proficiencies gained'), p.multi.length ? esc(profNames(p.multi)) : t('none'))}
+    ${MULTI_SKILLS[cls] ? row(t('Skills'), t('Choose {n} from: {list}', { n: MULTI_SKILLS[cls], list: ci.skills === 'any' ? t('any skill') : esc(ci.skills.join(', ')) })) : ''}
+    ${row(t('Hit points'), t('{next} per level, plus the Constitution modifier', { next: HIT_DIE[cls] / 2 + 1 }))}
   </dl></div>`;
 }
 
@@ -139,21 +178,56 @@ function addFeat(level, name, bonus) {
   toast(t('Added to level {n}: {x}', { n: level + 1, x: name }));
 }
 
+// ---------- Expertise picker ----------
+function expertiseStep() {
+  const b = curBuild();
+  const st = skillState(b);
+  const picked = pickedSkills(b);
+  const have = expertiseSkills(b);
+  const options = ALL_SKILLS.filter((x) => (st.granted[x] || st.chosen.includes(x) || picked.has(x)) && !have.has(x));
+  return `<h2>${t('Expertise')}</h2>
+    <p class="muted">${esc(featureText('Expertise'))}</p>
+    ${options.length >= 2 ? `<div class="lib-row">${options.map((x) => `<button class="chip${dlg.chosen.includes(x) ? ' on' : ''}" data-act="expertise-pick" data-s="${esc(x)}">${esc(x)}</button>`).join('')}</div>`
+      : `<p class="skill-lock">${t('Expertise needs two skills the build is proficient in. Choose the skills in Character creation first.')}</p>`}
+    <div class="modal-btns"><button class="btn" data-act="dialog-close">${t('Cancel')}</button>
+      <button class="btn primary" data-act="expertise-confirm"${dlg.chosen.length === 2 ? '' : ' disabled'}>${t('Add Expertise')}</button></div>`;
+}
+
 // ---------- spell picker ----------
 function spellPickerList() {
   const q = norm(dlg.q);
+  const tooHigh = (s) => dlg.max > 0 && s.lv > dlg.max;
   const list = SPELLS.filter((s) => (!dlg.onlyClass || (s.cl || []).includes(dlg.cls) || (s.lr || []).some(([who]) => who === dlg.sub))
+    && (!dlg.reach || !tooHigh(s))
     && (dlg.lv === '' || String(s.lv) === dlg.lv) && (!q || norm(s.n).includes(q) || norm(s.d).includes(q)));
   $('#dlg-count').textContent = t('{n} spells', { n: list.length });
+  spellPickerKnown();
   return list.slice(0, 120).map((s) =>
-    `<button class="pick-row" data-act="spell-choose" data-n="${esc(s.n)}">${pic(s.i, 'pic small')}<b>${esc(s.n)}</b>
-      <span>${s.lv ? t('Level {n}', { n: s.lv }) : t('Cantrip')}${s.sc ? ' · ' + esc(s.sc) : ''}</span>
+    `<button class="pick-row${tooHigh(s) ? ' no' : ''}" data-act="spell-choose" data-n="${esc(s.n)}">${pic(s.i, 'pic small')}<b>${esc(s.n)}</b>
+      <span>${s.lv ? t('Level {n}', { n: s.lv }) : t('Cantrip')}${s.sc ? ' · ' + esc(s.sc) : ''}${tooHigh(s) ? ` · <em>${t('above what this level can learn')}</em>` : ''}</span>
       <small class="fx">${esc(s.d || '')}</small>
       <small>${esc([s.rg, s.du, s.dm, s.co ? t('Concentration') : ''].filter(Boolean).join(' · '))}</small></button>`).join('')
     || `<p class="muted">${t('Nothing matches these filters.')}</p>`;
 }
+// How many cantrips and spells of this class the build has chosen, against what the class allows.
+function spellPickerKnown() {
+  const k = knownSpells(curBuild()).find((x) => x.cls === dlg.cls);
+  const el = $('#dlg-known');
+  if (!el) return;
+  el.innerHTML = k ? [k.maxCantrips ? `<b class="${k.cantrips > k.maxCantrips ? 'warn' : ''}">${t('{n} of {max} cantrips', { n: k.cantrips, max: k.maxCantrips })}</b>` : '',
+    k.maxSpells ? `<b class="${k.spells > k.maxSpells ? 'warn' : ''}">${t('{n} of {max} spells', { n: k.spells, max: k.maxSpells })}</b>` : ''].filter(Boolean).join(' · ') + ' ' + t('chosen for {cls} so far', { cls: dlg.cls }) : '';
+}
 
 Object.assign(actions, {
+  'gain-info'(el) {
+    const name = el.dataset.n;
+    const text = featureText(name);
+    openDialog(`<h2>${esc(name)}</h2>
+      <p>${text ? esc(text) : `<span class="muted">${t('The wiki has no short description for this one. Open its page for the details.')}</span>`}</p>
+      <div class="modal-btns"><a class="btn" href="${wikiUrl(name)}" target="_blank" rel="noopener">${t('Open the wiki page')} ↗</a>
+        <button class="btn primary" data-act="dialog-close">${t('Close')}</button></div>`);
+    return false;
+  },
   'feat-open'(el) {
     const level = +el.dataset.l;
     dlg = { kind: 'feat', level, q: '', refresh: () => { $('#dlg-list').innerHTML = featList(); } };
@@ -186,16 +260,39 @@ Object.assign(actions, {
     const bonus = s.name === 'Ability Improvement' && s.chosen.length === 1 ? '+2 ' + s.chosen[0] : s.chosen.map((ab) => '+1 ' + ab).join(', ');
     addFeat(dlg.level, s.name, bonus);
   },
+  'expertise-open'(el) {
+    dlg = { kind: 'expertise', level: +el.dataset.l, chosen: [] };
+    openDialog(expertiseStep());
+    return false;
+  },
+  'expertise-pick'(el) {
+    const i = dlg.chosen.indexOf(el.dataset.s);
+    if (i >= 0) dlg.chosen.splice(i, 1);
+    else { if (dlg.chosen.length >= 2) dlg.chosen.shift(); dlg.chosen.push(el.dataset.s); }
+    $('#dialog-box').innerHTML = expertiseStep();
+    return false;
+  },
+  'expertise-confirm'() {
+    const level = dlg.level;
+    curBuild().levels[level].picks.push('Expertise: ' + dlg.chosen.join(' + '));
+    closeDialog();
+    toast(t('Added to level {n}: {x}', { n: level + 1, x: 'Expertise' }));
+  },
   'spell-open'(el) {
     const level = +el.dataset.l;
-    const x = levelInfo(curBuild())[level];
-    dlg = { kind: 'spell', level, q: '', lv: '', cls: x.cls, sub: subLabel(x.sub), onlyClass: SPELLS.some((s) => (s.cl || []).includes(x.cls)),
+    const b = curBuild();
+    const x = levelInfo(b)[level];
+    const max = maxSpellLevel(b, level);
+    dlg = { kind: 'spell', level, q: '', lv: '', cls: x.cls, sub: subLabel(x.sub), max, reach: max > 0,
+      onlyClass: SPELLS.some((s) => (s.cl || []).includes(x.cls)),
       refresh: () => { $('#dlg-list').innerHTML = spellPickerList(); } };
     openDialog(`<h2>${t('Spells')}</h2><p class="muted">${t('Click a spell to add it to level {n}. You can add several.', { n: level + 1 })}</p>
       <div class="picker-tools"><input type="text" data-dlg="q" placeholder="${t('Search by name or description…')}" autocomplete="off">
         <select data-dlg="lv">${opt('', t('Any level'), '')}${opt('0', t('Cantrip'), '')}${[1, 2, 3, 4, 5, 6].map((n) => opt(String(n), t('Level {n}', { n }), '')).join('')}</select></div>
       <div class="picker-tools"><label class="chk"><input type="checkbox" data-dlg="onlyClass"${dlg.onlyClass ? ' checked' : ''}> ${t('Only {cls} spells', { cls: x.cls })}</label>
+        ${max > 0 ? `<label class="chk"><input type="checkbox" data-dlg="reach" checked> ${t('Only up to spell level {n}, the most {cls} {lv} can learn', { n: max, cls: x.cls, lv: x.n })}</label>` : ''}
         <span class="muted" id="dlg-count"></span></div>
+      <p class="points" id="dlg-known"></p>
       <div class="picker-list" id="dlg-list"></div>
       <div class="modal-btns"><span></span><button class="btn primary" data-act="dialog-close">${t('Done')}</button></div>`, 'picker-box');
     dlg.refresh();
@@ -205,5 +302,6 @@ Object.assign(actions, {
     const s = SPELLS.find((x) => x.n === el.dataset.n);
     curBuild().levels[dlg.level].picks.push((s.lv ? 'Spell: ' : 'Cantrip: ') + s.n);
     toast(t('Added to level {n}: {x}', { n: dlg.level + 1, x: s.n }));
+    spellPickerKnown();
   },
 });

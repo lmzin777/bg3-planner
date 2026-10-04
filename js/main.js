@@ -20,10 +20,13 @@ Object.assign(actions, {
   },
   async 'build-del'() {
     const b = curBuild();
-    if (!b || !(await ask(t('Delete the build "{name}"? This cannot be undone.', { name: b.name }), t('Delete build'), true))) return false;
+    if (!b || !(await ask(t('Delete the build "{name}"? You can bring it back from "Recently deleted".', { name: b.name }), t('Delete build'), true))) return false;
+    const seats = [];
+    state.parties.forEach((p) => p.members.forEach((m, i) => { if (m.buildId === b.id) { m.buildId = ''; seats.push([p.id, i]); } }));
+    toTrash('build', b, seats);
     state.builds = state.builds.filter((x) => x.id !== b.id);
-    state.parties.forEach((p) => p.members.forEach((m) => { if (m.buildId === b.id) m.buildId = ''; }));
     state.ui.buildId = state.builds[0] ? state.builds[0].id : '';
+    toast(t('Build deleted: {name}', { name: b.name }), { label: t('Undo'), act: 'undo-delete' });
   },
   'export-open'() {
     const b = curBuild();
@@ -93,6 +96,7 @@ Object.assign(actions, {
     const b = curBuild();
     const preset = PRESETS.find((p) => p.presetId && p.presetId === b.presetId);
     if (!preset || !(await ask(t('Replace "{name}" with the ready-made version? Your changes to this build are lost.', { name: b.name }), t('Reset build'), true))) return false;
+    takeSnapshot();
     const fresh = Object.assign(normalizeBuild(clone(preset)), { id: b.id });
     state.builds[state.builds.indexOf(b)] = fresh;
     toast(t('Build reset to the ready-made version'));
@@ -176,7 +180,9 @@ Object.assign(actions, {
   async 'party-del'() {
     const p = curParty();
     if (!(await ask(t('Delete the party "{name}"? Your builds stay saved.', { name: p.name }), t('Delete party'), true))) return false;
+    toTrash('party', p);
     state.parties = state.parties.filter((x) => x.id !== p.id);
+    toast(t('Party deleted: {name}', { name: p.name }), { label: t('Undo'), act: 'undo-delete' });
     if (!state.parties.length) state.parties.push(blankParty(t('My party')));
     state.ui.partyId = state.parties[0].id;
   },

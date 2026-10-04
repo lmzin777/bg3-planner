@@ -2,12 +2,13 @@
 // The scripts are plain (not modules) so the planner also runs from a file opened directly; they share the global scope.
 'use strict';
 
-const APP_VERSION = '1.0';
+const APP_VERSION = '1.1';
 const STORE_KEY = 'bg3planner.v1';
 const PRESETS = window.BG3_PRESETS || [];
 const I18N = window.BG3_I18N || {};
 const ITEMS = window.BG3_ITEMS || [];
 const SPELLS = window.BG3_SPELLS || [];
+const CONSUMABLES = window.BG3_CONSUMABLES || [];
 const DATA = window.BG3_DATA || { races: {}, subraces: {}, backgrounds: {}, origins: {}, classes: {} };
 
 // UI text is written in English and passed through t(); other languages live in i18n.js.
@@ -25,6 +26,7 @@ const SLOT_LABEL = Object.fromEntries(SLOTS);
 const RARITIES = [['', 'Rarity'], ['common', 'Common'], ['uncommon', 'Uncommon'], ['rare', 'Rare'], ['veryrare', 'Very rare'], ['legendary', 'Legendary']];
 const POINT_COST = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 };
 const PARTY_SIZE = 4;
+const TRASH_MAX = 15;
 // Hit die per class: the first level of the character gets the full die, later levels half of it plus one.
 const HIT_DIE = { Barbarian: 12, Fighter: 10, Paladin: 10, Ranger: 10, Bard: 8, Cleric: 8, Druid: 8, Monk: 8, Rogue: 8, Warlock: 8, Sorcerer: 6, Wizard: 6 };
 
@@ -98,6 +100,15 @@ const wikiUrl = (text) => {
 const skillList = (text) => [...new Set(String(text || '').split(/[,;]/).map((x) => x.trim()).filter(Boolean)
   .map((x) => ALL_SKILLS.find((s) => norm(s) === norm(x)) || x))];
 
+const CONSUMABLE_BY_NAME = new Map(CONSUMABLES.map((c) => [norm(c.n), c]));
+// An elixir that sets an ability score ("increase your Strength to 21"), as { ab, to }; null for any other.
+function elixirAbility(name) {
+  const c = CONSUMABLE_BY_NAME.get(norm(name));
+  if (!c || c.t !== 'Elixir') return null;
+  const m = new RegExp('increase your (' + ABILS.map((a) => a[2]).join('|') + ') to (\\d+)', 'i').exec(c.x || '');
+  return m ? { ab: ABILS.find((a) => norm(a[2]) === norm(m[1]))[0], to: Number(m[2]) } : null;
+}
+
 let state = null;
 // Each script adds its button handlers here; main.js dispatches clicks to them.
 const actions = {};
@@ -126,6 +137,7 @@ function blankBuild() {
     gear: Object.fromEntries(ACTS.map(([k]) => [k, blankAct()])),
     setup: [],
     consumables: [],
+    elixir: '',
     variants: '',
     notes: '',
   };
@@ -169,6 +181,13 @@ function normalizeBuild(src) {
   ['setup', 'consumables'].forEach((k) => {
     b[k] = Array.isArray(s[k]) ? s[k].map((x) => ({ name: x.name || '', note: x.note || '' })) : [];
   });
+  // The elixir the build keeps active. Builds saved before this field existed take the strongest
+  // ability elixir from their consumables list, which is what those builds were planned around.
+  if (typeof s.elixir === 'string') b.elixir = s.elixir;
+  else {
+    const best = b.consumables.map((x) => [x.name.trim(), elixirAbility(x.name)]).filter((x) => x[1]).sort((x, y) => y[1].to - x[1].to)[0];
+    b.elixir = best ? CONSUMABLE_BY_NAME.get(norm(best[0])).n : '';
+  }
   return b;
 }
 
@@ -190,7 +209,10 @@ function fresh() {
   return hydrate({ builds, parties: [party] });
 }
 function hydrate(s) {
-  const st = { builds: (s.builds || []).map(normalizeBuild), parties: (s.parties || []).map(normalizeParty), ui: Object.assign({ tab: 'builds', act: 'act1', partyAct: 'act1', lang: 'en' }, s.ui || {}) };
+  const st = { builds: (s.builds || []).map(normalizeBuild), parties: (s.parties || []).map(normalizeParty),
+    // builds and parties deleted recently, newest first, so a delete can be undone
+    trash: (Array.isArray(s.trash) ? s.trash : []).filter((x) => x && x.data).slice(0, TRASH_MAX),
+    ui: Object.assign({ tab: 'builds', act: 'act1', partyAct: 'act1', lang: 'en' }, s.ui || {}) };
   if (!st.parties.length) st.parties.push(blankParty(t('My party')));
   if (!st.builds.some((b) => b.id === st.ui.buildId)) st.ui.buildId = st.builds[0] ? st.builds[0].id : '';
   if (!st.parties.some((p) => p.id === st.ui.partyId)) st.ui.partyId = st.parties[0].id;
@@ -227,12 +249,14 @@ function flashSaved(msg) {
   clearTimeout(flashSaved.t);
   flashSaved.t = setTimeout(() => el.classList.remove('on'), 1400);
 }
-function toast(msg) {
+// A short message at the bottom. With `action` ({ label, act }) it carries a button and stays longer.
+function toast(msg, action) {
   const el = $('#toast');
   el.textContent = msg;
+  if (action) el.insertAdjacentHTML('beforeend', ` <button class="btn tiny" data-act="${esc(action.act)}">${esc(action.label)}</button>`);
   el.classList.add('on');
   clearTimeout(toast.t);
-  toast.t = setTimeout(() => el.classList.remove('on'), 2600);
+  toast.t = setTimeout(() => el.classList.remove('on'), action ? 8000 : 2600);
 }
 
 const curBuild = () => state.builds.find((b) => b.id === state.ui.buildId) || null;

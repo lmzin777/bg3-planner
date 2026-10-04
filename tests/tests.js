@@ -124,10 +124,179 @@
     eq([featBonuses(b).dex, featBonuses(b).con, featBonuses(b).str], [1, 2, 0]);
   });
   test('the Stealth Archer ends at level 12 with the expected numbers', () => {
-    const s = finalStats(preset('stealth-archer'));
-    eq([s.level, s.pb, s.scores.dex, s.hp, s.initiative], [12, 4, 19, 95, 4]);
+    const b = preset('stealth-archer');
+    const s = finalStats(b, 'act2');
+    eq([s.level, s.pb, s.scores.dex, s.hp], [12, 4, 19, 95]);
+    eq(s.initiativeParts.map((p) => p[0]), ['DEX', 'Dread Ambusher', 'Yuan-Ti Scale Mail'], 'initiative comes from Dexterity, the Gloom Stalker and the armour');
     const stealth = s.skills.find((k) => k.name === 'Stealth');
     eq([stealth.expert, stealth.bonus], [true, 12]);
+    eq(s.saves.filter((k) => k.proficient).map((k) => k.short), ['STR', 'DEX'], 'saving throws of the first class');
+    // act 3 wears the Amulet of Greater Health: Constitution 23 and the hit points that come with it
+    const late = finalStats(b, 'act3');
+    eq([late.scores.con, late.hp], [23, 143]);
+  });
+  test('gear and elixirs change ability scores the way their text says', () => {
+    const b = build(['Fighter'], { abilities: { str: 15, dex: 14, con: 13, int: 8, wis: 10, cha: 8 } });
+    const slots = b.gear.act1.slots;
+    eq(abilityScores(b, 'act1').scores.str, 15);
+    slots.gloves.name = 'Gauntlets of Hill Giant Strength';
+    eq(abilityScores(b, 'act1').scores.str, 23, 'set to 23');
+    eq(abilityScores(b, 'act2').scores.str, 15, 'only in the act that wears it');
+    slots.gloves.name = 'Gloves of Dexterity';
+    eq(abilityScores(b, 'act1').scores.dex, 18);
+    b.creation.abilities.dex = 15; b.creation.plus2 = 'dex'; b.levels[3].picks.push('Feat: Ability Improvement (+2 DEX)');
+    eq(abilityScores(b, 'act1').scores.dex, 19, 'an item that sets a score never lowers it');
+    slots.chest.name = 'The Graceful Cloth';
+    eq(abilityScores(b, 'act1').scores.dex, 20, '+2 up to a maximum of 20');
+    slots.meleeMain.name = 'Harmonium Halberd';
+    eq([abilityScores(b, 'act1').scores.int, abilityScores(b, 'act1').scores.wis], [7, 9], 'penalties count too');
+    b.elixir = 'Elixir of Cloud Giant Strength';
+    eq(abilityScores(b, 'act3').scores.str, 27, 'the elixir applies in every act');
+    eq(elixirAbility('Elixir of Bloodlust'), null);
+    const gnome = build(['Rogue'], { race: 'Gnome' });
+    gnome.gear.act1.slots.gloves.name = 'Nimblefinger Gloves';
+    eq(abilityScores(gnome, 'act1').scores.dex - abilityScores(gnome, 'act2').scores.dex, 2, 'a bonus only for some races');
+  });
+  test('builds saved before the elixir field pick it up from their consumables', () => {
+    eq(normalizeBuild({ consumables: [{ name: 'Elixir of Bloodlust' }, { name: 'Elixir of Hill Giant Strength' }] }).elixir, 'Elixir of Hill Giant Strength');
+    eq(normalizeBuild({ elixir: '', consumables: [{ name: 'Elixir of Hill Giant Strength' }] }).elixir, '', 'an explicit "none" is kept');
+  });
+  test('attack and damage follow ability, proficiency, enchantment and fighting style', () => {
+    const b = build(['Fighter', 'Fighter', 'Fighter', 'Fighter', 'Fighter'], { abilities: { str: 15, dex: 14, con: 13, int: 8, wis: 10, cha: 8 }, plus2: 'str' });
+    const slots = b.gear.act1.slots;
+    slots.meleeMain.name = 'Longsword +1';
+    slots.rangedMain.name = 'Titanstring Bow';
+    const row = (name) => finalStats(b, 'act1').attacks.rows.find((r) => r.name === name);
+    eq([row('Longsword +1').attackTotal, row('Longsword +1').dice, row('Longsword +1').damageTotal], [7, '1d10', 4], '+3 STR +3 proficiency +1; held in two hands');
+    slots.meleeOff.name = 'Adamantine Shield';
+    b.levels[0].picks.push('Fighting Style: Duelling (or Defence)');
+    eq([row('Longsword +1').dice, row('Longsword +1').damageTotal], ['1d8', 6], 'one hand with a shield, Duelling +2');
+    eq([row('Titanstring Bow').attackTotal, row('Titanstring Bow').damageTotal], [6, 6], '+2 DEX +3 +1; damage +2 DEX +1 +3 STR from the bow');
+    b.levels[0].picks[0] = 'Fighting Style: Archery';
+    eq(row('Titanstring Bow').attackTotal, 8, 'Archery +2');
+    const wizard = build(['Wizard']);
+    wizard.gear.act1.slots.meleeMain.name = 'Longsword +1';
+    eq(finalStats(wizard, 'act1').attacks.rows[0].proficient, false, 'no proficiency bonus without proficiency');
+    const monk = preset('tavern-brawler-monk');
+    const fist = finalStats(monk, 'act3').attacks.rows.find((r) => r.slot === 'unarmed');
+    ok(fist && fist.attack.some((p) => p[0] === 'Tavern Brawler') && /^1d\d+$/.test(fist.dice), 'monk unarmed strike with Tavern Brawler: ' + JSON.stringify(fist));
+  });
+  test('spell numbers and slots follow class, multiclass and Pact Magic', () => {
+    const levels = (list) => list.flatMap(([c, n]) => Array.from({ length: n }, () => c));
+    const wizard = build(levels([['Wizard', 5]]), { abilities: { str: 8, dex: 14, con: 14, int: 15, wis: 10, cha: 8 }, plus2: 'int' });
+    const s = finalStats(wizard, 'act1');
+    eq([s.casting[0].dc, s.casting[0].attack, s.casting[0].prepared, s.slots], [14, 6, 8, [4, 3, 2]], '8 + 3 + 3; +3 +3; INT + level; Wizard 5');
+    wizard.gear.act1.slots.head.name = 'Hood of the Weave';
+    eq([finalStats(wizard, 'act1').casting[0].dc, finalStats(wizard, 'act1').casting[0].attack], [16, 8], 'gear adds to spell save DC and spell attack');
+    eq(spellSlots(build(levels([['Paladin', 2], ['Sorcerer', 10]]))), [4, 3, 3, 3, 2, 1], 'effective level 1 + 10');
+    eq(spellSlots(build(levels([['Paladin', 5]]))), [4, 2], 'a single class uses its own table');
+    const ek = build(levels([['Fighter', 7]]));
+    ek.levels[2].sub = 'Eldritch Knight';
+    eq([spellSlots(ek), finalStats(ek, 'act1').casting[0].ability], [[4, 2], 'int'], 'Eldritch Knight 7 counts as level 3');
+    const lock = build(levels([['Warlock', 5], ['Fighter', 2]]));
+    eq([spellSlots(lock), pactSlots(lock)], [[], { n: 2, level: 3 }], 'Pact Magic is apart from spell slots');
+    eq([maxSpellLevel(wizard, 4), maxSpellLevel(wizard, 0), maxSpellLevel(build(['Fighter']), 0)], [3, 1, 0]);
+  });
+  test('class tables give resources and what changes at each level', () => {
+    const barb = build(Array.from({ length: 9 }, () => 'Barbarian'));
+    const res = Object.fromEntries(classResources(barb));
+    eq([res['Rage Charges'], res['Rage Damage']], ['4', '+3']);
+    ok(levelNumbers(levelInfo(barb)[2]).some((x) => x.startsWith('Rage Charges')), 'Barbarian 3 gains a Rage charge');
+    const wizard = build(['Wizard', 'Wizard', 'Wizard']);
+    ok(levelNumbers(levelInfo(wizard)[2]).some((x) => x.includes('4 / 2')), 'Wizard 3 shows its new slots: ' + levelNumbers(levelInfo(wizard)[2]));
+    ok(CLASSES.every((c) => Object.values(CLASS_DATA[c].levels).flat().every((g) => !/\dpx/.test(g))), 'no picture sizes left in feature names');
+    const bm = build(Array.from({ length: 7 }, () => 'Fighter'));
+    bm.levels[2].sub = 'Battle Master';
+    eq(Object.fromEntries(classResources(bm))['Superiority Dice'], '5');
+  });
+  test('features carry their description', () => {
+    ok(/extra damage/i.test(featureText('Rage')), 'Rage: ' + featureText('Rage'));
+    ok(featureText('Sneak Attack') && featureText('Extra Attack') && featureText('Bardic Inspiration (d6)'), 'common features');
+    ok(featureText('Misty Step'), 'a granted spell falls back to the spell description');
+    ok(Object.keys(FEATURES).length > 400, 'descriptions collected: ' + Object.keys(FEATURES).length);
+  });
+  test('items that grant proficiency count for the build', () => {
+    const wizard = build(['Wizard']);
+    ok(canUse(item('Elven Chain'), proficiencies(wizard)), 'Elven Chain makes its wearer proficient with it');
+    ok(!canUse(item('Titanstring Bow'), proficiencies(wizard, 'act1')), 'no longbows yet');
+    wizard.gear.act1.slots.gloves.name = 'Gloves of Archery';
+    ok(canUse(item('Titanstring Bow'), proficiencies(wizard, 'act1')) && !canUse(item('Titanstring Bow'), proficiencies(wizard, 'act2')), 'longbows while the gloves are on');
+  });
+  test('multiclassing adds skill picks, and Expertise is read from the level choices', () => {
+    const b = build(['Fighter', 'Rogue'], { race: 'Elf', subrace: 'Wood Elf', background: 'Soldier' });
+    const st = skillState(b);
+    eq(st.max, 3, 'Fighter 2 + Rogue 1');
+    ok(st.canAdd('Sleight of Hand') && !st.canAdd('Arcana'), 'the extra pick comes from the Rogue list');
+    ok(grantsExpertise(levelInfo(b)[1]) && !grantsExpertise(levelInfo(b)[0]), 'Rogue 1 grants Expertise');
+    b.levels[1].picks.push('Expertise: Athletics + Stealth');
+    eq(finalStats(b).skills.find((k) => k.name === 'Athletics').expert, true);
+  });
+
+  // ---------- build check ----------
+  test('the build check lists what is missing and what does not fit', () => {
+    const texts = (b) => buildIssues(b).map((x) => x.text).join(' | ');
+    const b = build(['Fighter', 'Fighter', 'Fighter', 'Fighter'], { race: 'Human', background: 'Soldier', abilities: { str: 15, dex: 13, con: 14, int: 8, wis: 12, cha: 10 }, plus2: 'str', plus1: 'con', skills: 'Perception, Survival, Arcana' });
+    ok(/subclass not chosen/.test(texts(b)) && /Level 4: feat not chosen/.test(texts(b)), texts(b));
+    b.levels[2].sub = 'Champion';
+    b.levels[3].picks.push('Feat: Alert');
+    ok(!/subclass|feat not chosen/.test(texts(b)), 'cleared once chosen: ' + texts(b));
+    b.gear.act1.slots.chest.name = 'Helldusk Armour';
+    b.gear.act1.slots.meleeMain.name = 'Balduran\'s Giantslayer';
+    b.gear.act1.slots.meleeOff.name = 'Adamantine Shield';
+    ok(/Helldusk Armour is only found in Act 3/.test(texts(b)) && /needs both hands/.test(texts(b)), texts(b));
+    const wizard = build(['Wizard']);
+    wizard.gear.act1.slots.chest.name = 'Adamantine Splint Armour';
+    wizard.levels[0].picks.push('Spell: Fireball');
+    ok(/not proficient with Heavy Armour/.test(texts(wizard)) && /Fireball is a level 3 spell/.test(texts(wizard)), texts(wizard));
+    eq(buildIssues(preset('stealth-archer')).filter((x) => x.level === 'warn').map((x) => x.text), ['Race not chosen'], 'the ready-made archer only lacks a race');
+  });
+  test('a contested item shows in the build check and drops in the recommendations', () => {
+    const a = build(['Fighter']);
+    const c = build(['Fighter']);
+    a.gear.act1.slots.ring1.name = 'Risky Ring';
+    state.builds.push(a, c);
+    const party = blankParty('Test');
+    party.members[0].buildId = a.id;
+    party.members[1].buildId = c.id;
+    party.members[0].char = 'Karlach';
+    state.parties.push(party);
+    eq(partyTaken(c, 'act1')[norm('Risky Ring')], 'Karlach');
+    c.gear.act1.slots.ring1.name = 'Risky Ring';
+    ok(buildIssues(c).some((x) => /also worn by Karlach/.test(x.text)), 'flagged in the check');
+    const rings = ITEMS.filter((it) => it.s === 'ring');
+    const taken = recommend(c, 'ring2', 'act1', 'damage', rings).find((r) => r.it.n === 'Risky Ring');
+    ok(taken && taken.taken === 'Karlach', 'marked in the recommendations');
+    state.parties.pop();
+    state.builds.splice(-2, 2);
+  });
+
+  // ---------- undo and sharing ----------
+  test('a deleted build comes back with its place in the party', () => {
+    const b = build(['Fighter']);
+    b.name = 'Trash test';
+    state.builds.push(b);
+    const p = curParty();
+    const free = p.members.findIndex((m) => !m.buildId);
+    p.members[free].buildId = b.id;
+    toTrash('build', b, [[p.id, free]]);
+    p.members[free].buildId = '';
+    state.builds.pop();
+    eq(state.trash[0].data.name, 'Trash test');
+    const back = restoreTrash(0);
+    eq([back.name, p.members[free].buildId === back.id, state.trash.length], ['Trash test', true, 0]);
+    p.members[free].buildId = '';
+    state.builds.pop();
+  });
+  test('pruning for the share code loses nothing', () => {
+    const b = preset('stealth-archer');
+    b.gear.act1.slots.ring1 = { name: 'Risky Ring', rarity: item('Risky Ring').r, where: itemWhere(item('Risky Ring')), note: 'mine', got: true };
+    const lean = leanBuild(b);
+    eq(lean.gear.act1.slots.ring1, { name: 'Risky Ring', note: 'mine', got: true }, 'what the item database knows is left out');
+    const back = normalizeBuild(fromLean(JSON.parse(JSON.stringify(lean))));
+    back.id = b.id;
+    eq(back, b);
+    ok(JSON.stringify(lean).length < JSON.stringify(b).length, 'and it is shorter');
+    ok(isShareCode('BG3B2.' + 'a'.repeat(40)) && !isShareCode('{"type":"bg3-planner"}'), 'codes are told apart from backups');
   });
   test('heavy armour ignores Dexterity, medium armour caps it', () => {
     const b = build(['Fighter'], { abilities: { str: 15, dex: 15, con: 13, int: 8, wis: 10, cha: 8 } });
@@ -210,9 +379,23 @@
   test('spell filters find class spells', () => {
     const f = libState('spells');
     const saved = clone(f);
-    Object.assign(f, { q: 'fireball', lv: [], cls: 'Wizard', school: '', cost: '', dmg: 'Fire', save: 'DEX', conc: false, ritual: false, learn: true });
+    Object.assign(f, { q: 'fireball', lv: [], cls: 'Wizard', origin: 'class', school: '', cost: '', dmg: 'Fire', save: 'DEX', conc: false, ritual: false });
     eq(libSorted('spells').map((s) => s.n), ['Fireball']);
+    Object.assign(f, { q: '', cls: '', dmg: '', save: '', origin: 'class' });
+    const classOnly = libSorted('spells').length;
+    f.origin = '';
+    ok(classOnly < libSorted('spells').length && libSorted('spells').length === SPELLS.length, 'follow-up actions and item spells are hidden until asked for');
+    eq(SPELLS.find((s) => s.n === 'Produce Flame: Hurl').og, 'other');
     Object.assign(f, saved);
+  });
+  test('consumables are listed with the items and suggested by name', () => {
+    const f = libState('items');
+    const saved = clone(f);
+    Object.assign(f, { q: 'hill giant', kind: 'consumable', type: '', tag: '', rar: [], act: '', build: '' });
+    eq(libSorted('items').map((it) => it.n), ['Elixir of Hill Giant Strength']);
+    Object.assign(f, saved);
+    eq(suggestItems('consumable', 'cloud gi').map((c) => c.n), ['Elixir of Cloud Giant Strength']);
+    ok(CONSUMABLES.filter((c) => c.t === 'Elixir').length > 30, 'elixirs collected');
   });
 
   // ---------- translation ----------

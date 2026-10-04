@@ -1,7 +1,7 @@
 """Download the item and spell pictures so the planner shows them without internet.
 
 Run from anywhere:  py tools/download_images.py
-Saves every picture referenced by items.js and spells.js into img/ (about 1300 small files) and
+Saves every picture referenced by items.js, spells.js and consumables.js into img/ (about 1300 small files) and
 switches the planner to use them. Pictures already downloaded are skipped, so it is safe to re-run
 after updating the databases. Delete img/ and set images.js back to false to return to loading
 the pictures from the wiki.
@@ -20,7 +20,7 @@ def local_name(path):
 
 def paths():
     out = set()
-    for name, var in (("items.js", "BG3_ITEMS"), ("spells.js", "BG3_SPELLS")):
+    for name, var in (("items.js", "BG3_ITEMS"), ("spells.js", "BG3_SPELLS"), ("consumables.js", "BG3_CONSUMABLES")):
         text = io.open(os.path.join(ROOT, name), encoding="utf-8").read()
         records = json.loads("[" + text.split("window." + var + " = [", 1)[1].rsplit("]", 1)[0] + "]")
         out.update(r["i"] for r in records if r.get("i"))

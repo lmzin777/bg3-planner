@@ -1,20 +1,24 @@
-"""Rebuild classes.js from bg3.wiki: what each class and subclass gains per level, and the list of feats.
+"""Rebuild classes.js from bg3.wiki: what each class and subclass gains per level, the numbers of the
+class tables (resources, cantrips and spells known, spell slots), what each feature does, and the feats.
 
 Run from anywhere:  py tools/update_classes.py
-Needs only the Python standard library and an internet connection. Takes under a minute.
+Needs only the Python standard library and an internet connection. Takes about a minute.
 
-Class features come from the "Class progression" table of each class page, the subclasses from its
-"Select a subclass" table, subclass features from the level sections of each subclass page, and feats
-from the table on the Feats page.
+Class features and numbers come from the "Class progression" table of each class page, the subclasses
+from its "Select a subclass" table, subclass features from the level sections of each subclass page,
+feature descriptions from the page of each feature, and feats from the table on the Feats page.
 """
 import io, json, os, re, sys, time
 
-from update_items import clean, field, page_texts, short
+from update_items import api, clean, field, page_texts, short
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "classes.js")
 CLASSES = ["Barbarian", "Bard", "Cleric", "Druid", "Fighter", "Monk", "Paladin", "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard"]
 FEATURE_TEMPLATE = re.compile(
     r"\{\{\s*(?:Lg|Md|Sm)?(?:SAI|Pass|Passive|Spell action|Action|Reaction|Feature box)\s*\|([^{}|]+)(?:\|([^{}|=]+)(?=\||\}\}))?[^{}]*\}\}", re.I)
+# The wiki page behind each feature name, collected while the names are read; used to fetch the descriptions.
+PAGE_OF = {}
+RESOURCES = {}
 
 
 def sections(text, level):
@@ -26,15 +30,62 @@ def sections(text, level):
 
 def tidy(name):
     name = clean(name.replace("&colon;", ":")).strip(" :-–")
-    return re.sub(r"\s*\((?:passive feature|Melee|Ranged)\)$", "", name)
+    name = re.sub(r"\s*\((?:passive feature|Melee|Ranged|class action)\)", "", name)
+    return re.sub(r"\(\s+", "(", name).strip()
+
+
+def remember(label, page):
+    """Note which page a feature name leads to. Links back into the class page itself say nothing."""
+    page = page.split("#")[0].strip().replace("_", " ")
+    label = tidy(label)
+    if page and label and page not in CLASSES and label not in PAGE_OF:
+        PAGE_OF[label] = page
+
+
+def resource(code, plural):
+    """Name of a class resource from the code the wiki's {{R}} template takes ("ki" is "Ki Points")."""
+    key = (code.strip().lower(), plural)
+    if key not in RESOURCES:
+        text = "{{R|" + code.strip() + ("|forceplural=yes" if plural else "") + "}}"
+        out = api(action="expandtemplates", text=text, prop="wikitext").get("expandtemplates", {}).get("wikitext", "")
+        out = re.sub(r"\[\[File:[^\]]*\]\]|&#8239;", "", out)
+        RESOURCES[key] = clean(out) or code.strip()
+    return RESOURCES[key]
+
+
+def resource_sub(m):
+    parts = [x.strip() for x in m.group(1).split("|")]
+    if any(re.match(r"icon\s*only", x, re.I) for x in parts[1:]):
+        return ""
+    return resource(parts[0].split(":")[0], any(x.lower().startswith("forceplural") for x in parts[1:]))
+
+
+def icon_link(m):
+    """{{Icon link|picture|page|label}}: keep the label, remember the page."""
+    args = [x.strip() for x in m.group(1).split("|") if "=" not in x]
+    label = args[-1] if args else ""
+    if len(args) >= 2:
+        remember(label, args[1])
+    return label
+
+
+def feature_sub(m):
+    remember(m.group(2) or m.group(1), m.group(1))
+    return m.group(2) or m.group(1)
 
 
 def plain(text):
     """Icon templates carry a file name first; keep only the label a reader would see."""
+    text = re.sub(r"\[\[File:[^\]]*\]\]", "", text, flags=re.I)
     text = re.sub(r"\{\{\s*(?:Icon|DieIcon|SpellSlot)\s*\|[^{}]*\}\}", "", text, flags=re.I)
-    text = re.sub(r"\{\{\s*(?:Sm|Md|Lg)?Icon ?link\s*\|([^{}]*)\}\}", lambda m: [x for x in m.group(1).split("|") if "=" not in x][-1], text, flags=re.I)
-    text = re.sub(r"\{\{\s*(?:R|Resource|Anchor)\s*\|[^{}]*\}\}", "", text, flags=re.I)
-    return FEATURE_TEMPLATE.sub(lambda m: m.group(2) or m.group(1), text)
+    text = re.sub(r"\{\{\s*(?:Sm|Md|Lg)?Icon ?link\s*\|([^{}]*)\}\}", icon_link, text, flags=re.I)
+    text = re.sub(r"\{\{\s*(?:R|Resource)\s*\|([^{}]*)\}\}", resource_sub, text, flags=re.I)
+    text = re.sub(r"\{\{\s*Anchor\s*\|[^{}]*\}\}", "", text, flags=re.I)
+    for page, label in re.findall(r"\[\[([^\]|#]+)(?:#[^\]|]*)?\|([^\]]+)\]\]", text):
+        remember(label, page)
+    for page in re.findall(r"\[\[([^\]|#]+)\]\]", text):
+        remember(page, page)
+    return FEATURE_TEMPLATE.sub(feature_sub, text)
 
 
 # Bookkeeping lines of a level section: spell slots, counts and reminders rather than features.
@@ -95,34 +146,89 @@ def feature_names(text):
         if dt:
             add(plain(dt.group(1)).rstrip("."))
         elif found:
+            plain(raw)  # remembers the page of each feature
             for n in found:
                 add(n)
         elif raw.startswith(";"):
-            add(re.sub(r"&colon;.*$", "", plain(raw[1:])))
+            # "Superiority Dice: 4" keeps its number; any other text after the colon is an explanation
+            add(re.sub(r"&colon;(?!\s*\d+\s*$).*$", "", plain(raw[1:])))
         elif raw.startswith("*") and not raw.startswith("**"):
             add(plain(raw.lstrip("* ")))
     return out
 
 
-def class_table(w):
-    """Features column of the class progression table, as {level: [feature, ...]}."""
-    out = {}
-    m = re.search(r"==\s*Class progression\s*==(.*?)\n\|\}", w, re.S | re.I)
-    table = m.group(1) if m else ""
-    for row in re.split(r"\n\|-[^\n]*", table):
-        lv = re.search(r"\[\[\w*#Level (\d+)\|", row)
-        if not lv:
+def grid(table):
+    """Rows of a wikitable as lists of cell texts, with rowspan and colspan expanded."""
+    rows, pending = [], {}
+    for raw in re.split(r"\n\|-[^\n]*", table):
+        cells = []
+        for line in raw.split("\n"):
+            if not line or line[0] not in "!|" or line.startswith("|}") or line.startswith("{|") or line.startswith("|+"):
+                continue
+            for part in re.split(r"\s*(?:!!|\|\|)\s*", line[1:]):
+                m = re.match(r'\s*((?:(?:style|rowspan|colspan|class|scope)\s*=\s*"[^"]*"\s*)+)\|(?!\|)(.*)$', part, re.S)
+                attrs, text = (m.group(1), m.group(2)) if m else ("", part)
+                rs = re.search(r'rowspan\s*=\s*"(\d+)"', attrs)
+                cs = re.search(r'colspan\s*=\s*"(\d+)"', attrs)
+                cells.append((text.strip(), int(rs.group(1)) if rs else 1, int(cs.group(1)) if cs else 1))
+        if not cells:
             continue
-        cells = re.split(r"\n\|", row)[1:]
-        best = max(cells, key=lambda c: len(re.findall(r"\{\{|\[\[", c)), default="")
-        best = re.sub(r'^\s*(?:(?:style|rowspan|colspan|class)="[^"]*"\s*)+\|', "", best)
-        names = []
-        for piece in re.split(r",(?![^{]*\}\})(?![^\[]*\]\])", plain(best)):
+        row, col = [], 0
+        while cells or col in pending:
+            if col in pending:
+                text, left = pending[col]
+                row.append(text)
+                if left > 1:
+                    pending[col] = (text, left - 1)
+                else:
+                    del pending[col]
+                col += 1
+                continue
+            text, rs, cs = cells.pop(0)
+            for _ in range(cs):
+                row.append(text)
+                if rs > 1:
+                    pending[col] = (text, rs - 1)
+                col += 1
+        rows.append(row)
+    return rows
+
+
+SLOT_COLUMN = re.compile(r"^(\d)(?:st|nd|rd|th)$")
+SKIP_COLUMNS = {"level", "proficiency bonus", "features", "subclass"}
+
+
+def class_table(w):
+    """The class progression table: features per level, and the numbers of its other columns.
+
+    Returns (levels, cols, table, slots): {level: [feature]}, the names of the number columns,
+    {level: [value per column]} and {level: [slots of spell level 1, 2, ...]}.
+    """
+    levels, cols, table, slots = {}, [], {}, {}
+    m = re.search(r"==\s*Class progression\s*==(.*?)\n\|\}", w, re.S | re.I)
+    rows = grid(m.group(1)) if m else []
+    header = next((r for r in rows if any(clean(c).lower() == "features" for c in r)), [])
+    names = [clean(plain(c)) for c in header]
+    col_ix = [i for i, n in enumerate(names) if n.lower() not in SKIP_COLUMNS and not SLOT_COLUMN.match(n)]
+    slot_ix = [i for i, n in enumerate(names) if SLOT_COLUMN.match(n)]
+    feat_ix = next((i for i, n in enumerate(names) if n.lower() == "features"), 2)
+    cols = [names[i] for i in col_ix]
+    for row in rows:
+        lv = re.search(r"\[\[\w*#Level (\d+)\|", row[0]) if row else None
+        if not lv or len(row) < len(names):
+            continue
+        n = int(lv.group(1))
+        found = []
+        for piece in re.split(r",(?![^{]*\}\})(?![^\[]*\]\])", plain(row[feat_ix])):
             text = tidy(piece)
-            if text and not re.fullmatch(r"[\d+\-–\s]*", text) and text not in names:
-                names.append(text)
-        out[int(lv.group(1))] = names
-    return out
+            if text and not re.fullmatch(r"[\d+\-–\s]*", text) and text not in found:
+                found.append(text)
+        levels[n] = found
+        if cols:
+            table[n] = [("" if clean(row[i]) in ("-", "–") else clean(row[i])) for i in col_ix]
+        if slot_ix:
+            slots[n] = [int(clean(row[i])) if clean(row[i]).isdigit() else 0 for i in slot_ix]
+    return levels, cols, table, slots
 
 
 def subclass_list(w):
@@ -163,6 +269,46 @@ def feats(w):
     return out
 
 
+def rclean(text):
+    """clean(), with resource codes ({{R|ki}}) written out as their names first."""
+    return clean(re.sub(r"\{\{\s*(?:R|Resource)\s*\|([^{}]*)\}\}", resource_sub, text, flags=re.I))
+
+
+def describe(w):
+    """What a feature does, from its page: the in-game description, else the wiki's summary, else its first sentence."""
+    if re.search(r"\{\{\s*Disambig", w, re.I):
+        return ""
+    text = " ".join(x for x in (rclean(field(w, "description")), rclean(field(w, "extra description"))) if x)
+    if not text:
+        text = rclean(field(w, "summary"))
+    if not text:
+        for line in w.split("\n"):
+            line = line.strip()
+            if len(line) > 60 and re.match(r"['A-Za-z]", line) and not line.startswith("File:"):
+                text = rclean(re.sub(r"\{\{\s*ref\s*\|.*?\}\}(?=[ .]|$)", "", line))
+                break
+    text = re.sub(r"\s*;\s*", " ", text)
+    return short(text, 340)
+
+
+def descriptions(data):
+    """{feature name: what it does} for every feature a class or subclass grants."""
+    names = set()
+    for d in data.values():
+        for feats_ in list(d["levels"].values()) + [f for s in d["subclasses"].values() for f in s.values()]:
+            names.update(feats_)
+    wanted = {n: PAGE_OF.get(n) or PAGE_OF.get(re.sub(r"\s*\([^)]*\)$", "", n)) or n for n in names
+              if not re.match(r"(feats?|choose a subclass|subclass features?)$", n, re.I) and not re.search(r"^(choose|select|you )|\d$", n, re.I)}
+    pages = page_texts(list(set(wanted.values())))
+    out = {}
+    for n, page in sorted(wanted.items()):
+        text = describe(pages.get(page, ""))
+        # a page shared by many features (the Spells page behind "Spellcasting") says nothing about this one
+        if text and not text.startswith("Spells are "):
+            out[n] = text
+    return out
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     print("Reading class pages…")
@@ -171,7 +317,8 @@ def main():
     for c in CLASSES:
         w = pages.get(c, "")
         level, subs = subclass_list(w)
-        data[c] = {"levels": class_table(w), "subclassLevel": level, "subclasses": {}}
+        levels, cols, table, slots = class_table(w)
+        data[c] = {"levels": levels, "subclassLevel": level, "subclasses": {}, "cols": cols, "table": table, "slots": slots}
         for s in subs:
             wanted[s] = c
     print(f"Reading {len(wanted)} subclass pages…")
@@ -179,21 +326,27 @@ def main():
     for s, c in wanted.items():
         data[c]["subclasses"][s] = subclass_levels(sub_pages.get(s, ""))
     feat_list = feats(pages.get("Feats", ""))
+    print("Reading what each feature does…")
+    features = descriptions(data)
 
-    js = ("// What each class and subclass gains per level, and the feats. Generated by tools/update_classes.py from bg3.wiki;\n"
-          "// do not edit by hand, re-run the script instead.\n"
-          "// BG3_CLASSES[class] = { levels: {class level: [features]}, subclassLevel, subclasses: {name: {class level: [features]}} }\n"
-          "// BG3_FEATS = [[name, what it does], ...]\n"
+    row = lambda d: json.dumps(d, ensure_ascii=False, separators=(",", ":"))
+    js = ("// What each class and subclass gains per level, the numbers of the class tables, what each feature does, and the feats.\n"
+          "// Generated by tools/update_classes.py from bg3.wiki; do not edit by hand, re-run the script instead.\n"
+          "// BG3_CLASSES[class] = { levels: {class level: [features]}, subclassLevel, subclasses: {name: {class level: [features]}},\n"
+          "//   cols: [names of the number columns], table: {class level: [value per column]}, slots: {class level: [slots per spell level]} }\n"
+          "// BG3_FEATS = [[name, what it does], ...] · BG3_FEATURES = {feature name: what it does}\n"
           f"window.BG3_CLASSES_DATE = {json.dumps(time.strftime('%Y-%m-%d'))};\n"
           "window.BG3_CLASSES = " + json.dumps(data, ensure_ascii=False, indent=1) + ";\n"
-          "window.BG3_FEATS = [\n" + ",\n".join("  " + json.dumps(f, ensure_ascii=False) for f in feat_list) + "\n];\n")
+          "window.BG3_FEATS = [\n" + ",\n".join("  " + row(f) for f in feat_list) + "\n];\n"
+          "window.BG3_FEATURES = {\n" + ",\n".join("  " + json.dumps(k, ensure_ascii=False) + ":" + json.dumps(v, ensure_ascii=False) for k, v in features.items()) + "\n};\n")
     io.open(OUT, "w", encoding="utf-8", newline="\n").write(js)
 
-    print(f"Wrote {OUT} ({len(js) // 1024} KB): {len(feat_list)} feats")
+    print(f"Wrote {OUT} ({len(js) // 1024} KB): {len(feat_list)} feats, {len(features)} feature descriptions")
     for c in CLASSES:
         d = data[c]
         empty = [s for s, lv in d["subclasses"].items() if not lv]
-        print(f"  {c}: {len(d['levels'])} levels, subclass at {d['subclassLevel']}: {', '.join(d['subclasses'])}" + (f" | NO FEATURES FOUND: {empty}" if empty else ""))
+        print(f"  {c}: {len(d['levels'])} levels, subclass at {d['subclassLevel']}, columns {d['cols']}, slots {'yes' if d['slots'] else 'no'}"
+              + (f" | NO FEATURES FOUND: {empty}" if empty else ""))
 
 
 if __name__ == "__main__":

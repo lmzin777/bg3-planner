@@ -87,6 +87,12 @@ const KIND_SLOTS = { head: ['head'], cloak: ['cloak'], chest: ['chest'], gloves:
 function addDialog() {
   const b = buildById(dlg.build) || state.builds[0];
   const buildSelect = `<label class="field"><span>${t('Build')}</span><select data-dlg="build">${state.builds.map((x) => opt(x.id, x.name || t('Unnamed'), b.id)).join('')}</select></label>`;
+  if (dlg.kind === 'consumable') {
+    return `<h2>${t('Add to build')}</h2><p class="muted">${esc(dlg.item.n)}</p>
+      ${buildSelect}
+      <p class="muted">${t('It goes to the Consumables list of the build.')}</p>
+      <div class="modal-btns"><button class="btn" data-act="dialog-close">${t('Cancel')}</button><button class="btn primary" data-act="add-confirm">${t('Add to build')}</button></div>`;
+  }
   if (dlg.kind === 'item') {
     const it = dlg.item;
     const slots = KIND_SLOTS[it.s].filter((k) => !(k === 'meleeOff' && it.w === 'two') && !(k === 'rangedOff' && it.w !== 'one'));
@@ -119,33 +125,36 @@ Object.assign(actions, {
         <button class="choice" data-act="backup-copy"><strong>${t('Copy backup as text')}</strong><span>${t('Copies the same content to the clipboard. Paste it into Import, or into a note to keep.')}</span></button>
       </div>
       <label class="field"><span>${t('Backup text (you can also select and copy it by hand)')}</span><textarea id="backup-text" rows="4" readonly>${esc(text)}</textarea></label>
+      ${snapshots().length ? `<h3 class="group">${t('Automatic copies')}</h3>
+        <p class="muted">${t('The planner keeps a copy a day in this browser, and one before anything that replaces your data.')}</p>${snapshotList()}` : ''}
       <div class="modal-btns"><button class="btn" data-act="dialog-close">${t('Close')}</button></div>`);
     return false;
   },
   'backup-file'() { download('bg3-planner-backup.json', backupData()); return false; },
   async 'backup-copy'() {
-    const area = $('#backup-text');
-    area.select();
-    try { await navigator.clipboard.writeText(dlg.text); toast(t('Backup copied')); } catch (err) {
-      // no clipboard permission: the text stays selected so Ctrl+C works
-      toast(document.execCommand && document.execCommand('copy') ? t('Backup copied') : t('Press Ctrl+C to copy the selected text'));
-    }
+    toast((await copyText(dlg.text, $('#backup-text'))) ? t('Backup copied') : t('Press Ctrl+C to copy the selected text'));
     return false;
   },
   import() {
     dlg = { text: '' };
     openDialog(`<h2>${t('Import')}</h2>
-      <p>${t('Load a build or a backup exported from this planner.')}</p>
+      <p>${t('Load a build or a backup exported from this planner, or a share code a friend sent you.')}</p>
       <div class="choices"><button class="choice" data-act="import-file"><strong>${t('Choose a file…')}</strong><span>${t('A .json file saved by Export.')}</span></button></div>
-      <label class="field"><span>${t('…or paste the backup text here')}</span><textarea data-dlg="text" rows="5" placeholder='{"type":"bg3-planner", …}'></textarea></label>
+      <label class="field"><span>${t('…or paste a share code or the backup text here')}</span><textarea data-dlg="text" rows="5" placeholder='BG3B2.… / {"type":"bg3-planner", …}'></textarea></label>
       <div class="modal-btns"><button class="btn" data-act="dialog-close">${t('Cancel')}</button><button class="btn primary" data-act="import-text">${t('Import pasted text')}</button></div>`);
     return false;
   },
   'import-file'() { $('#file').click(); return false; },
-  'import-text'() {
+  async 'import-text'() {
     let data = null;
-    try { data = JSON.parse(dlg.text); } catch (err) { /* reported below */ }
-    if (!data) { toast(t('That text is not a valid backup')); return false; }
+    if (isShareCode(dlg.text)) {
+      const build = await readShareCode(dlg.text);
+      if (!build) { toast(t('That share code is incomplete or damaged')); return false; }
+      data = { type: 'bg3-build', build };
+    } else {
+      try { data = JSON.parse(dlg.text); } catch (err) { /* reported below */ }
+    }
+    if (!data) { toast(t('That text is not a valid backup or share code')); return false; }
     importData(data);
     return false;
   },
@@ -156,8 +165,9 @@ Object.assign(actions, {
   },
   async 'import-replace'() {
     const data = dlg.pending;
-    if (!(await ask(t('Replace all your current builds and parties with the backup? This cannot be undone.'), t('Replace everything'), true))) return false;
-    state = hydrate({ builds: data.builds, parties: data.parties, ui: state.ui });
+    if (!(await ask(t('Replace all your current builds and parties with the backup? What you have now is kept as an automatic copy.'), t('Replace everything'), true))) return false;
+    takeSnapshot();
+    state = hydrate({ builds: data.builds, parties: data.parties, ui: state.ui, trash: state.trash });
     closeDialog();
     toast(t('Backup imported'));
   },
@@ -165,7 +175,8 @@ Object.assign(actions, {
   'add-to-build'(el) {
     if (!state.builds.length) { toast(t('Create a build first')); return false; }
     const cur = curBuild() || state.builds[0];
-    if (el.dataset.kind === 'item') dlg = { kind: 'item', item: ITEM_BY_NAME.get(norm(el.dataset.n)), build: cur.id, act: state.ui.act, slot: '' };
+    if (el.dataset.kind === 'item' && CONSUMABLE_BY_NAME.has(norm(el.dataset.n))) dlg = { kind: 'consumable', item: CONSUMABLE_BY_NAME.get(norm(el.dataset.n)), build: cur.id };
+    else if (el.dataset.kind === 'item') dlg = { kind: 'item', item: ITEM_BY_NAME.get(norm(el.dataset.n)), build: cur.id, act: state.ui.act, slot: '' };
     else dlg = { kind: 'spell', spell: SPELLS.find((s) => s.n === el.dataset.n), build: cur.id, level: 0 };
     dlg.refresh = () => { $('#dialog-box').innerHTML = addDialog(); };
     openDialog(addDialog());
@@ -175,7 +186,10 @@ Object.assign(actions, {
   'add-confirm'() {
     const b = buildById(dlg.build);
     if (!b) return false;
-    if (dlg.kind === 'item') {
+    if (dlg.kind === 'consumable') {
+      if (!b.consumables.some((x) => norm(x.name) === norm(dlg.item.n))) b.consumables.push({ name: dlg.item.n, note: '' });
+      toast(t('{x} added to {build}', { x: dlg.item.n, build: b.name }));
+    } else if (dlg.kind === 'item') {
       const it = dlg.item;
       Object.assign(b.gear[dlg.act].slots[dlg.slot], { name: it.n, rarity: it.r || '', where: [it.l, it.h].filter(Boolean).join(' — '), got: false });
       toast(t('{x} added to {build}', { x: it.n, build: b.name }));

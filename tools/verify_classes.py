@@ -90,8 +90,11 @@ def main():
         w = pages[c]
         d = data.get(c)
         level, subs = subclass_list(w)
-        table = class_table(w)
+        table, cols, numbers, slots = class_table(w)
         issues = []
+        if d and (d.get("cols") != cols or {int(k): v for k, v in d.get("table", {}).items()} != numbers
+                  or {int(k): v for k, v in d.get("slots", {}).items()} != slots):
+            issues.append("the numbers of the class table differ from the wiki now (re-run update_classes.py)")
         if not d:
             issues.append("class missing from classes.js")
         else:

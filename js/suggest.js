@@ -12,6 +12,10 @@ let suggestFor = null;  // the input the box belongs to
 function suggestItems(slot, text) {
   const q = norm(text);
   if (q.length < 2) return [];
+  if (slot === 'consumable') {
+    return CONSUMABLES.filter((c) => norm(c.n).includes(q) && norm(c.n) !== q)
+      .sort((a, b) => (norm(b.n).startsWith(q) - norm(a.n).startsWith(q)) || a.n.localeCompare(b.n)).slice(0, SUGGEST_MAX);
+  }
   const kinds = SLOT_KINDS[slot] || [];
   return ITEMS.filter((it) => kinds.includes(it.s) && norm(it.n).includes(q) && norm(it.n) !== q)
     // names that start with what was typed come first, then the rarer items
@@ -26,10 +30,11 @@ function showSuggest(input) {
   const list = suggestItems(input.dataset.suggest, input.value);
   if (!list.length) { hideSuggest(); return; }
   suggestFor = input;
+  const consumable = input.dataset.suggest === 'consumable';
   suggestBox.innerHTML = list.map((it, i) =>
     `<button class="pick-row r-${it.r}${i === 0 ? ' first' : ''}" data-n="${esc(it.n)}">${pic(it.i, 'pic small')}<b>${esc(it.n)}</b>
       <span>${esc([it.t, it.d].filter(Boolean).join(' · '))}</span>
-      <small>${esc([it.a ? t('Act {n}', { n: it.a }) : t('Any act'), it.l].filter(Boolean).join(' · '))}</small></button>`).join('')
+      <small>${esc(consumable ? it.x : [it.a ? t('Act {n}', { n: it.a }) : t('Any act'), it.l].filter(Boolean).join(' · '))}</small></button>`).join('')
     + `<p class="muted">${t('Enter picks the first one · Esc closes')}</p>`;
   const r = input.getBoundingClientRect();
   suggestBox.style.left = Math.max(8, Math.min(r.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - 380)) + 'px';
@@ -38,7 +43,7 @@ function showSuggest(input) {
 }
 function chooseSuggestion(name) {
   const input = suggestFor;
-  const it = ITEM_BY_NAME.get(norm(name));
+  const it = input && input.dataset.suggest === 'consumable' ? CONSUMABLE_BY_NAME.get(norm(name)) : ITEM_BY_NAME.get(norm(name));
   hideSuggest();
   if (!input || !it) return;
   const obj = getPath(curBuild(), input.dataset.path.replace(/\.name$/, ''));

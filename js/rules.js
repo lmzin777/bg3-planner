@@ -38,10 +38,31 @@ const PICK_PROF = [
 ];
 
 const WEAPON_TYPES = [...new Set(ITEMS.filter((it) => it.s === 'melee' || it.s === 'ranged').map((it) => it.t))];
+const effectTexts = (it) => [it.sp || '', ...(it.ps || []).map((p) => p[1] || '')];
+// The item of each gear slot in an act, as {slot: item}. `swap` replaces slots to answer "what if I wore this".
+function wornItems(b, act, swap) {
+  const out = {};
+  SLOTS.forEach(([k]) => { const it = swap && k in swap ? swap[k] : ITEM_BY_NAME.get(norm(b.gear[act].slots[k].name)); if (it) out[k] = it; });
+  return out;
+}
+// Proficiency an item grants by its own text: with itself ("considered Proficient with this armour while
+// wearing it") or with weapon types ("You gain Proficiency with Longbows and Shortbows").
+function itemProfGrant(it) {
+  if (it.pg !== undefined) return it.pg;
+  let self = false;
+  const types = [];
+  effectTexts(it).forEach((text) => text.split(/;|\.(?=\s|$)/).forEach((sentence) => {
+    if (/considered proficient with this/i.test(sentence)) self = true;
+    else if (/gain proficiency with/i.test(sentence)) WEAPON_TYPES.forEach((w) => { if (norm(sentence).includes(norm(w))) types.push(w); });
+  }));
+  it.pg = self || types.length ? { self, types } : null;
+  return it.pg;
+}
 // The off hand takes Light weapons only, unless the build has the Dual Wielder feat.
 const canOffHand = (it, b) => it.s === 'shield' || (it.w !== 'two' && ((it.pp || []).includes('Light') || b.levels.some((l) => l.picks.some((p) => /dual wielder/i.test(p)))));
 // Everything the build is proficient with, as a Set of armour categories, weapon categories and weapon types.
-function proficiencies(b) {
+// With an act, what the gear of that act grants is included too.
+function proficiencies(b, act) {
   const set = new Set();
   const add = (list) => (list || []).forEach((x) => set.add(x));
   const first = (b.levels.find((l) => l.cls) || {}).cls;
@@ -61,10 +82,12 @@ function proficiencies(b) {
   });
   add((DATA.races[b.creation.race] || {}).prof);
   add((DATA.subraces[b.creation.subrace] || {}).prof);
+  if (act) Object.values(wornItems(b, act)).forEach((it) => add((itemProfGrant(it) || {}).types));
   return set;
 }
 const isWeapon = (it) => it.s === 'melee' || it.s === 'ranged';
-const canUse = (it, prof) => (isWeapon(it) ? prof.has(it.t) || prof.has(it.c === 'simple' ? SIMPLE : MARTIAL) : !it.p || prof.has(it.p));
+const canUse = (it, prof) => (itemProfGrant(it) || {}).self
+  || (isWeapon(it) ? prof.has(it.t) || prof.has(it.c === 'simple' ? SIMPLE : MARTIAL) : !it.p || prof.has(it.p));
 function profText(prof) {
   const armour = [LIGHT, MEDIUM, HEAVY, SHIELDS].filter((x) => prof.has(x));
   const weapons = [];

@@ -46,14 +46,14 @@ ITEMS.forEach(tagItem);
 const FULL_CASTERS = ['Bard', 'Cleric', 'Druid', 'Sorcerer', 'Warlock', 'Wizard'];
 const CASTING_ABILITY = { Bard: 'cha', Cleric: 'wis', Druid: 'wis', Sorcerer: 'cha', Warlock: 'cha', Wizard: 'int', Paladin: 'cha', Ranger: 'wis' };
 
-function buildProfile(b) {
+function buildProfile(b, act) {
   const info = levelInfo(b);
   const levels = {};
   info.forEach((x) => { if (x.cls) levels[x.cls] = (levels[x.cls] || 0) + 1; });
   const total = charLevel(b);
   const picks = allPicks(b).join(' | ');
   const subs = new Set(info.map((x) => x.sub).filter(Boolean));
-  const stats = finalStats(b);
+  const stats = finalStats(b, act);
   const casterLevels = FULL_CASTERS.reduce((a, c) => a + (levels[c] || 0), 0);
   const has = (re) => re.test(picks);
   let style = 'melee';
@@ -141,7 +141,7 @@ function scoreItem(b, p, it, slot, act, goal, current) {
   if (it.s === 'shield' && (p.monk || p.style === 'ranged')) score -= 1;
   // armour, shields and anything that changes Armour Class: count the real difference to what is worn now
   if (weights.ac && (slot === 'chest' || it.s === 'shield' || it.g.includes('ac'))) {
-    const delta = armourClass(b, act, p.stats.mods, { [slot]: it }) - current;
+    const delta = armourClass(b, act, null, { [slot]: it }) - current;
     if (delta) { score += delta * weights.ac * 0.6; reasons.push([Math.abs(delta) * weights.ac * 0.6, t('AC {n} against what you wear now', { n: signed(delta) })]); }
   }
   // weapons: the damage they deal and whether the build's ability works with them
@@ -157,16 +157,26 @@ function scoreItem(b, p, it, slot, act, goal, current) {
   if (matched.length && weights.damage) { score += 1.5; reasons.push([1.5, t('matches your {el} damage', { el: matched.join(', ') })]); }
   const partners = SLOTS.map(([k]) => (k === slot ? null : ITEM_BY_NAME.get(norm(b.gear[act].slots[k].name)))).filter((x) => x && (x.en2 || []).some((e) => (it.en2 || []).includes(e)));
   if (partners.length) { score += 1.5; reasons.push([1.5, t('combines with {x}', { x: partners[0].n })]); }
+  // what the item does to the build's own numbers: a higher main ability, a spell DC, an attack bonus
+  if (weights.damage || weights.ability) {
+    const gain = abilityScores(b, act, { [slot]: it }).mods[p.main] - p.stats.mods[p.main];
+    if (gain > 0) { const w = gain * (weights.damage || weights.ability) * 0.9; score += w; reasons.push([w, t('{ab} modifier {n} with it on', { ab: p.main.toUpperCase(), n: signed(gain) })]); }
+  }
   if (score > 0) score += RARITY_RANK[it.r] * 0.25;
   reasons.sort((x, y) => y[0] - x[0]);
   return { score, reasons: reasons.slice(0, 3).map((r) => r[1]) };
 }
 
 // The usable items of a slot, best first for the goal.
+// An item another member of the party already wears drops down the list, and says who has it.
 function recommend(b, slot, act, goal, list) {
-  const p = buildProfile(b);
-  const current = armourClass(b, act, p.stats.mods);
-  return list.map((it) => Object.assign({ it }, scoreItem(b, p, it, slot, act, goal, current)))
-    .filter((r) => r.score > 0)
+  const p = buildProfile(b, act);
+  const current = armourClass(b, act);
+  const taken = partyTaken(b, act);
+  return list.map((it) => {
+    const r = Object.assign({ it }, scoreItem(b, p, it, slot, act, goal, current));
+    if (taken[norm(it.n)]) { r.score *= 0.3; r.taken = taken[norm(it.n)]; }
+    return r;
+  }).filter((r) => r.score > 0)
     .sort((x, y) => y.score - x.score || x.it.n.localeCompare(y.it.n));
 }

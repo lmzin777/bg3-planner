@@ -34,8 +34,10 @@ function pickerList() {
     const where = [it.a ? t('Act {n}', { n: it.a }) : t('Any act'), [it.l, it.h].filter(Boolean).join(' — ')].filter(Boolean).join(' · ');
     const effect = (it.ps || []).map((p) => p[1] || p[0]).join(' ') || it.x || '';
     const r = why && why.get(it);
+    const who = picker.taken[norm(it.n)];
     return `<button class="pick-row r-${it.r}${ok ? '' : ' no'}" data-act="picker-choose" data-n="${esc(it.n)}">
-      ${pic(it.i, 'pic small')}<b>${r ? `<i class="rank">${i + 1}</i>` : ''}${esc(it.n)}</b><span>${esc([it.t, it.d].filter(Boolean).join(' · '))}${ok ? '' : ` · <em>${t('not proficient')}</em>`}</span>
+      ${pic(it.i, 'pic small')}<b>${r ? `<i class="rank">${i + 1}</i>` : ''}${esc(it.n)}</b><span>${esc([it.t, it.d].filter(Boolean).join(' · '))}${ok ? '' : ` · <em>${t('not proficient')}</em>`}${
+        who ? ` · <em>${t('worn by {who}', { who: esc(who) })}</em>` : ''}</span>
       ${r ? `<small class="why">${r.reasons.map(esc).join(' · ')}</small>` : ''}
       ${effect ? `<small class="fx">${esc(effect)}</small>` : ''}<small>${esc(where)}</small></button>`;
   }).join('');
@@ -45,7 +47,7 @@ function pickerList() {
 }
 function openPicker(path, slot) {
   const b = curBuild();
-  picker = { path, slot, act: state.ui.act, q: '', type: '', usable: true, byAct: true, mode: 'all', prof: proficiencies(b) };
+  picker = { path, slot, act: state.ui.act, q: '', type: '', usable: true, byAct: true, mode: 'all', prof: proficiencies(b, state.ui.act), taken: partyTaken(b, state.ui.act) };
   const kinds = SLOT_KINDS[slot] || [];
   const types = [...new Set(ITEMS.filter((it) => kinds.includes(it.s)).map((it) => it.t))].sort();
   const actLabel = t(ACTS.find(([k]) => k === picker.act)[1]);
@@ -56,7 +58,7 @@ function openPicker(path, slot) {
       <button class="chip on" data-act="picker-mode" data-mode="all">${t('All')}</button>
       ${Object.keys(GOALS).map((g) => `<button class="chip" data-act="picker-mode" data-mode="${g}">${t(GOAL_LABEL[g])}</button>`).join('')}
     </div>
-    <p class="muted">${t('Recommendations read this build as: {profile}', { profile: esc(profileText(buildProfile(b))) })}</p>
+    <p class="muted">${t('Recommendations read this build as: {profile}', { profile: esc(profileText(buildProfile(b, picker.act))) })}</p>
     <div class="picker-tools">
       <input type="text" data-picker="q" placeholder="${t('Search by name…')}" autocomplete="off">
       ${types.length > 1 ? `<select data-picker="type">${opt('', t('All types'), '')}${types.map((x) => opt(x, x, '')).join('')}</select>` : ''}
@@ -87,7 +89,7 @@ $('#picker').addEventListener('click', (e) => { if (e.target.id === 'picker') cl
 const PAGE = 60;
 const LIB_DEFAULTS = {
   items: { q: '', kind: '', type: '', tag: '', rar: [], act: '', build: '', sort: 'rarity', dir: 'desc', view: 'cards', limit: PAGE },
-  spells: { q: '', lv: [], cls: '', school: '', cost: '', dmg: '', save: '', conc: false, ritual: false, learn: true, sort: 'level', dir: 'asc', view: 'cards', limit: PAGE },
+  spells: { q: '', lv: [], cls: '', origin: 'class', school: '', cost: '', dmg: '', save: '', conc: false, ritual: false, sort: 'level', dir: 'asc', view: 'cards', limit: PAGE },
 };
 // Keys that are presentation, not filters: they do not count as an active filter and "Clear filters" leaves them alone.
 const LIB_VIEW_KEYS = ['sort', 'dir', 'view', 'limit'];
@@ -103,7 +105,12 @@ const lib = { get items() { return libState('items'); }, get spells() { return l
 Object.keys(LIB_DEFAULTS).forEach((tab) => { libState(tab).limit = PAGE; });
 
 const KINDS = [['head', 'Head'], ['cloak', 'Cloak'], ['chest', 'Armour'], ['gloves', 'Gloves'], ['boots', 'Boots'], ['amulet', 'Amulet'], ['ring', 'Ring'],
-  ['shield', 'Shield'], ['melee', 'Melee weapon'], ['ranged', 'Ranged weapon']];
+  ['shield', 'Shield'], ['melee', 'Melee weapon'], ['ranged', 'Ranged weapon'], ['consumable', 'Consumable']];
+// The Items tab lists consumables next to the equipment; they take no gear slot, so the pickers never see them.
+const LIB_ITEMS = ITEMS.concat(CONSUMABLES.map((c) => ({ n: c.n, s: 'consumable', t: c.t + 's', r: c.r, a: 0, h: c.h, x: c.x, i: c.i, pr: c.pr, du: c.du })));
+// Where a spell comes from: a class list, a subclass or race, an item, or none of those (follow-up actions of other spells).
+const ORIGINS_OF_SPELLS = [['class', 'Class spells'], ['feature', 'Subclass and race'], ['item', 'From items'], ['other', 'Follow-up actions']];
+SPELLS.forEach((s) => { s.og = (s.cl || []).length ? 'class' : (s.lr || []).length || s.ft ? 'feature' : s.it ? 'item' : 'other'; });
 const COSTS = [['action', 'Action'], ['bonus', 'Bonus action'], ['reaction', 'Reaction']];
 const DAMAGE_TYPES = ['Acid', 'Bludgeoning', 'Cold', 'Fire', 'Force', 'Lightning', 'Necrotic', 'Piercing', 'Poison', 'Psychic', 'Radiant', 'Slashing', 'Thunder', 'Healing'];
 const SAVES = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
@@ -118,7 +125,7 @@ const LIB_TESTS = {
     rar: (it, f) => !f.rar.length || f.rar.includes(it.r),
     act: (it, f) => !f.act || String(it.a) === f.act,
     tag: (it, f) => !f.tag || (it.g || []).includes(f.tag),
-    build: (it, f, ctx) => !ctx.prof || canUse(it, ctx.prof),
+    build: (it, f, ctx) => !ctx.prof || (it.s !== 'consumable' && canUse(it, ctx.prof)),
     q: (it, f, ctx) => !ctx.q || norm(it.n).includes(ctx.q) || norm(it.x).includes(ctx.q) || (it.ps || []).some((p) => norm(p[0]).includes(ctx.q) || norm(p[1]).includes(ctx.q)),
   },
   spells: {
@@ -130,14 +137,14 @@ const LIB_TESTS = {
     save: (s, f) => !f.save || s.sv === f.save,
     conc: (s, f) => !f.conc || !!s.co,
     ritual: (s, f) => !f.ritual || !!s.ri,
-    learn: (s, f) => !f.learn || (s.cl || []).length > 0,
+    origin: (s, f) => !f.origin || s.og === f.origin,
     q: (s, f, ctx) => !ctx.q || norm(s.n).includes(ctx.q) || norm(s.d).includes(ctx.q) || norm(s.xd).includes(ctx.q) || norm(s.dm).includes(ctx.q),
   },
 };
 // The values a record has for each chip group, used to count what a chip would show.
 const LIB_FACETS = {
   kind: (it) => [it.s], rar: (it) => [it.r], act: (it) => [String(it.a)],
-  lv: (s) => [String(s.lv)], cls: (s) => s.cl || [],
+  lv: (s) => [String(s.lv)], cls: (s) => s.cl || [], origin: (s) => [s.og],
 };
 // Sort keys: a function returns the value to compare; null means by name. Ties always fall back to the name.
 const LIB_SORTS = {
@@ -151,7 +158,7 @@ function libList(tab, skipKey) {
   const b = tab === 'items' ? buildById(f.build) : null;
   const ctx = { q: norm(f.q), prof: b ? proficiencies(b) : null };
   const tests = Object.entries(LIB_TESTS[tab]).filter(([k]) => k !== skipKey).map(([, fn]) => fn);
-  return (tab === 'items' ? ITEMS : SPELLS).filter((x) => tests.every((fn) => fn(x, f, ctx)));
+  return (tab === 'items' ? LIB_ITEMS : SPELLS).filter((x) => tests.every((fn) => fn(x, f, ctx)));
 }
 function libSorted(tab) {
   const f = libState(tab);
@@ -209,6 +216,7 @@ function itemCard(it) {
       <a class="icon" href="${wikiLink(it.n)}" target="_blank" rel="noopener" title="${t('Open the wiki page')}">↗</a></header>
     <div class="tags">${isWeapon(it) ? fact(t('Damage'), it.d, 'dmg') : tag(it.d, 'dmg')}${fact(t('Two-handed'), it.vd)}${fact(t('Enchantment'), it.en)}${tag(hands)}${
       (it.pp || []).map((x) => tag(x)).join('')}${tag(it.p ? t('Needs {p} proficiency', { p: it.p }) : '')}${tag(it.sd ? t('Stealth disadvantage') : '', 'warn')}</div>
+    ${it.du ? `<div class="tags">${fact(t('Lasts'), it.du)}</div>` : ''}
     ${(it.g || []).length ? `<div class="tags effects">${it.g.map((k) => `<span>${t(TAG_LABEL[k])}</span>`).join('')}</div>` : ''}
     ${it.x ? `<p>${esc(it.x)}</p>` : ''}
     ${(it.ps || []).length ? `<ul class="fx">${it.ps.map(([n, text]) => `<li><b>${esc(n)}</b>${text ? ' ' + esc(text) : ''}</li>`).join('')}</ul>` : ''}
@@ -225,7 +233,8 @@ function spellCard(s) {
     return n + (extra ? ' (' + extra + ')' : '');
   }).join(', ');
   return `<article class="lib-card sp">
-    <header>${pic(s.i)}<div><h3>${esc(s.n)}</h3><div class="sub">${s.lv ? t('Level {n}', { n: s.lv }) : t('Cantrip')}${s.sc ? ' · ' + esc(s.sc) : ''}</div></div>
+    <header>${pic(s.i)}<div><h3>${esc(s.n)}</h3><div class="sub">${s.lv ? t('Level {n}', { n: s.lv }) : t('Cantrip')}${s.sc ? ' · ' + esc(s.sc) : ''}${
+      s.og !== 'class' ? ' · ' + t((ORIGINS_OF_SPELLS.find(([v]) => v === s.og) || ['', ''])[1]) : ''}</div></div>
       <button class="icon txt" data-act="add-to-build" data-kind="spell" data-n="${esc(s.n)}" title="${t('Add this spell to a level of one of your builds')}">${t('+ Build')}</button>
       <a class="icon" href="${wikiLink(s.p || s.n)}" target="_blank" rel="noopener" title="${t('Open the wiki page')}">↗</a></header>
     <div class="tags">${tag(t((COSTS.find(([v]) => v === s.a) || ['', ''])[1]))}${fact(t('Range'), s.rg)}${fact(t('Area'), s.ao)}${fact(t('Lasts'), s.du)}${fact(t('Damage'), s.dm, 'dmg')}${
@@ -288,8 +297,8 @@ const libShell = (tab, title, sub, filters) => {
 function renderItems() {
   const f = lib.items;
   if (!ITEMS.length) return `<div class="content wide"><section class="card empty"><h2>${t('The item database is missing.')}</h2><p class="muted">py tools/update_items.py</p></section></div>`;
-  const types = [...new Set(ITEMS.filter((it) => !f.kind || it.s === f.kind).map((it) => it.t))].sort();
-  return libShell('items', t('Items'), t('{n} items · data from bg3.wiki, {date}', { n: ITEMS.length, date: window.BG3_ITEMS_DATE || '' }), `
+  const types = [...new Set(LIB_ITEMS.filter((it) => !f.kind || it.s === f.kind).map((it) => it.t))].sort();
+  return libShell('items', t('Items'), t('{n} items and {c} consumables · data from bg3.wiki, {date}', { n: ITEMS.length, c: CONSUMABLES.length, date: window.BG3_ITEMS_DATE || '' }), `
     <input type="search" class="lib-search" data-lib="q" value="${esc(f.q)}" placeholder="${t('Search by name or effect…  ( / )')}">
     <div class="lib-row"><span>${t('Slot')}</span>${libChips('kind', [['', t('All')], ...KINDS.map(([v, l]) => [v, t(l)])], f.kind)}</div>
     <div class="lib-row"><span>${t('Rarity')}</span>${libChips('rar', RARITIES.slice(1).map(([v, l]) => [v, t(l)]), f.rar)}</div>
@@ -310,6 +319,7 @@ function renderSpells() {
     <input type="search" class="lib-search" data-lib="q" value="${esc(f.q)}" placeholder="${t('Search by name or description…  ( / )')}">
     <div class="lib-row"><span>${t('Level')}</span>${libChips('lv', [['0', t('Cantrip')], ...[1, 2, 3, 4, 5, 6].map((n) => [String(n), String(n)])], f.lv)}</div>
     <div class="lib-row"><span>${t('Class')}</span>${libChips('cls', [['', t('All')], ...casters.map((c) => [c, c])], f.cls)}</div>
+    <div class="lib-row"><span>${t('Comes from')}</span>${libChips('origin', [['', t('All')], ...ORIGINS_OF_SPELLS.map(([v, l]) => [v, t(l)])], f.origin)}</div>
     <div class="lib-selects">
       ${libSelect('school', [['', t('All schools')], ...schools.map((x) => [x, x])], f.school, t('School'))}
       ${libSelect('cost', [['', t('Any')], ...COSTS.map(([v, l]) => [v, t(l)])], f.cost, t('Casting cost'))}
@@ -317,5 +327,5 @@ function renderSpells() {
       ${libSelect('save', [['', t('Any')], ...SAVES.map((x) => [x, x])], f.save, t('Saving throw'))}
       ${libSortBox('spells')}
     </div>
-    <div class="lib-checks">${libCheck('conc', f.conc, t('Concentration'))}${libCheck('ritual', f.ritual, t('Ritual'))}${libCheck('learn', f.learn, t('Only spells a class can learn'))}</div>`);
+    <div class="lib-checks">${libCheck('conc', f.conc, t('Concentration'))}${libCheck('ritual', f.ritual, t('Ritual'))}</div>`);
 }

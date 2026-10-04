@@ -35,6 +35,8 @@ function refreshDerived() {
   set('points', pointsText(b));
   const live = $('#stats-live');
   if (live) live.innerHTML = statsLive(b);
+  const check = $('#check-live');
+  if (check) check.innerHTML = checkLive(b);
   const st = skillState(b);
   ALL_SKILLS.forEach((x) => set('sk-' + x, signed(skillBonus(b, st, x))));
   SKILLS.forEach(([ab]) => set('skab-' + ab, signed(abilityMod(b, ab.toLowerCase()))));

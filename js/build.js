@@ -6,11 +6,14 @@
 function renderBuilds() {
   const b = curBuild();
   const dis = b ? '' : ' disabled';
-  const list = state.builds.map((x) =>
-    `<button class="side-item${b && x.id === b.id ? ' on' : ''}" data-act="build-select" data-id="${x.id}">
+  const list = state.builds.map((x) => {
+    const pending = buildIssues(x).filter((i) => i.level === 'warn').length;
+    return `<button class="side-item${b && x.id === b.id ? ' on' : ''}" data-act="build-select" data-id="${x.id}">
       <strong data-d="side-name-${x.id}">${esc(x.name || t('Unnamed'))}</strong>
       <small data-d="side-split-${x.id}">${esc(splitText(x))}</small>
-    </button>`).join('');
+      ${pending ? `<i class="badge" title="${t('{n} thing(s) to review in the build check', { n: pending })}">${pending}</i>` : ''}
+    </button>`;
+  }).join('');
   return `<div class="layout">
     <aside class="side">
       <div class="side-actions">
@@ -21,6 +24,7 @@ function renderBuilds() {
       </div>
       <h3>${t('My builds')}</h3>
       <div class="side-list">${list || `<p class="muted">${t('No builds yet.')}</p>`}</div>
+      ${state.trash.length ? `<button class="btn tiny wide" data-act="trash-open">${t('Recently deleted ({n})', { n: state.trash.length })}</button>` : ''}
       <p class="hint">${t('To start a variation, duplicate a build and edit the copy. Everything is saved automatically in this browser.')}</p>
     </aside>
     <div class="content" data-scope="build">${b ? buildEditor(b) : emptyBuilds()}</div>
@@ -53,6 +57,8 @@ function buildEditor(b) {
       ${PRESETS.some((p) => p.presetId && p.presetId === b.presetId) ? `<button class="btn tiny back" data-act="preset-reset" title="${t('Replaces this build with the current ready-made version')}">${t('Reset to the ready-made version')}</button>` : ''}
     </section>
 
+    ${checkCard(b)}
+
     <section class="card">
       <h2>${t('Character creation')}</h2>
       <div class="grid g4">
@@ -68,7 +74,7 @@ function buildEditor(b) {
       <h3 class="group">${t('Skills')}</h3>
       ${skillsPicker(b)}
       <h3 class="group">${t('Equipment proficiencies')}</h3>
-      <p class="points">${esc(profText(proficiencies(b)))}<br><span class="muted">${t('Worked out from the classes, subclasses, race and armour feats of this build. The item browser filters by it.')}</span></p>
+      <p class="points">${esc(profText(proficiencies(b)))}<br><span class="muted">${t('Worked out from the classes, subclasses, race and armour feats of this build. The item browser filters by it, and adds what the gear of the act grants.')}</span></p>
     </section>
 
     <section class="card">
@@ -87,7 +93,7 @@ function buildEditor(b) {
     <section class="card">
       <div class="grid g2">
         <div><h2>${t('Setup items')}</h2>${simpleList(b, 'setup', t('Item'), t('What it is for / where to get it'))}</div>
-        <div><h2>${t('Consumables')}</h2>${simpleList(b, 'consumables', t('Elixir, potion, arrow…'), t('Note'))}</div>
+        <div><h2>${t('Consumables')}</h2>${simpleList(b, 'consumables', t('Elixir, potion, arrow…'), t('Note'), 'consumable')}</div>
       </div>
     </section>
 
@@ -161,6 +167,8 @@ const signed = (n) => (n >= 0 ? '+' : '') + n;
 const skillAbility = (x) => { const g = SKILLS.find(([, list]) => list.includes(x)); return g ? g[0].toLowerCase() : ''; };
 const abilityMod = (b, ab) => Math.floor((finalOf(b, ab) - 10) / 2);
 
+// Skill proficiencies a class gives when it is added by multiclassing (the wiki's Classes page).
+const MULTI_SKILLS = { Bard: 1, Ranger: 1, Rogue: 1, Cleric: 2 };
 // Everything the skill section needs: what is chosen or granted, what is still missing above, and the pick limits.
 function skillState(b) {
   const c = b.creation;
@@ -170,16 +178,23 @@ function skillState(b) {
   const chosen = skillList(c.skills).filter((x) => !granted[x]);
   const onList = (x) => !!ci && (ci.skills === 'any' || ci.skills.includes(x));
   const human = c.race === 'Human';
+  // classes added later that bring skill picks from their own list
+  const multi = [...new Set(b.levels.map((l) => l.cls).filter(Boolean))].filter((k) => k !== cls && MULTI_SKILLS[k]);
+  const multiPicks = multi.reduce((a, k) => a + MULTI_SKILLS[k], 0);
+  const onMulti = (x) => multi.some((k) => DATA.classes[k].skills === 'any' || DATA.classes[k].skills.includes(x));
   const missing = [];
   if (!DATA.races[c.race]) missing.push(t('Race'));
   else if ((RACES[c.race] || []).length && !c.subrace) missing.push(t('Subrace'));
   if (!BACKGROUNDS[c.background]) missing.push(t('Background'));
   if (!ci) missing.push(t('the class of level 1, in Level progression'));
-  const max = ci ? ci.pick + (human ? 1 : 0) : 0;
-  const offList = chosen.filter((x) => !onList(x)).length;
-  // A skill can be added while picks remain; only a Human's extra pick may come from outside the class list.
-  const canAdd = (x) => !missing.length && chosen.length < max && (onList(x) || (human && offList < 1));
-  return { cls, ci, granted, chosen, onList, human, missing, max, canAdd };
+  const max = ci ? ci.pick + (human ? 1 : 0) + multiPicks : 0;
+  const offList = chosen.filter((x) => !onList(x));
+  const offAll = offList.filter((x) => !onMulti(x)).length;
+  // A skill can be added while picks remain. Outside the starting class list, it has to fit a multiclass
+  // pick (from that class's list) or the Human's extra pick (any skill).
+  const canAdd = (x) => !missing.length && chosen.length < max
+    && (onList(x) || (onMulti(x) && offList.length < multiPicks + (human ? 1 : 0)) || (human && offAll < 1));
+  return { cls, ci, granted, chosen, onList: (x) => onList(x) || onMulti(x), human, missing, max, canAdd, multi };
 }
 const skillBonus = (b, st, x) => abilityMod(b, skillAbility(x)) + (st.granted[x] || st.chosen.includes(x) ? PROF_BONUS : 0);
 
@@ -200,14 +215,15 @@ function skillsPicker(b) {
   const status = st.missing.length
     ? `<p class="skill-lock">${t('Skills unlock once you choose: {list}', { list: st.missing.join(', ') })}</p>`
     : `<p class="points"><b class="${st.chosen.length > st.max ? 'warn' : st.chosen.length === st.max ? 'ok' : ''}">${t('{n} of {max} chosen', { n: st.chosen.length, max: st.max })}</b>${
-      t(' · {cls} picks {pick} from its list', { cls: st.cls, pick: st.ci.pick })}${st.human ? t(' · Human adds 1 of any skill') : ''}</p>`;
+      t(' · {cls} picks {pick} from its list', { cls: st.cls, pick: st.ci.pick })}${st.human ? t(' · Human adds 1 of any skill') : ''}${
+      st.multi.map((k) => t(' · multiclassing into {cls} adds {n} from its list', { cls: k, n: MULTI_SKILLS[k] })).join('')}</p>`;
   return `${status}
     <div class="skill-groups${st.missing.length ? ' locked' : ''}">
       ${SKILLS.map(([ab, list]) => `<div class="skill-group"><span>${ab} <i data-d="skab-${ab}">${signed(abilityMod(b, ab.toLowerCase()))}</i></span>${list.map(chip).join('')}</div>`).join('')}
       ${extra.length ? `<div class="skill-group"><span>${t('Other')}</span>${extra.map(chip).join('')}</div>` : ''}
     </div>
     ${grantedText ? `<p class="points">${t('Granted: {list}', { list: esc(grantedText) })}</p>` : ''}
-    <p class="muted">${t('The number is the bonus to checks with that skill at level 1: the ability modifier, plus the +2 proficiency bonus when you are proficient.')}</p>`;
+    <p class="muted">${t('The number is the bonus to checks with that skill at level 1: the ability modifier, plus the +2 proficiency bonus when you are proficient. Expertise is chosen in the level table, at the levels that grant it.')}</p>`;
 }
 
 const wikiButtons = (fillPath) =>
@@ -217,7 +233,7 @@ const browseButton = (fillPath, slot) => (ITEMS.length
   ? `<button class="icon txt" data-act="picker-open" data-fill="${fillPath}" data-slot="${slot}" title="${t('Browse the items this build can use in this slot')}">${t('Browse')}</button>` : '');
 // A name field. With a slot it suggests items of that slot from the local database while typing;
 // without one (setup items, consumables) it suggests page names from the wiki.
-const nameInput = (path, value, ph, cls, slot) => (slot
+const nameInput = (path, value, ph, cls, slot) => (slot && (slot !== 'consumable' || CONSUMABLES.length)
   ? `<input type="text" class="${cls || ''}" autocomplete="off" data-suggest="${slot}" data-path="${path}" value="${esc(value)}" placeholder="${ph}">`
   : `<input type="text" class="${cls || ''} wiki-name" list="dl-wiki" autocomplete="off" data-path="${path}" value="${esc(value)}" placeholder="${ph}">`);
 
@@ -260,10 +276,13 @@ function slotCard(s, path, label) {
   </div>`;
 }
 
-function simpleList(b, key, phName, phNote) {
-  const rows = b[key].map((x, i) =>
-    `<div class="li"><span class="with-btn">${nameInput(`${key}.${i}.name`, x.name, phName)}${wikiButtons(`${key}.${i}`)}</span>
+function simpleList(b, key, phName, phNote, suggest) {
+  const rows = b[key].map((x, i) => {
+    const known = suggest === 'consumable' ? CONSUMABLE_BY_NAME.get(norm(x.name)) : null;
+    return `<div class="li"><span class="with-btn">${nameInput(`${key}.${i}.name`, x.name, phName, '', suggest)}${wikiButtons(`${key}.${i}`)}</span>
       <textarea rows="1" data-path="${key}.${i}.note" placeholder="${phNote}">${esc(x.note)}</textarea>
-      <button class="icon x" data-act="list-del" data-list="${key}" data-i="${i}" title="${t('Remove')}">×</button></div>`).join('');
+      <button class="icon x" data-act="list-del" data-list="${key}" data-i="${i}" title="${t('Remove')}">×</button>
+      ${known ? `<p class="li-fx">${pic(known.i, 'pic small')}<span><b>${esc(known.t)}</b> · ${esc(known.x)}${known.du ? ' · ' + esc(known.du) : ''}</span></p>` : ''}</div>`;
+  }).join('');
   return `<div class="list">${rows}</div><button class="btn tiny" data-act="list-add" data-list="${key}">${t('+ add')}</button>`;
 }

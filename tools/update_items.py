@@ -130,6 +130,8 @@ def clean(s):
             args = [x for x in parts[1:] if not re.match(r"^[\w ]+=", x)]
             if name in ("see bugs", "seebugs", "ref", "note"):
                 return ""
+            if name in ("temp hp", "temphp") and args:
+                return args[0] + " temporary hit points"
             if name == "dist":
                 return named["m"] + " m" if named.get("m") else named.get("ft", "") + " ft"
             if name in ("damagetext", "damage text") and len(args) > 1:
@@ -167,7 +169,7 @@ def main():
             skipped[kind] = skipped.get(kind, 0) + 1
             continue
         ac = clean(field(w, "armour class"))
-        items.append({"n": title, "s": slot, "t": kind, "p": clean(field(w, "proficiency")), "r": RARITY.get(clean(field(w, "rarity")).lower(), ""),
+        items.append({"n": title, "s": slot, "t": kind, "p": clean(field(w, "proficiency")), "r": RARITY.get(clean(field(w, "rarity")).lower(), "common"),
                       "l": clean(field(w, "where to find location")), "h": short(clean(field(w, "where to find")), 160), "d": ("AC " + ac) if ac else "",
                       "x": short(clean(field(w, "description")), 240), "i": THUMBS.get(title, ""),
                       "ps": names(field(w, "passives")), "sp": short(clean(field(w, "special")), 220),
@@ -190,7 +192,7 @@ def main():
         dmg = " ".join(x for x in (clean(field(w, "damage")), clean(field(w, "damage type"))) if x)
         items.append({"n": title, "s": "ranged" if ranged else "melee", "t": kind, "c": "simple" if kind in SIMPLE else "martial",
                       "w": "two" if hand.startswith("two") else "versatile" if hand.startswith("vers") else "one",
-                      "r": RARITY.get(clean(field(w, "rarity")).lower(), ""),
+                      "r": RARITY.get(clean(field(w, "rarity")).lower(), "common"),
                       "l": clean(field(w, "where to find location")), "h": short(clean(field(w, "where to find")), 160), "d": dmg,
                       "x": short(clean(field(w, "description")), 240), "i": THUMBS.get(title, ""),
                       "ps": [n for k in ("passives", "weapon passives", "passives main hand", "passives off hand") for n in names(field(w, k))],
@@ -213,6 +215,8 @@ def main():
             hit = next((l for l in named if l in it["h"]), None)
             if hit:
                 it["a"] = acts[hit]
+        if not it["a"] and re.search(r"Netherbrain|Upper City|High Hall", it["h"]):
+            it["a"] = 3  # the final battles
         if not it["a"]:
             said = re.search(r"\bAct (One|Two|Three|[123])\b", it["h"] + " " + it["l"], re.I)
             if said:

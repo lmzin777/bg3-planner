@@ -16,10 +16,20 @@ function sheetHtml(b) {
     const bonus = bonusOf(b, ab);
     return `<div class="sh-abil"><span>${short}</span><b>${f}</b><i>${modText(f)}</i><small>${bonus ? `${t('base')} ${f - bonus} +${bonus}` : '&nbsp;'}</small></div>`;
   }).join('');
-  const fin = finalStats(b);
-  const numbers = fin.level ? `<section><h2>${t('Final numbers')}</h2>
+  // the numbers use the gear of the last act that has any
+  const lastAct = ACTS.map(([k]) => k).reverse().find((k) => SLOTS.some(([sk]) => b.gear[k].slots[sk].name.trim())) || 'act3';
+  const fin = finalStats(b, lastAct);
+  const signedParts = (total, parts) => signed(total) + (parts.length > 1 ? ' (' + partsText(parts) + ')' : '');
+  const numbers = fin.level ? `<section><h2>${t('Final numbers')} <small>${t('with the gear of {act}', { act: t(ACTS.find(([k]) => k === lastAct)[1]) })}</small></h2>
       <dl class="sh-meta">${[[t('Level'), fin.level], [t('Proficiency bonus'), signed(fin.pb)], [t('Hit points'), fin.hp], [t('Initiative'), signed(fin.initiative)],
-        ...ACTS.map(([k, l]) => [t('AC · {act}', { act: t(l) }), fin.ac[k]]), [t('Abilities'), ABILS.map(([ab, short]) => fin.scores[ab] + ' ' + short).join(' · ')]]
+        ...ACTS.map(([k, l]) => [t('AC · {act}', { act: t(l) }), fin.ac[k]]), [t('Abilities'), ABILS.map(([ab, short]) => fin.scores[ab] + ' ' + short).join(' · ')],
+        [t('Saving throws'), fin.saves.map((k) => k.short + ' ' + signed(k.bonus) + (k.proficient ? '●' : '')).join(' · ')],
+        ...(b.elixir ? [[t('Elixir kept active'), esc(b.elixir)]] : []),
+        ...fin.attacks.rows.map((r) => [esc(r.name), t('Attack') + ' ' + signedParts(r.attackTotal, r.attack) + ' · ' + t('Damage') + ' ' + esc(r.dice) + (r.damageTotal ? ' ' + (r.damageTotal > 0 ? '+ ' : '− ') + Math.abs(r.damageTotal) : '') + ' ' + esc(r.type)]),
+        ...fin.casting.map((c) => [esc(c.label) + ' (' + abilityShort(c.ability) + ')', t('Spell save DC') + ' ' + c.dc + ' · ' + t('Spell attack') + ' ' + signed(c.attack)]),
+        ...(fin.slots.length ? [[t('Spell slots'), fin.slots.map((n, i) => t('Level {n}', { n: i + 1 }) + ' ×' + n).join(' · ')]] : []),
+        ...(fin.pact ? [[t('Pact Magic slots'), t('{n} of level {lv}, back on a Short Rest', { n: fin.pact.n, lv: fin.pact.level })]] : []),
+        ...(fin.resources.length ? [[t('Class resources'), fin.resources.map(([n, v]) => esc(n) + ' ' + esc(v)).join(' · ')]] : [])]
         .map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>
       <p class="sh-skills">${fin.skills.map((k) => `<span class="${k.proficient ? 'prof' : ''}">${esc(k.name)} <b>${signed(k.bonus)}</b>${k.expert ? '★' : ''}</span>`).join(' · ')}</p></section>` : '';
   const known = [...new Set(allPicks(b).map((p) => /^(?:spell|cantrip)\s*:\s*([^(]+)/i.exec(p.trim())).filter(Boolean).map((m) => norm(m[1])))]
@@ -27,11 +37,13 @@ function sheetHtml(b) {
   const spells = known.length ? `<section><h2>${t('Spells')}</h2><ul>${known.map((s) => `<li><b>${esc(s.n)}</b> — ${s.lv ? t('Level {n}', { n: s.lv }) : t('Cantrip')}${
     [s.rg, s.du, s.dm, s.co ? t('Concentration') : ''].filter(Boolean).map((x) => ' · ' + esc(x)).join('')}. ${esc(s.d || '')}</li>`).join('')}</ul></section>` : '';
   const count = {};
+  const linfo = levelInfo(b);
   const levels = b.levels.map((l, i) => {
     if (l.cls) count[l.cls] = (count[l.cls] || 0) + 1;
     const picks = l.picks.filter((p) => p.trim()).map(esc).join(' · ');
     if (!l.cls && !picks) return '';
-    return `<tr><td class="n">${i + 1}</td><td class="cls">${l.cls ? esc(l.cls) + ' ' + count[l.cls] : '—'}${l.sub.trim() ? `<b>${esc(l.sub)}</b>` : ''}</td><td>${picks}</td></tr>`;
+    const gains = [...levelGains(linfo[i]), ...levelNumbers(linfo[i])].map(esc).join(' · ');
+    return `<tr><td class="n">${i + 1}</td><td class="cls">${l.cls ? esc(l.cls) + ' ' + count[l.cls] : '—'}${l.sub.trim() ? `<b>${esc(l.sub)}</b>` : ''}</td><td>${picks}${gains ? `<div class="sh-gains">${gains}</div>` : ''}</td></tr>`;
   }).join('');
   const acts = ACTS.map(([k, label]) => {
     const g = b.gear[k];
