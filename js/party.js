@@ -113,6 +113,27 @@ function checklist(active, act) {
       </label>`).join('')}</div>`).join('')}</div>`;
 }
 
+// ---------- Builds: the three pages of the group, side by side ----------
+function renderHub() {
+  const row = (attrs, name, sub) => `<button class="side-item" ${attrs}><strong>${esc(name)}</strong>${sub ? `<small>${esc(sub)}</small>` : ''}</button>`;
+  const card = (title, text, list, button) => `<article class="card hub-card"><h2>${title}</h2><p class="muted">${text}</p>
+    <div class="side-list">${list || `<p class="muted">${t('Nothing here yet.')}</p>`}</div><div class="row-btns">${button}</div></article>`;
+  return `<div class="content wide">
+    <section class="card hero"><h1>${t('Builds')}</h1><p class="muted">${t('Everything about builds: the ones you make, the parties you put them in, and the ready-made ones to start from.')}</p></section>
+    <div class="hub">
+      ${card(t('Build Planner'), t('Your builds: character creation, the choices of each level, gear by act and the final numbers.'),
+        state.builds.map((b) => row(`data-act="build-select" data-id="${b.id}" data-go="builds"`, b.name || t('Unnamed'), splitText(b))).join(''),
+        `<button class="btn primary" data-act="tab" data-tab="builds">${t('Open the Build Planner')}</button><button class="btn" data-act="wiz-new">${t('+ New build, step by step')}</button>`)}
+      ${card(t('Party Planner'), t('Four builds side by side: who wears what, who covers which skill, and what is still missing in each act.'),
+        state.parties.map((p) => row(`data-act="party-open" data-id="${p.id}"`, p.name || t('Unnamed'), p.members.map((m, i) => memberLabel({ char: m.char, i })).filter((x, i) => p.members[i].buildId || p.members[i].char).join(' · '))).join(''),
+        `<button class="btn primary" data-act="tab" data-tab="party">${t('Open the Party Planner')}</button>`)}
+      ${card(t('Ready-made builds'), t('Reference builds. "Use as a base" creates a copy in My builds that you can change freely without touching the original.'),
+        PRESETS.map((raw) => { const b = normalizeBuild(raw); return row('data-act="tab" data-tab="presets"', b.name, splitText(b)); }).join(''),
+        `<button class="btn primary" data-act="tab" data-tab="presets">${t('See ready-made builds')}</button>`)}
+    </div>
+  </div>`;
+}
+
 // ---------- Ready-made builds ----------
 function renderPresets() {
   return `<div class="content wide">

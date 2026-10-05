@@ -5,9 +5,25 @@
 // ---------- actions ----------
 // An action returns false to skip the save + re-render, or { focus, top } hints for after it.
 Object.assign(actions, {
-  tab(el) { state.ui.tab = el.dataset.tab; state.ui.fromParty = false; },
+  tab(el) {
+    state.ui.tab = el.dataset.tab;
+    state.ui.fromParty = false;
+    // an entry of the Items or Spells menu opens the list on just that slot or level; the group itself, on all of it
+    const only = el.dataset.kind != null ? ['items', 'kind', el.dataset.kind] : el.dataset.lv != null ? ['spells', 'lv', el.dataset.lv ? [el.dataset.lv] : []] : null;
+    if (only) {
+      const f = libState(only[0]);
+      Object.keys(LIB_DEFAULTS[only[0]]).forEach((k) => { if (!LIB_VIEW_KEYS.includes(k)) f[k] = clone(LIB_DEFAULTS[only[0]][k]); });
+      f[only[1]] = only[2];
+      f.limit = PAGE;
+    }
+    // the menu it came from closes
+    const group = el.closest('.nav-group');
+    navShut = group ? [...group.parentNode.children].indexOf(group) : -1;
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  },
   lang(el) { state.ui.lang = el.dataset.lang; },
-  'build-select'(el) { state.ui.buildId = el.dataset.id; state.ui.fromParty = false; state.ui.wizard = ''; },
+  'build-select'(el) { state.ui.buildId = el.dataset.id; state.ui.fromParty = false; state.ui.wizard = ''; if (el.dataset.go) state.ui.tab = el.dataset.go; },
+  'party-open'(el) { state.ui.partyId = el.dataset.id; state.ui.tab = 'party'; },
   'build-new'() { const b = blankBuild(); state.builds.push(b); state.ui.buildId = b.id; state.ui.tab = 'builds'; state.ui.wizard = ''; },
   'build-dup'() {
     const b = curBuild();

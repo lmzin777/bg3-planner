@@ -1066,6 +1066,35 @@
     eq(plan(fw, 'melee')[1], [['Attack action', 2]]);
     state.ui.honour = false;
     eq(plan(fw, 'melee')[1], [['Attack action', 3]]);
+    // The damage test rolls what the averages are made of. With every roll in the middle: a d20 is 11, a d8 5, a d6 4.
+    state.ui.honour = true;
+    const realRandom = simRandom;
+    const fs = finalStats(f, 'act1');
+    simRandom = () => 0.5;
+    let turn = simTurn(fs, 'melee', plain, '', null);
+    eq([turn.total, turn.lines.map((x) => [x.d20, x.hit, x.damage])], [16, [[11, true, 8], [11, true, 8]]], '11 + 6 against AC 16 hits; 1d8 (5) + 3, twice');
+    eq(simTurn(fs, 'melee', titan, '', null).total, 8, 'a common sword against resistance to non-magical Slashing: half of each hit');
+    simRandom = () => 0.999;
+    eq(simTurn(fs, 'melee', plain, '', null).lines.map((x) => [x.crit, x.damage]), [[true, 19], [true, 19]], 'a natural 20: 2d8 (16) + 3');
+    simRandom = () => 0;
+    eq(simTurn(fs, 'melee', plain, '', null).total, 0, 'a natural 1 always misses');
+    simRandom = () => 0.5;
+    f.active = ['surge'];
+    const surged = finalStats(f, 'act1');
+    const fl = simResources(surged);
+    eq([simTurn(surged, 'melee', plain, '', fl).lines.length, simTurn(surged, 'melee', plain, '', fl).lines.length, fl.surge], [4, 2, 0], 'Action Surge is there for one turn');
+    f.active = [];
+    const left = simResources(st);
+    eq([left.slots, left.surge, left.ki], [[4, 3, 2], 0, 0]);
+    turn = simTurn(st, 'caster', plain, 'Fireball', left);
+    eq([turn.name, turn.total, turn.lines[0].passed, left.slots], ['Fireball', 16, true, [4, 3, 1]], 'the save: 11 + 3 meets DC 14, so half of 8d6 (32)');
+    simTurn(st, 'caster', plain, 'Fireball', left);
+    turn = simTurn(st, 'caster', plain, 'Fireball', left);
+    eq([turn.name, turn.total, turn.notes.length, left.slots], ['Fire Bolt', 12, 1, [4, 3, 0]], 'no level 3 slot left: the cantrip, 11 + 6 hits, 2d10 (6 + 6)');
+    eq([simTurn(st, 'caster', plain, 'Magic Missile', left).total, left.slots], [12, [3, 3, 0]], 'three darts of 1d4 (3) + 1, no roll, and a level 1 slot');
+    simRandom = realRandom;
+    const rolled = Array.from({ length: 4000 }, () => simTurn(fs, 'melee', plain, '', null).total).reduce((a, x) => a + x, 0) / 4000;
+    ok(Math.abs(rolled - 9.15) < 0.6, 'four thousand turns rolled average what was worked out: ' + rolled.toFixed(2) + ' against 9.15');
     Object.assign(state.ui, kept);
     ok(ENEMIES.length > 20 && ENEMIES.every((e) => e.ac > 9 && e.hp.b > 0 && e.act >= 1 && e.act <= 3), 'the reference enemies carry their numbers');
     // the two fights that are a puzzle first, in the state where damage counts
@@ -1533,6 +1562,40 @@
     eq([state.ui.targets, rowOf('Fireball').querySelector('strong').textContent], [2, '42.0']);
     state.ui.castLevel = 0;
     state.ui.targets = 1;
+  });
+
+  flow('the menu opens a whole group or one part of it, and the damage test rolls turns', async () => {
+    const b = build(Array(5).fill('Fighter'), { race: 'Human', background: 'Soldier', abilities: { str: 15, dex: 14, con: 15, int: 8, wis: 10, cha: 8 }, plus2: 'str', plus1: 'con' });
+    b.levels[0].picks = ['Fighting Style: Defence'];
+    b.levels[2].sub = 'Champion';
+    b.gear.act1.slots.meleeMain.name = 'Longsword';
+    Object.assign(state.ui, { act: 'act1', target: '', targetAc: 16, simAction: '', honour: true });
+    show(b);
+    await click(q('#tabs [data-tab="items"][data-kind="ring"]'), 'Items › Ring');
+    eq([state.ui.tab, lib.items.kind, all('#lib-results .lib-card').length > 0, q('#tabs .nav-menu button.on').textContent], ['items', 'ring', true, 'Ring']);
+    await click(q('#tabs .nav-top[data-tab="items"]'), 'Items');
+    eq([lib.items.kind, q('#tabs .nav-menu button.on').textContent], ['', 'All items'], 'the group itself shows every item');
+    await click(q('#tabs [data-tab="spells"][data-lv="0"]'), 'Spells › Cantrips');
+    eq([state.ui.tab, lib.spells.lv], ['spells', ['0']]);
+    await click(q('#tabs .nav-top[data-tab="hub"]'), 'Builds');
+    ok(all('.hub-card').length === 3 && q('.hub-card [data-act="build-select"]'), 'the three pages of the group, each with what it holds');
+    await click(q('.hub-card [data-act="build-select"]'), 'a build of the list');
+    eq([state.ui.tab, q('#tabs .nav-top.on').textContent.replace('▾', '')], ['builds', 'Builds']);
+    await click(q('#tabs [data-tab="damage"]'), 'Damage test');
+    ok(Math.abs(Number(q('.sim .turn b').textContent) - 10.45) < 0.06, 'the expected average of the turn, the Longsword held in both hands: 2 × (0.55 × 8.5 + 0.1 × 5.5); shown ' + q('.sim .turn b').textContent);
+    await click(q('[data-act="sim-roll"][data-n="10"]'), 'roll 10 turns');
+    eq([all('.sim-turn').length, all('.sim-turn li').length], [10, 20], 'ten turns of two attacks each');
+    await click(q('[data-act="sim-many"]'), 'average of 1,000 turns');
+    ok(all('.sim .turn').length === 2 && /1000/.test(all('.sim .turn')[1].textContent));
+    await click(q('.pslot[data-act="enemy-open"]'), 'enemy');
+    await pick('Goblin Warrior');
+    eq(all('.sim-turn').length, 0, 'another enemy starts the test over');
+    await click(q('[data-act="sim-roll"][data-n="kill"]'), 'until it falls');
+    ok(q('.sim-down') && q('[data-act="sim-roll"]').disabled && q('.hpbar.down'), 'the goblin falls and the rolling stops');
+    await click(q('[data-act="sim-reset"]'), 'start over');
+    ok(!q('.sim-down') && !all('.sim-turn').length);
+    state.ui.target = '';
+    state.ui.tab = 'builds';
   });
 
   flow('the party page: ticking an item as obtained', async () => {

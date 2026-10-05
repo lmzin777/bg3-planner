@@ -10,13 +10,8 @@
   <!-- Static text carries its English string in data-i18n; app.js swaps it for the chosen language. -->
   <header class="top">
     <div class="brand">BG3 <span>Planner</span> <small id="version"></small></div>
-    <nav class="tabs" id="tabs">
-      <button data-act="tab" data-tab="builds" data-i18n="Build Planner">Build Planner</button>
-      <button data-act="tab" data-tab="party" data-i18n="Party Planner">Party Planner</button>
-      <button data-act="tab" data-tab="presets" data-i18n="Ready-made builds">Ready-made builds</button>
-      <button data-act="tab" data-tab="items" data-i18n="Items">Items</button>
-      <button data-act="tab" data-tab="spells" data-i18n="Spells">Spells</button>
-    </nav>
+    <!-- the menu is written by navHtml() in js/shell.js -->
+    <nav class="tabs" id="tabs"></nav>
     <div class="top-tools">
       <span class="saved" id="saved"></span>
       <div class="langs" id="langs" role="group" aria-label="Language">
@@ -121,6 +116,7 @@
   <script src="js/traits.js"></script>
   <script src="js/spellbook.js"></script>
   <script src="js/damage.js"></script>
+  <script src="js/simulate.js"></script>
   <script src="js/wizard.js"></script>
   <script src="js/check.js"></script>
   <script src="js/safety.js"></script>

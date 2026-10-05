@@ -36,10 +36,11 @@ const targetLabel = (target) => (target.name ? target.name : t('AC {ac}', { ac: 
 // ---------- weapon attacks ----------
 // One attack of a row against the target: the chances, and the damage it is worth on average.
 // A weapon counts as magical when it is enchanted or more than common; unarmed strikes from Monk 6 on.
+const rowMagical = (stats, row) => (row.slot === 'unarmed' ? stats.gains.some((g) => /^ki-empowered strikes/i.test(g)) : !!(row.item && (row.item.en || (row.item.r && row.item.r !== 'common'))));
 function rowDamage(stats, row, target) {
   const bonus = row.attackTotal + (row.attackDice || []).reduce((a, d) => a + avgDice(d), 0);
   const p = hitChance(bonus, target.ac, stats.crit, stats.advantage);
-  const magical = row.slot === 'unarmed' ? stats.gains.some((g) => /^ki-empowered strikes/i.test(g)) : !!(row.item && (row.item.en || (row.item.r && row.item.r !== 'common')));
+  const magical = rowMagical(stats, row);
   const f = typeFactor(target, row.type, magical);
   const dice = avgDice(row.dice) * f + (row.extraDice || []).reduce((a, d) => a + avgDice(d[0]) * typeFactor(target, d[1] || row.type, magical), 0);
   return { p, each: p.hit * (dice + row.damageTotal * f) + p.crit * dice };
@@ -48,7 +49,8 @@ const POLEARMS = ['Glaives', 'Halberds', 'Pikes', 'Quarterstaves', 'Spears'];
 // A turn of weapon attacks: the Attack action with Extra Attack, the actions switched on (Action Surge, Haste)
 // and the best use of the bonus action the build has. A critical hit rolls every damage die twice.
 // { target, ac, parts: [{ row, n, how, each, p, spends, chance }], total }
-function turnPlan(stats, style, against) {
+// `without` names what has run out and cannot be spent in this turn ("Ki Points").
+function turnPlan(stats, style, against, without) {
   const target = asTarget(against);
   const main = mainAttack(stats, style);
   if (!main) return null;
@@ -67,7 +69,7 @@ function turnPlan(stats, style, against) {
   const bonus = [];
   const melee = main.slot === 'meleeMain' && !main.thrown;
   const off = stats.attacks.rows.find((r) => !r.thrown && r.slot === (main.slot === 'rangedMain' ? 'rangedOff' : main.slot === 'meleeMain' ? 'meleeOff' : ''));
-  if (main.slot === 'unarmed' && stats.monk) bonus.push(part(main, 2, 'Flurry of Blows', hit, { spends: 'Ki Points' }));
+  if (main.slot === 'unarmed' && stats.monk && !(without && without.has('Ki Points'))) bonus.push(part(main, 2, 'Flurry of Blows', hit, { spends: 'Ki Points' }));
   if (off && !main.thrown) bonus.push(part(off, 1, t('bonus action'), rowDamage(stats, off, target)));
   const feats = stats.featNames || new Set();
   if (melee && feats.has('Great Weapon Master')) {
@@ -224,6 +226,9 @@ function spellDamage(stats, entry, target, main) {
   };
   const saved = (x) => fail + (1 - fail) * kept(x);
   const saveText = () => t('{ab} save, DC {dc}: {n}% fail', { ab: saveKey.toUpperCase(), dc, n: Math.round(fail * 100) });
+  // what a cast rolls, for the damage test: the same numbers the average is made of
+  const rolled = { attack, ac: target.ac, crit: stats.crit, adv: !!stats.advantage,
+    save: saveKey ? { key: saveKey, bonus: target.saves[saveKey], dc, dis: heightened } : null, repeat: 1, parts: [] };
   const laterText = hits.parts.length || hits.weapon ? hits.later.map((x) => dicePart(x) + ' (' + x.note + ')').join(', ') : '';
   if (hits.weapon) {
     // a smite: one weapon attack with the spell's dice on top; a burst that asks a save comes when the attack hits
@@ -236,7 +241,8 @@ function spellDamage(stats, entry, target, main) {
     const total = d.each + burst.reduce((a, x) => a + d.p.hit * (avgDice(x.dice) + x.flat) * typeFactor(target, typed(x), true) * saved(x), 0);
     return { name: s.n, sp: s, slot, total, how: t('{n}% to hit', { n: Math.round(d.p.hit * 100) }) + (burst.length && saveKey ? ' · ' + saveText() : '') + upText,
       text: [t('weapon hit'), ...hits.parts.map(dicePart)].join(' + '), later: laterText, area: false, bonuses: [], weapon: true,
-      heightened: heightened && burst.length > 0, points: heightened && burst.length ? 3 : 0 };
+      heightened: heightened && burst.length > 0, points: heightened && burst.length ? 3 : 0, cls: entry.cls || '',
+      recipe: Object.assign(rolled, { weapon: row, parts: burst.map((x) => ({ mode: 'save', dice: x.dice, flat: x.flat, type: typed(x), f: typeFactor(target, typed(x), true), kept: kept(x), times: 1 })) }) };
   }
   const now = hits.parts.length ? hits.parts : hits.later.filter((x) => /per turn/i.test(x.note));
   if (!now.length) return null;
@@ -280,12 +286,15 @@ function spellDamage(stats, entry, target, main) {
     if (mode === 'attack') total += hits.beams * (p.hit * (dice + flat) + p.crit * dice) * (mixed ? 1 : targets);
     else if (mode === 'save') total += (dice + flat) * saved(x) * targets;
     else total += hits.beams * (dice + flat) * targets;
+    rolled.parts.push({ mode, dice: x.dice, flat: x.flat + each + (k === onceAt ? once : 0), type: x.type, f, kept: kept(x),
+      times: mode === 'save' ? targets : hits.beams * (mode === 'attack' && mixed ? 1 : targets) });
   });
   // "3 × 1d4 + 1 Force" for darts and rays that are all alike
   const same = now.length > 1 && now.every((x) => dicePart(x) === dicePart(now[0]));
   // Twinned Spell: a spell that targets one creature also hits a second one
   const twin = (!area || TWIN_AREA.includes(s.n)) && !same && hits.beams === 1 && on.includes('meta:twin') && opts.has('Twinned Spell');
   if (twin) total *= 2;
+  rolled.repeat = twin ? 2 : 1;
   // Sorcery Points of the cast: Twinned Spell costs 1 for each level of the slot (1 for a cantrip), Heightened Spell 3
   const points = (twin ? Math.max(1, slot) : 0) + (heightened ? 3 : 0);
   const halfText = now.some((x, k) => modeOf(x, k) === 'save' && kept(x) === 0.5) ? ' · ' + t('half on a save') : '';
@@ -294,7 +303,7 @@ function spellDamage(stats, entry, target, main) {
     modes.has('auto') ? t('always lands') : ''].filter(Boolean).join(' · ') + upText + (perTurn ? ' · ' + t('each turn') : '')
     + (targets > 1 ? ' · ' + t('{n} targets', { n: targets }) : '') + (twin ? ' · Twinned Spell' : '') + (heightened ? ' · Heightened Spell' : '');
   const text = (hits.beams > 1 ? hits.beams + ' × ' : same ? now.length + ' × ' : '') + (same ? dicePart(now[0]) : now.map(dicePart).join(', '));
-  return { name: s.n, sp: s, slot, total, how, text, later: laterText, area, cap, bonuses, twin, heightened, perTurn, points, option: entry.option || '' };
+  return { name: s.n, sp: s, slot, total, how, text, later: laterText, area, cap, bonuses, twin, heightened, perTurn, points, option: entry.option || '', cls: entry.cls || '', recipe: rolled };
 }
 // Every damaging spell of the build against the target, strongest first; the ones that add a die to weapon
 // hits come apart, in `riders`.
@@ -361,6 +370,15 @@ function quickTurn(stats, plan, spells) {
   if (!second) return null;
   return { first: first.name, second: second.name, total: first.total + second.total, points: 3 + (first.points || 0) + second.points };
 }
+// The slot the spells are cast with, and how many enemies an area catches.
+function castTools(stats, spells) {
+  const top = (stats.slots || []).length;
+  const chosen = Math.min(Number(state.ui.castLevel) || 0, top);
+  const slotButtons = top > 1 ? `<span class="lbl">${t('Cast with a slot of')}</span><div class="acts mini">${[0, ...Array.from({ length: top - 1 }, (x, k) => k + 2)].map((n) =>
+    `<button class="${chosen === n ? 'on' : ''}" data-act="cast-level" data-n="${n}">${n ? t('level {n}', { n }) : t('its own level')}</button>`).join('')}</div>` : '';
+  const areaTools = spells.some((x) => x.area) ? `<span class="lbl">${t('Enemies in an area')}</span>${stepper(Math.max(1, Number(state.ui.targets) || 1), 'data-ui="targets" data-v="1"', 1, 8)}` : '';
+  return slotButtons || areaTools ? `<div class="cast-tools">${slotButtons}${areaTools}</div>` : '';
+}
 // The block under the attacks: the turn of weapon attacks, the best the build does at will, the spells.
 function turnBox(stats, style) {
   const best = bestTurn(stats, style, targetOf());
@@ -383,19 +401,13 @@ function turnBox(stats, style) {
     return `<div class="opt"><b>${pic(x.sp.i, 'pic small')}${esc(x.name)}</b><span>${esc(dicePart(x.rider))}</span><span>${t('on every hit')}</span>
       <strong>+${worth.toFixed(1)}</strong><small>${[x.slot ? t('level {n} slot', { n: x.slot }) : '', castsText(stats, x.slot), x.sp.du || '', x.sp.co ? t('Concentration') : ''].filter(Boolean).map(esc).join(' · ')}</small></div>`;
   };
-  // the slot the spells are cast with, and how many enemies an area catches
-  const top = (stats.slots || []).length;
-  const chosen = Math.min(Number(state.ui.castLevel) || 0, top);
-  const slotButtons = top > 1 ? `<span class="lbl">${t('Cast with a slot of')}</span><div class="acts mini">${[0, ...Array.from({ length: top - 1 }, (x, k) => k + 2)].map((n) =>
-    `<button class="${chosen === n ? 'on' : ''}" data-act="cast-level" data-n="${n}">${n ? t('level {n}', { n }) : t('its own level')}</button>`).join('')}</div>` : '';
-  const areaTools = spells.some((x) => x.area) ? `<span class="lbl">${t('Enemies in an area')}</span>${stepper(Math.max(1, Number(state.ui.targets) || 1), 'data-ui="targets" data-v="1"', 1, 8)}` : '';
   const costs = spellSpends(stats, spells);
   const quick = quickTurn(stats, plan, spells);
   return `${weapon}
     ${spends.length ? `<p class="muted">${spends.map(esc).join(' · ')}</p>` : ''}
     ${cantrip && plan && cantrip.total > plan.total ? `<p class="muted">${t('At will, {spell} does more than the weapon: {n} a turn.', { spell: esc(cantrip.name), n: cantrip.total.toFixed(1) })}</p>` : ''}
     ${shown.length || riders.length ? `<h3 class="group">${t('Spells against {who}', { who })}</h3>
-      ${slotButtons || areaTools ? `<div class="cast-tools">${slotButtons}${areaTools}</div>` : ''}
+      ${castTools(stats, spells)}
       ${stats.pact ? `<p class="muted">${t('Pact Magic casts every Warlock spell with a level {n} slot.', { n: stats.pact.level })}</p>` : ''}
       <div class="opts">${shown.map(row).join('')}${riders.map(riderRow).join('')}</div>
       ${quick ? `<p class="turn"><b>${quick.total.toFixed(1)}</b>${t('with Quickened Spell: {a} with the bonus action, then {b}', { a: esc(quick.first), b: esc(quick.second) })} · ${sorceryText(quick.points)}</p>` : ''}

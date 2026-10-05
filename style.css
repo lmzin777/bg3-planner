@@ -868,3 +868,48 @@ button.chip:hover { border-color: var(--gold); color: var(--text); }
 .acts.mini { display: inline-flex; flex-wrap: wrap; margin: 0; }
 .acts.mini button { padding: 4px 10px; font-size: 12px; }
 .enemy-line em { font-style: normal; color: var(--gold-hi); }
+
+/* ---------- the menu: groups with what is inside each ---------- */
+.tabs { align-items: center; }
+.nav-group { position: relative; }
+.nav-top i { font-style: normal; font-size: 10px; margin-left: 6px; opacity: .65; }
+.nav-menu { display: none; position: absolute; top: 100%; left: 0; z-index: 30; min-width: 190px; padding: 6px; gap: 1px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 0 8px 8px 8px; box-shadow: 0 14px 34px rgba(0, 0, 0, .55); }
+.nav-group:not(.shut):hover .nav-menu, .nav-group:not(.shut):focus-within .nav-menu { display: grid; }
+.tabs .nav-menu button { text-align: left; white-space: nowrap; padding: 7px 12px; font-weight: 500; border-bottom: 0; border-radius: 6px; }
+.tabs .nav-menu button:hover { background: var(--field); }
+.tabs .nav-menu button.on { background: var(--field); border-radius: 6px; }
+/* with no pointer to hover, a group just opens its page: the parts are chosen there */
+@media (hover: none) { .nav-group .nav-menu { display: none !important; } .nav-top i { display: none; } }
+
+/* ---------- Builds: the three pages side by side ---------- */
+.hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 16px; align-items: start; }
+.hub-card { display: grid; gap: 10px; }
+.hub-card h2 { margin: 0; }
+.hub-card .side-list { max-height: 340px; overflow-y: auto; }
+
+/* ---------- damage test ---------- */
+.sim .hero .toggles { margin: 0; }
+.sim-btns { margin: 4px 0 12px; }
+.hpbar { position: relative; height: 26px; margin: 0 0 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--field); overflow: hidden; }
+.hpbar i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(180deg, #a8433a, #742a25); transition: width .25s; }
+.hpbar span { position: relative; display: block; padding: 0 10px; font: 600 12.5px/24px var(--sans); }
+.hpbar.down i { width: 0 !important; }
+.sim-down { color: var(--ok); font-weight: 600; }
+.sim-res b { color: var(--text); }
+.slot-n.out { opacity: .4; }
+.sim-log { display: grid; gap: 8px; margin: 4px 0 10px; }
+.sim-turn { border: 1px solid var(--line-soft); border-radius: 9px; background: var(--field); padding: 8px 12px; }
+.sim-turn header { display: flex; align-items: baseline; gap: 10px; }
+.sim-turn header b { color: var(--gold-hi); font-family: var(--serif); }
+.sim-turn header span { flex: 1; color: var(--muted); font-size: 13px; }
+.sim-turn header strong { font: 600 19px var(--serif); color: var(--gold-hi); font-variant-numeric: tabular-nums; }
+.sim-turn ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
+.sim-turn li { display: grid; grid-template-columns: minmax(130px, 1fr) minmax(0, 1.5fr) minmax(0, 1.4fr) 46px; gap: 2px 12px; align-items: baseline; font-size: 13px; padding: 3px 0; border-top: 1px solid var(--line-soft); }
+.sim-turn li b { font-weight: 600; }
+.sim-turn li i { font-style: normal; color: var(--muted); font-size: 11.5px; margin-left: 6px; }
+.sim-turn li span { color: var(--muted); min-width: 0; }
+.sim-turn li strong { text-align: right; font-variant-numeric: tabular-nums; }
+.sim-turn li.off { opacity: .55; }
+.sim-turn li.crit em { color: var(--r-legendary); }
+@media (max-width: 720px) { .sim-turn li { grid-template-columns: minmax(0, 1fr) 46px; } .sim-turn li span { grid-column: 1 / -1; grid-row: auto; } .sim-turn li b { grid-column: 1; } }

@@ -875,19 +875,59 @@ button.chip:hover { border-color: var(--gold); color: var(--text); }
 .acts.mini { display: inline-flex; flex-wrap: wrap; margin: 0; }
 .acts.mini button { padding: 4px 10px; font-size: 12px; }
 .enemy-line em { font-style: normal; color: var(--gold-hi); }
+
+/* ---------- the menu: groups with what is inside each ---------- */
+.tabs { align-items: center; }
+.nav-group { position: relative; }
+.nav-top i { font-style: normal; font-size: 10px; margin-left: 6px; opacity: .65; }
+.nav-menu { display: none; position: absolute; top: 100%; left: 0; z-index: 30; min-width: 190px; padding: 6px; gap: 1px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 0 8px 8px 8px; box-shadow: 0 14px 34px rgba(0, 0, 0, .55); }
+.nav-group:not(.shut):hover .nav-menu, .nav-group:not(.shut):focus-within .nav-menu { display: grid; }
+.tabs .nav-menu button { text-align: left; white-space: nowrap; padding: 7px 12px; font-weight: 500; border-bottom: 0; border-radius: 6px; }
+.tabs .nav-menu button:hover { background: var(--field); }
+.tabs .nav-menu button.on { background: var(--field); border-radius: 6px; }
+/* with no pointer to hover, a group just opens its page: the parts are chosen there */
+@media (hover: none) { .nav-group .nav-menu { display: none !important; } .nav-top i { display: none; } }
+
+/* ---------- Builds: the three pages side by side ---------- */
+.hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 16px; align-items: start; }
+.hub-card { display: grid; gap: 10px; }
+.hub-card h2 { margin: 0; }
+.hub-card .side-list { max-height: 340px; overflow-y: auto; }
+
+/* ---------- damage test ---------- */
+.sim .hero .toggles { margin: 0; }
+.sim-btns { margin: 4px 0 12px; }
+.hpbar { position: relative; height: 26px; margin: 0 0 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--field); overflow: hidden; }
+.hpbar i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(180deg, #a8433a, #742a25); transition: width .25s; }
+.hpbar span { position: relative; display: block; padding: 0 10px; font: 600 12.5px/24px var(--sans); }
+.hpbar.down i { width: 0 !important; }
+.sim-down { color: var(--ok); font-weight: 600; }
+.sim-res b { color: var(--text); }
+.slot-n.out { opacity: .4; }
+.sim-log { display: grid; gap: 8px; margin: 4px 0 10px; }
+.sim-turn { border: 1px solid var(--line-soft); border-radius: 9px; background: var(--field); padding: 8px 12px; }
+.sim-turn header { display: flex; align-items: baseline; gap: 10px; }
+.sim-turn header b { color: var(--gold-hi); font-family: var(--serif); }
+.sim-turn header span { flex: 1; color: var(--muted); font-size: 13px; }
+.sim-turn header strong { font: 600 19px var(--serif); color: var(--gold-hi); font-variant-numeric: tabular-nums; }
+.sim-turn ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
+.sim-turn li { display: grid; grid-template-columns: minmax(130px, 1fr) minmax(0, 1.5fr) minmax(0, 1.4fr) 46px; gap: 2px 12px; align-items: baseline; font-size: 13px; padding: 3px 0; border-top: 1px solid var(--line-soft); }
+.sim-turn li b { font-weight: 600; }
+.sim-turn li i { font-style: normal; color: var(--muted); font-size: 11.5px; margin-left: 6px; }
+.sim-turn li span { color: var(--muted); min-width: 0; }
+.sim-turn li strong { text-align: right; font-variant-numeric: tabular-nums; }
+.sim-turn li.off { opacity: .55; }
+.sim-turn li.crit em { color: var(--r-legendary); }
+@media (max-width: 720px) { .sim-turn li { grid-template-columns: minmax(0, 1fr) 46px; } .sim-turn li span { grid-column: 1 / -1; grid-row: auto; } .sim-turn li b { grid-column: 1; } }
 </style>
 </head>
 <body>
   <!-- Static text carries its English string in data-i18n; app.js swaps it for the chosen language. -->
   <header class="top">
     <div class="brand">BG3 <span>Planner</span> <small id="version"></small></div>
-    <nav class="tabs" id="tabs">
-      <button data-act="tab" data-tab="builds" data-i18n="Build Planner">Build Planner</button>
-      <button data-act="tab" data-tab="party" data-i18n="Party Planner">Party Planner</button>
-      <button data-act="tab" data-tab="presets" data-i18n="Ready-made builds">Ready-made builds</button>
-      <button data-act="tab" data-tab="items" data-i18n="Items">Items</button>
-      <button data-act="tab" data-tab="spells" data-i18n="Spells">Spells</button>
-    </nav>
+    <!-- the menu is written by navHtml() in js/shell.js -->
+    <nav class="tabs" id="tabs"></nav>
     <div class="top-tools">
       <span class="saved" id="saved"></span>
       <div class="langs" id="langs" role="group" aria-label="Language">
@@ -1800,6 +1840,64 @@ window.BG3_I18N = {
     '{n} Sorcery Points': '{n} Sorcery Points',
     '1 Sorcery Point': '1 Sorcery Point',
     'with Quickened Spell: {a} with the bonus action, then {b}': 'com Quickened Spell: {a} com a bonus action, depois {b}',
+    // the menu, the Builds page and the damage test
+    'All items': 'Todos os itens',
+    'All spells': 'Todas as spells',
+    'At will': 'À vontade',
+    'Average a turn': 'Média por turno',
+    'Average of 1,000 turns': 'Média de 1.000 turnos',
+    'Best turn': 'Melhor turno',
+    'Builds': 'Builds',
+    'Cantrips': 'Cantrips',
+    'Choose a build with at least one level.': 'Escolha uma build com pelo menos um nível.',
+    'Damage test': 'Teste de dano',
+    'Everything about builds: the ones you make, the parties you put them in, and the ready-made ones to start from.': 'Tudo sobre builds: as que você cria, as parties em que elas entram e as prontas para usar de base.',
+    'Everything comes back.': 'Volta tudo.',
+    'Four builds side by side: who wears what, who covers which skill, and what is still missing in each act.': 'Quatro builds lado a lado: quem usa o quê, quem cobre cada skill e o que ainda falta em cada ato.',
+    'In each turn': 'A cada turno',
+    'Left to spend': 'Ainda para gastar',
+    'No Sorcery Points left for the Metamagic.': 'Sem Sorcery Points para o Metamagic.',
+    'No spell slot left for {spell}: the turn goes to what the build does at will.': 'Sem spell slot para {spell}: o turno vai para o que a build faz à vontade.',
+    'Nothing here yet.': 'Nada aqui ainda.',
+    'Nothing rolled yet. A change in the build, the enemy or what is done in the turn starts the test over.': 'Nada rolado ainda. Mudar a build, o inimigo ou o que é feito no turno recomeça o teste.',
+    'Open the Build Planner': 'Abrir o Build Planner',
+    'Open the Party Planner': 'Abrir o Party Planner',
+    'Pact Magic slots, Ki Points and Action Surge come back.': 'Voltam os slots de Pact Magic, os Ki Points e o Action Surge.',
+    'Resistance halves and vulnerability doubles each roll as it is, without rounding, so the rolled average meets the expected one.': 'Resistência divide e vulnerabilidade dobra cada rolagem como ela é, sem arredondar, para a média rolada bater com a esperada.',
+    'Roll 10 turns': 'Rolar 10 turnos',
+    'Roll a turn': 'Rolar um turno',
+    'Roll until it falls': 'Rolar até cair',
+    'Rolls 1,000 turns with nothing running out, to compare with the expected average.': 'Rola 1.000 turnos sem nada acabar, para comparar com a média esperada.',
+    'Rolls the dice of a turn against an enemy: every attack roll, saving throw and damage die, with the spell slots and the other resources running out as they are spent. It uses the build, the gear and the switches below; nothing rolled here is saved.': 'Rola os dados de um turno contra um inimigo: cada rolagem de ataque, saving throw e dado de dano, com os spell slots e os outros recursos acabando conforme são gastos. Usa a build, o equipamento e os botões abaixo; nada do que é rolado aqui fica salvo.',
+    'Start over': 'Recomeçar',
+    'The builds of My builds that have at least one level.': 'As builds de Minhas builds que têm pelo menos um nível.',
+    'The last {n} turns are shown.': 'Aparecem os últimos {n} turnos.',
+    'Total damage': 'Dano total',
+    'Turn {n}': 'Turno {n}',
+    'Turns': 'Turnos',
+    'Weapon attacks': 'Ataques de arma',
+    'What the build does every turn of the test. A spell spends a slot each time; when none is left, the turn goes to what the build does at will.': 'O que a build faz em cada turno do teste. Uma spell gasta um slot a cada vez; quando não sobra nenhum, o turno vai para o que a build faz à vontade.',
+    'Worst turn': 'Pior turno',
+    'Your builds: character creation, the choices of each level, gear by act and the final numbers.': 'Suas builds: criação do personagem, as escolhas de cada nível, equipamento por ato e os números finais.',
+    'average of {n} turns rolled, from {min} to {max} · expected {x}': 'de média em {n} turnos rolados, de {min} a {max} · esperado {x}',
+    'critical hit': 'acerto crítico',
+    'expected on average in a turn against {who}': 'esperado em média num turno contra {who}',
+    'expected {x}': 'esperado {x}',
+    'failed': 'falhou',
+    'hit': 'acertou',
+    'miss': 'errou',
+    'natural 1: miss': '1 natural: errou',
+    'no roll': 'sem rolagem',
+    'passed, all the same': 'passou, dano inteiro mesmo assim',
+    'passed: half': 'passou: metade',
+    'passed: nothing': 'passou: nada',
+    '{ab} save {roll}{bonus} = {total} against DC {dc}': 'save de {ab} {roll}{bonus} = {total} contra DC {dc}',
+    '{left} of {hp} hit points': '{left} de {hp} pontos de vida',
+    '{n} a turn on average': '{n} por turno em média',
+    '{roll}{bonus} = {total} against AC {ac}': '{roll}{bonus} = {total} contra AC {ac}',
+    '{who} falls in turn {n}.': '{who} cai no turno {n}.',
+    '— nothing to roll —': '— nada para rolar —',
+
     // dialogs and toasts
     'Cancel': 'Cancelar',
     'Confirm': 'Confirmar',
@@ -11680,7 +11778,7 @@ window.BG3_DATA_DATES = {
 // The scripts are plain (not modules) so the planner also runs from a file opened directly; they share the global scope.
 'use strict';
 
-const APP_VERSION = '3.3';
+const APP_VERSION = '3.4';
 const STORE_KEY = 'bg3planner.v1';
 const PRESETS = window.BG3_PRESETS || [];
 const I18N = window.BG3_I18N || {};
@@ -12461,6 +12559,27 @@ function checklist(active, act) {
       </label>`).join('')}</div>`).join('')}</div>`;
 }
 
+// ---------- Builds: the three pages of the group, side by side ----------
+function renderHub() {
+  const row = (attrs, name, sub) => `<button class="side-item" ${attrs}><strong>${esc(name)}</strong>${sub ? `<small>${esc(sub)}</small>` : ''}</button>`;
+  const card = (title, text, list, button) => `<article class="card hub-card"><h2>${title}</h2><p class="muted">${text}</p>
+    <div class="side-list">${list || `<p class="muted">${t('Nothing here yet.')}</p>`}</div><div class="row-btns">${button}</div></article>`;
+  return `<div class="content wide">
+    <section class="card hero"><h1>${t('Builds')}</h1><p class="muted">${t('Everything about builds: the ones you make, the parties you put them in, and the ready-made ones to start from.')}</p></section>
+    <div class="hub">
+      ${card(t('Build Planner'), t('Your builds: character creation, the choices of each level, gear by act and the final numbers.'),
+        state.builds.map((b) => row(`data-act="build-select" data-id="${b.id}" data-go="builds"`, b.name || t('Unnamed'), splitText(b))).join(''),
+        `<button class="btn primary" data-act="tab" data-tab="builds">${t('Open the Build Planner')}</button><button class="btn" data-act="wiz-new">${t('+ New build, step by step')}</button>`)}
+      ${card(t('Party Planner'), t('Four builds side by side: who wears what, who covers which skill, and what is still missing in each act.'),
+        state.parties.map((p) => row(`data-act="party-open" data-id="${p.id}"`, p.name || t('Unnamed'), p.members.map((m, i) => memberLabel({ char: m.char, i })).filter((x, i) => p.members[i].buildId || p.members[i].char).join(' · '))).join(''),
+        `<button class="btn primary" data-act="tab" data-tab="party">${t('Open the Party Planner')}</button>`)}
+      ${card(t('Ready-made builds'), t('Reference builds. "Use as a base" creates a copy in My builds that you can change freely without touching the original.'),
+        PRESETS.map((raw) => { const b = normalizeBuild(raw); return row('data-act="tab" data-tab="presets"', b.name, splitText(b)); }).join(''),
+        `<button class="btn primary" data-act="tab" data-tab="presets">${t('See ready-made builds')}</button>`)}
+    </div>
+  </div>`;
+}
+
 // ---------- Ready-made builds ----------
 function renderPresets() {
   return `<div class="content wide">
@@ -12485,6 +12604,40 @@ function renderPresets() {
 // The scripts are plain (not modules) so the planner also runs from a file opened directly; they share the global scope.
 'use strict';
 
+// ---------- the menu ----------
+// Three groups with what is inside each, and the damage test. Clicking a group opens all of it (every item, every
+// spell, the three build pages side by side); an entry of its menu opens just that part.
+let navShut = -1;  // the group whose menu was just used: it stays shut until the pointer moves to another
+function navHtml() {
+  const tab = state.ui.tab;
+  const kind = lib.items.kind;
+  const lv = lib.spells.lv;
+  const entry = (label, attrs, on) => `<button class="${on ? 'on' : ''}" data-act="tab" ${attrs}>${esc(label)}</button>`;
+  const groups = [
+    [t('Builds'), 'data-tab="hub"', ['hub', 'builds', 'party', 'presets'].includes(tab), [
+      entry(t('Build Planner'), 'data-tab="builds"', tab === 'builds'), entry(t('Party Planner'), 'data-tab="party"', tab === 'party'), entry(t('Ready-made builds'), 'data-tab="presets"', tab === 'presets')]],
+    [t('Items'), 'data-tab="items" data-kind=""', tab === 'items', [entry(t('All items'), 'data-tab="items" data-kind=""', tab === 'items' && !kind),
+      ...KINDS.map(([v, l]) => entry(t(l), `data-tab="items" data-kind="${v}"`, tab === 'items' && kind === v))]],
+    [t('Spells'), 'data-tab="spells" data-lv=""', tab === 'spells', [entry(t('All spells'), 'data-tab="spells" data-lv=""', tab === 'spells' && !lv.length),
+      ...[0, 1, 2, 3, 4, 5, 6].map((n) => entry(n ? t('Level {n}', { n }) : t('Cantrips'), `data-tab="spells" data-lv="${n}"`, tab === 'spells' && lv.length === 1 && lv[0] === String(n)))]],
+  ];
+  return groups.map(([label, attrs, on, entries], i) => `<div class="nav-group${navShut === i ? ' shut' : ''}">
+      <button class="nav-top${on ? ' on' : ''}" data-act="tab" ${attrs} aria-haspopup="true">${esc(label)}<i>▾</i></button>
+      <div class="nav-menu">${entries.join('')}</div></div>`).join('')
+    + `<button class="nav-top${tab === 'damage' ? ' on' : ''}" data-act="tab" data-tab="damage">${t('Damage test')}</button>`;
+}
+// a menu that was just used opens again once the pointer goes to another group or leaves the menu
+(() => {
+  const open = (e) => {
+    const g = e.type === 'mouseleave' ? null : e.target.closest('.nav-group');
+    if (navShut < 0 || (g && [...g.parentNode.children].indexOf(g) === navShut)) return;
+    navShut = -1;
+    $$('#tabs .shut').forEach((x) => x.classList.remove('shut'));
+  };
+  $('#tabs').addEventListener('mouseover', open);
+  $('#tabs').addEventListener('mouseleave', open);
+})();
+
 // ---------- render ----------
 function render() {
   document.documentElement.lang = state.ui.lang;
@@ -12492,9 +12645,9 @@ function render() {
   $('#version').textContent = 'v' + APP_VERSION;
   $$('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
   $$('[data-i18n-title]').forEach((el) => { el.title = t(el.dataset.i18nTitle); });
-  $$('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === state.ui.tab));
+  $('#tabs').innerHTML = navHtml();
   $$('#langs button').forEach((b) => b.classList.toggle('on', b.dataset.lang === state.ui.lang));
-  const views = { party: renderParty, presets: renderPresets, items: renderItems, spells: renderSpells };
+  const views = { hub: renderHub, party: renderParty, presets: renderPresets, items: renderItems, spells: renderSpells, damage: renderDamage };
   $('#app').innerHTML = (views[state.ui.tab] || renderBuilds)();
   // the section menu sticks below the header, which is sticky itself on wide screens
   const top = $('.top');
@@ -15849,10 +16002,11 @@ const targetLabel = (target) => (target.name ? target.name : t('AC {ac}', { ac: 
 // ---------- weapon attacks ----------
 // One attack of a row against the target: the chances, and the damage it is worth on average.
 // A weapon counts as magical when it is enchanted or more than common; unarmed strikes from Monk 6 on.
+const rowMagical = (stats, row) => (row.slot === 'unarmed' ? stats.gains.some((g) => /^ki-empowered strikes/i.test(g)) : !!(row.item && (row.item.en || (row.item.r && row.item.r !== 'common'))));
 function rowDamage(stats, row, target) {
   const bonus = row.attackTotal + (row.attackDice || []).reduce((a, d) => a + avgDice(d), 0);
   const p = hitChance(bonus, target.ac, stats.crit, stats.advantage);
-  const magical = row.slot === 'unarmed' ? stats.gains.some((g) => /^ki-empowered strikes/i.test(g)) : !!(row.item && (row.item.en || (row.item.r && row.item.r !== 'common')));
+  const magical = rowMagical(stats, row);
   const f = typeFactor(target, row.type, magical);
   const dice = avgDice(row.dice) * f + (row.extraDice || []).reduce((a, d) => a + avgDice(d[0]) * typeFactor(target, d[1] || row.type, magical), 0);
   return { p, each: p.hit * (dice + row.damageTotal * f) + p.crit * dice };
@@ -15861,7 +16015,8 @@ const POLEARMS = ['Glaives', 'Halberds', 'Pikes', 'Quarterstaves', 'Spears'];
 // A turn of weapon attacks: the Attack action with Extra Attack, the actions switched on (Action Surge, Haste)
 // and the best use of the bonus action the build has. A critical hit rolls every damage die twice.
 // { target, ac, parts: [{ row, n, how, each, p, spends, chance }], total }
-function turnPlan(stats, style, against) {
+// `without` names what has run out and cannot be spent in this turn ("Ki Points").
+function turnPlan(stats, style, against, without) {
   const target = asTarget(against);
   const main = mainAttack(stats, style);
   if (!main) return null;
@@ -15880,7 +16035,7 @@ function turnPlan(stats, style, against) {
   const bonus = [];
   const melee = main.slot === 'meleeMain' && !main.thrown;
   const off = stats.attacks.rows.find((r) => !r.thrown && r.slot === (main.slot === 'rangedMain' ? 'rangedOff' : main.slot === 'meleeMain' ? 'meleeOff' : ''));
-  if (main.slot === 'unarmed' && stats.monk) bonus.push(part(main, 2, 'Flurry of Blows', hit, { spends: 'Ki Points' }));
+  if (main.slot === 'unarmed' && stats.monk && !(without && without.has('Ki Points'))) bonus.push(part(main, 2, 'Flurry of Blows', hit, { spends: 'Ki Points' }));
   if (off && !main.thrown) bonus.push(part(off, 1, t('bonus action'), rowDamage(stats, off, target)));
   const feats = stats.featNames || new Set();
   if (melee && feats.has('Great Weapon Master')) {
@@ -16037,6 +16192,9 @@ function spellDamage(stats, entry, target, main) {
   };
   const saved = (x) => fail + (1 - fail) * kept(x);
   const saveText = () => t('{ab} save, DC {dc}: {n}% fail', { ab: saveKey.toUpperCase(), dc, n: Math.round(fail * 100) });
+  // what a cast rolls, for the damage test: the same numbers the average is made of
+  const rolled = { attack, ac: target.ac, crit: stats.crit, adv: !!stats.advantage,
+    save: saveKey ? { key: saveKey, bonus: target.saves[saveKey], dc, dis: heightened } : null, repeat: 1, parts: [] };
   const laterText = hits.parts.length || hits.weapon ? hits.later.map((x) => dicePart(x) + ' (' + x.note + ')').join(', ') : '';
   if (hits.weapon) {
     // a smite: one weapon attack with the spell's dice on top; a burst that asks a save comes when the attack hits
@@ -16049,7 +16207,8 @@ function spellDamage(stats, entry, target, main) {
     const total = d.each + burst.reduce((a, x) => a + d.p.hit * (avgDice(x.dice) + x.flat) * typeFactor(target, typed(x), true) * saved(x), 0);
     return { name: s.n, sp: s, slot, total, how: t('{n}% to hit', { n: Math.round(d.p.hit * 100) }) + (burst.length && saveKey ? ' · ' + saveText() : '') + upText,
       text: [t('weapon hit'), ...hits.parts.map(dicePart)].join(' + '), later: laterText, area: false, bonuses: [], weapon: true,
-      heightened: heightened && burst.length > 0, points: heightened && burst.length ? 3 : 0 };
+      heightened: heightened && burst.length > 0, points: heightened && burst.length ? 3 : 0, cls: entry.cls || '',
+      recipe: Object.assign(rolled, { weapon: row, parts: burst.map((x) => ({ mode: 'save', dice: x.dice, flat: x.flat, type: typed(x), f: typeFactor(target, typed(x), true), kept: kept(x), times: 1 })) }) };
   }
   const now = hits.parts.length ? hits.parts : hits.later.filter((x) => /per turn/i.test(x.note));
   if (!now.length) return null;
@@ -16093,12 +16252,15 @@ function spellDamage(stats, entry, target, main) {
     if (mode === 'attack') total += hits.beams * (p.hit * (dice + flat) + p.crit * dice) * (mixed ? 1 : targets);
     else if (mode === 'save') total += (dice + flat) * saved(x) * targets;
     else total += hits.beams * (dice + flat) * targets;
+    rolled.parts.push({ mode, dice: x.dice, flat: x.flat + each + (k === onceAt ? once : 0), type: x.type, f, kept: kept(x),
+      times: mode === 'save' ? targets : hits.beams * (mode === 'attack' && mixed ? 1 : targets) });
   });
   // "3 × 1d4 + 1 Force" for darts and rays that are all alike
   const same = now.length > 1 && now.every((x) => dicePart(x) === dicePart(now[0]));
   // Twinned Spell: a spell that targets one creature also hits a second one
   const twin = (!area || TWIN_AREA.includes(s.n)) && !same && hits.beams === 1 && on.includes('meta:twin') && opts.has('Twinned Spell');
   if (twin) total *= 2;
+  rolled.repeat = twin ? 2 : 1;
   // Sorcery Points of the cast: Twinned Spell costs 1 for each level of the slot (1 for a cantrip), Heightened Spell 3
   const points = (twin ? Math.max(1, slot) : 0) + (heightened ? 3 : 0);
   const halfText = now.some((x, k) => modeOf(x, k) === 'save' && kept(x) === 0.5) ? ' · ' + t('half on a save') : '';
@@ -16107,7 +16269,7 @@ function spellDamage(stats, entry, target, main) {
     modes.has('auto') ? t('always lands') : ''].filter(Boolean).join(' · ') + upText + (perTurn ? ' · ' + t('each turn') : '')
     + (targets > 1 ? ' · ' + t('{n} targets', { n: targets }) : '') + (twin ? ' · Twinned Spell' : '') + (heightened ? ' · Heightened Spell' : '');
   const text = (hits.beams > 1 ? hits.beams + ' × ' : same ? now.length + ' × ' : '') + (same ? dicePart(now[0]) : now.map(dicePart).join(', '));
-  return { name: s.n, sp: s, slot, total, how, text, later: laterText, area, cap, bonuses, twin, heightened, perTurn, points, option: entry.option || '' };
+  return { name: s.n, sp: s, slot, total, how, text, later: laterText, area, cap, bonuses, twin, heightened, perTurn, points, option: entry.option || '', cls: entry.cls || '', recipe: rolled };
 }
 // Every damaging spell of the build against the target, strongest first; the ones that add a die to weapon
 // hits come apart, in `riders`.
@@ -16174,6 +16336,15 @@ function quickTurn(stats, plan, spells) {
   if (!second) return null;
   return { first: first.name, second: second.name, total: first.total + second.total, points: 3 + (first.points || 0) + second.points };
 }
+// The slot the spells are cast with, and how many enemies an area catches.
+function castTools(stats, spells) {
+  const top = (stats.slots || []).length;
+  const chosen = Math.min(Number(state.ui.castLevel) || 0, top);
+  const slotButtons = top > 1 ? `<span class="lbl">${t('Cast with a slot of')}</span><div class="acts mini">${[0, ...Array.from({ length: top - 1 }, (x, k) => k + 2)].map((n) =>
+    `<button class="${chosen === n ? 'on' : ''}" data-act="cast-level" data-n="${n}">${n ? t('level {n}', { n }) : t('its own level')}</button>`).join('')}</div>` : '';
+  const areaTools = spells.some((x) => x.area) ? `<span class="lbl">${t('Enemies in an area')}</span>${stepper(Math.max(1, Number(state.ui.targets) || 1), 'data-ui="targets" data-v="1"', 1, 8)}` : '';
+  return slotButtons || areaTools ? `<div class="cast-tools">${slotButtons}${areaTools}</div>` : '';
+}
 // The block under the attacks: the turn of weapon attacks, the best the build does at will, the spells.
 function turnBox(stats, style) {
   const best = bestTurn(stats, style, targetOf());
@@ -16196,19 +16367,13 @@ function turnBox(stats, style) {
     return `<div class="opt"><b>${pic(x.sp.i, 'pic small')}${esc(x.name)}</b><span>${esc(dicePart(x.rider))}</span><span>${t('on every hit')}</span>
       <strong>+${worth.toFixed(1)}</strong><small>${[x.slot ? t('level {n} slot', { n: x.slot }) : '', castsText(stats, x.slot), x.sp.du || '', x.sp.co ? t('Concentration') : ''].filter(Boolean).map(esc).join(' · ')}</small></div>`;
   };
-  // the slot the spells are cast with, and how many enemies an area catches
-  const top = (stats.slots || []).length;
-  const chosen = Math.min(Number(state.ui.castLevel) || 0, top);
-  const slotButtons = top > 1 ? `<span class="lbl">${t('Cast with a slot of')}</span><div class="acts mini">${[0, ...Array.from({ length: top - 1 }, (x, k) => k + 2)].map((n) =>
-    `<button class="${chosen === n ? 'on' : ''}" data-act="cast-level" data-n="${n}">${n ? t('level {n}', { n }) : t('its own level')}</button>`).join('')}</div>` : '';
-  const areaTools = spells.some((x) => x.area) ? `<span class="lbl">${t('Enemies in an area')}</span>${stepper(Math.max(1, Number(state.ui.targets) || 1), 'data-ui="targets" data-v="1"', 1, 8)}` : '';
   const costs = spellSpends(stats, spells);
   const quick = quickTurn(stats, plan, spells);
   return `${weapon}
     ${spends.length ? `<p class="muted">${spends.map(esc).join(' · ')}</p>` : ''}
     ${cantrip && plan && cantrip.total > plan.total ? `<p class="muted">${t('At will, {spell} does more than the weapon: {n} a turn.', { spell: esc(cantrip.name), n: cantrip.total.toFixed(1) })}</p>` : ''}
     ${shown.length || riders.length ? `<h3 class="group">${t('Spells against {who}', { who })}</h3>
-      ${slotButtons || areaTools ? `<div class="cast-tools">${slotButtons}${areaTools}</div>` : ''}
+      ${castTools(stats, spells)}
       ${stats.pact ? `<p class="muted">${t('Pact Magic casts every Warlock spell with a level {n} slot.', { n: stats.pact.level })}</p>` : ''}
       <div class="opts">${shown.map(row).join('')}${riders.map(riderRow).join('')}</div>
       ${quick ? `<p class="turn"><b>${quick.total.toFixed(1)}</b>${t('with Quickened Spell: {a} with the bonus action, then {b}', { a: esc(quick.first), b: esc(quick.second) })} · ${sorceryText(quick.points)}</p>` : ''}
@@ -16240,6 +16405,320 @@ Object.assign(actions, {
   },
   'honour-toggle'() { state.ui.honour = !honourMode(); },
   'cast-level'(el) { state.ui.castLevel = Number(el.dataset.n) || 0; },
+});
+</script>
+  <script>
+// Damage test: the dice of a turn, rolled. The page takes the build on screen with the enemy and the switches of
+// Final numbers, and rolls what damage.js works out on average: every attack roll, saving throw and damage die,
+// turn after turn, spending the spell slots and the other things that run out. Nothing here is saved.
+'use strict';
+
+let simRandom = Math.random;  // the tests put a fixed roll here
+const rollDie = (sides) => 1 + Math.floor(simRandom() * sides);
+// "2d6" rolled, with twice the dice on a critical hit: { sum, rolls }. A flat number is itself.
+function rollDice(text, crit) {
+  const m = /(\d+)d(\d+)/.exec(text || '');
+  if (!m) return { sum: Number(text) || 0, rolls: [] };
+  const rolls = Array.from({ length: Number(m[1]) * (crit ? 2 : 1) }, () => rollDie(Number(m[2])));
+  return { sum: rolls.reduce((a, n) => a + n, 0), rolls };
+}
+// A d20: the better of two rolls with Advantage (1), the worse with Disadvantage (-1).
+function rollD20(mode) {
+  const a = rollDie(20);
+  if (!mode) return a;
+  const b = rollDie(20);
+  return mode > 0 ? Math.max(a, b) : Math.min(a, b);
+}
+const tenth = (n) => (Math.round(n * 10) / 10).toString();
+// The damage of one roll as text: "1d8 (5) + 3 = 8 Slashing", and what is left of it after a resistance.
+function damageBits(bits, raw, dealt) {
+  const text = bits.map((x, i) => (i ? '+ ' : '') + x).join(' ');
+  return text + ' = ' + tenth(raw) + (Math.abs(raw - dealt) > 0.001 ? ' → ' + tenth(dealt) : '');
+}
+
+// One weapon attack: the d20 against the Armour Class (a natural 1 misses, the critical threshold always hits),
+// then every damage die, rolled twice on a critical hit.
+function rollWeapon(stats, row, target) {
+  const d20 = rollD20(stats.advantage ? 1 : 0);
+  const bonus = row.attackTotal + (row.attackDice || []).reduce((a, x) => a + rollDice(x).sum, 0);
+  const crit = d20 >= stats.crit;
+  const hit = d20 !== 1 && (crit || d20 + bonus >= target.ac);
+  const line = { name: row.name, kind: 'attack', d20, bonus, against: target.ac, hit, crit: hit && crit, damage: 0, text: '' };
+  if (!hit) return line;
+  const magical = rowMagical(stats, row);
+  const bits = [];
+  let raw = 0;
+  [[row.dice, row.type], ...(row.extraDice || [])].forEach(([dice, type]) => {
+    if (!dice) return;
+    const r = rollDice(dice, crit);
+    const f = typeFactor(target, type || row.type, magical);
+    raw += r.sum;
+    line.damage += r.sum * f;
+    bits.push(r.rolls.length ? `${r.rolls.length}d${/d(\d+)/.exec(dice)[1]} (${r.rolls.join(', ')})${type && type !== row.type ? ' ' + type : ''}` : String(r.sum));
+  });
+  if (row.damageTotal) { raw += row.damageTotal; line.damage += row.damageTotal * typeFactor(target, row.type, magical); bits.push(String(row.damageTotal)); }
+  line.text = damageBits(bits, raw, line.damage) + ' ' + row.type;
+  return line;
+}
+// One cast of a spell, from the recipe spellDamage leaves: each part by attack roll, by the enemy's saving throw
+// (one for each enemy, for all the parts) or with no roll.
+function rollSpell(stats, x, target) {
+  const r = x.recipe;
+  const lines = [];
+  const savePart = (part, save) => {
+    const dice = rollDice(part.dice);
+    const raw = dice.sum + part.flat;
+    const dealt = raw * part.f * (save.passed ? part.kept : 1);
+    return { name: x.name, kind: 'save', ab: r.save.key.toUpperCase(), d20: save.d20, bonus: r.save.bonus, against: r.save.dc, passed: save.passed, kept: part.kept, damage: dealt,
+      text: damageBits([dice.rolls.length ? `${part.dice} (${dice.rolls.join(', ')})` : '', part.flat ? String(part.flat) : ''].filter(Boolean), raw, dealt) + ' ' + part.type };
+  };
+  const throwSave = () => { const d20 = rollD20(r.save.dis ? -1 : 0); return { d20, passed: d20 + r.save.bonus >= r.save.dc }; };
+  if (r.weapon) {
+    const line = rollWeapon(stats, r.weapon, target);
+    line.name = x.name;
+    lines.push(line);
+    if (line.hit && r.save) { const save = throwSave(); r.parts.forEach((part) => lines.push(savePart(part, save))); }
+    return lines;
+  }
+  for (let rep = 0; rep < r.repeat; rep++) {
+    const saves = [];
+    r.parts.forEach((part) => {
+      for (let k = 0; k < part.times; k++) {
+        if (part.mode === 'save') { saves[k] = saves[k] || throwSave(); lines.push(savePart(part, saves[k])); continue; }
+        const d20 = part.mode === 'attack' ? rollD20(r.adv ? 1 : 0) : 0;
+        const crit = part.mode === 'attack' && d20 >= r.crit;
+        const hit = part.mode !== 'attack' || (d20 !== 1 && (crit || d20 + r.attack >= r.ac));
+        const line = { name: x.name, kind: part.mode, d20, bonus: r.attack, against: r.ac, hit, crit: hit && crit, damage: 0, text: '' };
+        if (hit) {
+          const dice = rollDice(part.dice, crit);
+          const raw = dice.sum + part.flat;
+          line.damage = raw * part.f;
+          line.text = damageBits([dice.rolls.length ? `${dice.rolls.length}d${/d(\d+)/.exec(part.dice)[1]} (${dice.rolls.join(', ')})` : '', part.flat ? String(part.flat) : ''].filter(Boolean), raw, line.damage) + ' ' + part.type;
+        }
+        lines.push(line);
+      }
+    });
+  }
+  return lines;
+}
+
+// What a build starts a fight with, of the things that run out.
+function simResources(stats) {
+  const res = Object.fromEntries((stats.resources || []).map(([n, v]) => [n, Number(v) || 0]));
+  return { slots: (stats.slots || []).slice(), pact: stats.pact ? stats.pact.n : 0, pactLevel: stats.pact ? stats.pact.level : 0,
+    points: res['Sorcery Points'] || 0, ki: res['Ki Points'] || 0, surge: (stats.fighter || 0) >= 2 ? 1 : 0 };
+}
+// A slot for the cast: the lowest one that is enough, a Warlock spell from the pact slots first.
+function takeSlot(left, x, spend) {
+  const pact = () => { if (!(left.pact > 0 && left.pactLevel >= x.slot)) return false; if (spend) left.pact--; return true; };
+  if (x.cls === 'Warlock' && pact()) return true;
+  for (let i = x.slot - 1; i < left.slots.length; i++) if (left.slots[i] > 0) { if (spend) left.slots[i]--; return true; }
+  return pact();
+}
+// One turn of the test: the spell chosen, or the weapon attacks, with what is left to spend (`left`; with none
+// given, nothing runs out). { name, lines, total, notes }
+function simTurn(stats, style, target, action, left) {
+  const notes = [];
+  let on = (stats.active || []).slice();
+  if (left && on.includes('surge') && left.surge < 1) on = on.filter((k) => k !== 'surge');
+  const without = new Set(left && left.ki < 1 ? ['Ki Points'] : []);
+  let st = Object.assign({}, stats, { active: on });
+  const plan = () => turnPlan(st, style, target, without);
+  const find = (name) => { const p = plan(); return spellOptions(st, target, p ? p.parts[0].row : null).find((x) => x.name === name) || null; };
+  let spell = action ? find(action) : null;
+  if (spell && left) {
+    if ((spell.points || 0) > left.points) {
+      // Metamagic the Sorcery Points no longer pay for is left out
+      on = on.filter((k) => !/^meta:/.test(k));
+      st = Object.assign({}, stats, { active: on });
+      spell = find(action);
+      notes.push(t('No Sorcery Points left for the Metamagic.'));
+    }
+    if (spell && spell.slot && !takeSlot(left, spell, false)) {
+      notes.push(t('No spell slot left for {spell}: the turn goes to what the build does at will.', { spell: action }));
+      spell = null;
+      action = '';
+    }
+  }
+  // at will: the weapon attacks, or the cantrip when there is no weapon or the slots ran out and it does more
+  if (!spell) {
+    const best = bestTurn(st, style, target);
+    if (best.cantrip && (!best.plan || (notes.length && best.cantrip.total > best.plan.total))) spell = best.cantrip;
+  }
+  const lines = [];
+  if (spell) {
+    lines.push(...rollSpell(st, spell, target));
+    if (left) { if (spell.slot) takeSlot(left, spell, true); left.points -= spell.points || 0; }
+  } else {
+    const p = plan();
+    let crits = 0;
+    (p ? p.parts : []).forEach((part) => {
+      // Great Weapon Master gives its attack only after a critical hit in the turn
+      if (part.chance != null && !crits) return;
+      const n = part.chance != null ? 1 : part.n;
+      for (let k = 0; k < n; k++) {
+        const line = rollWeapon(st, part.row, target);
+        line.how = part.how;
+        if (line.crit) crits++;
+        lines.push(line);
+      }
+      if (left && part.spends === 'Action Surge') left.surge--;
+      if (left && part.spends === 'Ki Points') left.ki--;
+    });
+  }
+  return { name: spell ? spell.name : t('Weapon attacks'), lines, total: lines.reduce((a, x) => a + x.damage, 0), notes };
+}
+
+// ---------- the page ----------
+let sim = { key: '', turns: [], left: null, dealt: 0, many: null };
+// In Honour mode the enemy has its Honour hit points, or the Tactician ones when its page gives no others.
+const enemyHp = (e) => (honourMode() ? e.hp.h || e.hp.t || e.hp.b : e.hp.b);
+// Everything the test needs from the build on screen; a change in any of it starts the test over.
+function simContext() {
+  const b = curBuild();
+  if (!b || !charLevel(b)) return null;
+  const total = charLevel(b);
+  const at = b.current && b.current < total ? b.current : 0;
+  const stats = finalStats(b, state.ui.act, at ? { level: at } : null);
+  const style = buildProfile(at ? atLevel(b, at) : b, state.ui.act).style;
+  const target = targetOf();
+  const plan = turnPlan(stats, style, target);
+  const spells = spellOptions(stats, target, plan ? plan.parts[0].row : null);
+  let action = state.ui.simAction || '';
+  if (action && !spells.some((x) => x.name === action)) action = '';
+  if (!action && !plan && spells.length) action = (spells.find((x) => !x.sp.lv) || spells[0]).name;
+  const chosen = spells.find((x) => x.name === action) || null;
+  const expected = chosen ? chosen.total : plan ? plan.total : 0;
+  const hp = target.enemy ? enemyHp(target.enemy) : 0;
+  const key = JSON.stringify([b.id, state.ui.act, at, target.name, target.ac, target.saves, action, b.active, honourMode(), state.ui.castLevel, state.ui.targets, tenth(expected * 100)]);
+  if (sim.key !== key) sim = { key, turns: [], left: simResources(stats), dealt: 0, many: null };
+  return { b, stats, style, target, plan, spells, action, chosen, expected, hp };
+}
+function simRun(ctx, n, untilDown) {
+  for (let k = 0; k < n; k++) {
+    if (ctx.hp && sim.dealt >= ctx.hp) break;
+    const turn = simTurn(ctx.stats, ctx.style, ctx.target, ctx.action, sim.left);
+    sim.dealt += turn.total;
+    sim.turns.push(Object.assign(turn, { n: sim.turns.length + 1 }));
+    if (!untilDown && k + 1 >= n) break;
+  }
+}
+const SIM_SHOWN = 30;
+function simLine(x) {
+  const sign = (n) => (n < 0 ? ' − ' + Math.abs(n) : ' + ' + n);
+  let roll = '';
+  let out = '';
+  if (x.kind === 'attack') {
+    roll = t('{roll}{bonus} = {total} against AC {ac}', { roll: x.d20, bonus: sign(x.bonus), total: x.d20 + x.bonus, ac: x.against });
+    out = x.crit ? t('critical hit') : x.hit ? t('hit') : x.d20 === 1 ? t('natural 1: miss') : t('miss');
+  } else if (x.kind === 'save') {
+    roll = t('{ab} save {roll}{bonus} = {total} against DC {dc}', { ab: x.ab, roll: x.d20, bonus: sign(x.bonus), total: x.d20 + x.bonus, dc: x.against });
+    out = !x.passed ? t('failed') : x.kept === 1 ? t('passed, all the same') : x.kept ? t('passed: half') : t('passed: nothing');
+  } else roll = t('no roll');
+  const good = x.kind === 'save' ? !x.passed : x.hit;
+  return `<li class="${good ? '' : 'off'}${x.crit ? ' crit' : ''}"><b>${esc(x.name)}</b>${x.how ? `<i>${esc(x.how)}</i>` : ''}<span>${esc(roll)}${out ? ` · <em>${esc(out)}</em>` : ''}</span>
+    <span>${esc(x.text || '')}</span><strong>${tenth(x.damage)}</strong></li>`;
+}
+function renderDamage() {
+  const b = curBuild();
+  const ctx = simContext();
+  const head = `<section class="card hero"><h1>${t('Damage test')}</h1>
+    <p class="muted">${t('Rolls the dice of a turn against an enemy: every attack roll, saving throw and damage die, with the spell slots and the other resources running out as they are spent. It uses the build, the gear and the switches below; nothing rolled here is saved.')}</p>
+    <div class="stat-tools">
+      <div class="field"><span>${t('Build')}</span>${slotButton('sim-build-open', '', b ? b.name || t('Unnamed') : '', '', t('— choose —'))}</div>
+      ${ctx ? `<div><span class="lbl">${t('With the gear of')}</span>${actTabs(state.ui.act, 'act')}</div>${targetTools()}` : ''}
+    </div>
+    ${ctx ? togglesRow(b) : ''}</section>`;
+  if (!ctx) return `<div class="content wide sim">${head}<section class="card empty"><h2>${t('Choose a build with at least one level.')}</h2></section></div>`;
+  const { stats, target, plan, spells, action, chosen, expected, hp } = ctx;
+  const who = targetLabel(target);
+  const turns = sim.turns;
+  const down = hp && sim.dealt >= hp;
+  const left = sim.left;
+  const res = [
+    left.slots.length ? t('Spell slots') + ' ' + left.slots.map((n, i) => `<span class="slot-n${n ? '' : ' out'}" title="${t('Level {n}', { n: i + 1 })}">${i + 1}<i>×${n}</i></span>`).join('') : '',
+    left.pactLevel ? esc(t('Pact Magic slots')) + ' <b>' + left.pact + '</b>' : '',
+    simResources(stats).points ? 'Sorcery Points <b>' + left.points + '</b>' : '',
+    simResources(stats).ki ? 'Ki Points <b>' + left.ki + '</b>' : '',
+    simResources(stats).surge ? 'Action Surge <b>' + left.surge + '</b>' : ''].filter(Boolean);
+  const totals = turns.map((x) => x.total);
+  const mean = turns.length ? sim.dealt / turns.length : 0;
+  const box = (label, value, hint) => `<div class="stat"><span>${label}</span><b>${value}</b>${hint ? `<small>${hint}</small>` : ''}</div>`;
+  const log = turns.slice(-SIM_SHOWN).reverse().map((x) => `<article class="sim-turn"><header><b>${t('Turn {n}', { n: x.n })}</b><span>${esc(x.name)}</span><strong>${tenth(x.total)}</strong></header>
+    ${x.notes.map((n) => `<p class="muted">${esc(n)}</p>`).join('')}<ul>${x.lines.map(simLine).join('')}</ul></article>`).join('');
+  return `<div class="content wide sim">${head}
+    <section class="card">
+      <div class="stat-tools">
+        <div class="field"><span>${t('In each turn')}</span>${slotButton('sim-action-open', '', chosen ? chosen.name : plan ? t('Weapon attacks') : '', chosen ? pic(chosen.sp.i, 'pic small') : '', t('— nothing to roll —'))}</div>
+        ${castTools(stats, spells)}
+      </div>
+      <p class="turn"><b>${expected.toFixed(1)}</b>${t('expected on average in a turn against {who}', { who: esc(who) })}${chosen ? ': ' + esc(chosen.text + ' · ' + chosen.how) : plan ? ': ' + plan.parts.map((x) =>
+        `${x.chance != null ? Math.round(x.chance * 100) + '%' : x.n} × ${esc(x.row.name)} (${esc(x.how)})`).join(' + ') : ''}</p>
+      ${hp ? `<div class="hpbar${down ? ' down' : ''}"><i style="width:${Math.max(0, 100 - sim.dealt / hp * 100).toFixed(1)}%"></i><span>${esc(who)} · ${t('{left} of {hp} hit points', { left: tenth(Math.max(0, hp - sim.dealt)), hp })}</span></div>` : ''}
+      ${down ? `<p class="sim-down">${t('{who} falls in turn {n}.', { who: esc(who), n: turns.length })}</p>` : ''}
+      <div class="row-btns sim-btns">
+        <button class="btn primary" data-act="sim-roll" data-n="1"${down || !expected ? ' disabled' : ''}>${t('Roll a turn')}</button>
+        <button class="btn" data-act="sim-roll" data-n="10"${down || !expected ? ' disabled' : ''}>${t('Roll 10 turns')}</button>
+        ${hp ? `<button class="btn" data-act="sim-roll" data-n="kill"${down || !expected ? ' disabled' : ''}>${t('Roll until it falls')}</button>` : ''}
+        <button class="btn" data-act="sim-many"${expected ? '' : ' disabled'} title="${t('Rolls 1,000 turns with nothing running out, to compare with the expected average.')}">${t('Average of 1,000 turns')}</button>
+        <button class="btn" data-act="sim-rest" data-k="short" title="${t('Pact Magic slots, Ki Points and Action Surge come back.')}">Short Rest</button>
+        <button class="btn" data-act="sim-rest" data-k="long" title="${t('Everything comes back.')}">Long Rest</button>
+        <button class="btn" data-act="sim-reset"${turns.length || sim.many ? '' : ' disabled'}>${t('Start over')}</button>
+      </div>
+      ${res.length ? `<p class="points sim-res"><b>${t('Left to spend')}</b> ${res.join(' · ')}</p>` : ''}
+      ${sim.many ? `<p class="turn"><b>${sim.many.avg.toFixed(1)}</b>${t('average of {n} turns rolled, from {min} to {max} · expected {x}', { n: sim.many.n, min: tenth(sim.many.min), max: tenth(sim.many.max), x: expected.toFixed(1) })}</p>` : ''}
+      ${turns.length ? `<div class="stat-row">${box(t('Turns'), turns.length)}${box(t('Total damage'), tenth(sim.dealt))}${box(t('Average a turn'), mean.toFixed(1), t('expected {x}', { x: expected.toFixed(1) }))}
+        ${box(t('Best turn'), tenth(Math.max(...totals)))}${box(t('Worst turn'), tenth(Math.min(...totals)))}</div>
+        <div class="sim-log">${log}</div>${turns.length > SIM_SHOWN ? `<p class="muted">${t('The last {n} turns are shown.', { n: SIM_SHOWN })}</p>` : ''}`
+    : `<p class="muted">${t('Nothing rolled yet. A change in the build, the enemy or what is done in the turn starts the test over.')}</p>`}
+      <p class="muted">${t('Resistance halves and vulnerability doubles each roll as it is, without rounding, so the rolled average meets the expected one.')}</p>
+    </section>
+  </div>`;
+}
+
+Object.assign(actions, {
+  'sim-roll'(el) {
+    const ctx = simContext();
+    if (!ctx) return;
+    if (el.dataset.n === 'kill') simRun(ctx, 200, true); else simRun(ctx, Number(el.dataset.n) || 1);
+  },
+  'sim-many'() {
+    const ctx = simContext();
+    if (!ctx) return;
+    const n = 1000;
+    const totals = Array.from({ length: n }, () => simTurn(ctx.stats, ctx.style, ctx.target, ctx.action, null).total);
+    sim.many = { n, avg: totals.reduce((a, x) => a + x, 0) / n, min: Math.min(...totals), max: Math.max(...totals) };
+  },
+  'sim-rest'(el) {
+    const ctx = simContext();
+    if (!ctx) return;
+    const full = simResources(ctx.stats);
+    if (el.dataset.k === 'long') sim.left = full;
+    else Object.assign(sim.left, { pact: full.pact, ki: full.ki, surge: full.surge });
+  },
+  'sim-reset'() { sim.key = ''; },
+  'sim-build-open'() {
+    const list = state.builds.filter((x) => charLevel(x));
+    const ids = list.map((x) => x.id);
+    // two builds of the same name are told apart by their place in the list
+    const rows = list.map((x, i) => { const name = x.name || t('Unnamed'); const same = list.slice(0, i).filter((y) => (y.name || t('Unnamed')) === name).length; return [name + (same ? ' (' + (same + 1) + ')' : ''), splitText(x), '', '', '']; });
+    const cur = curBuild();
+    openChooser(t('Build'), t('The builds of My builds that have at least one level.'), [{ label: t('Build'), n: 1, min: 0, options: rows, chosen: cur && ids.includes(cur.id) ? [rows[ids.indexOf(cur.id)][0]] : [] }],
+      (done) => { const i = rows.findIndex((r) => r[0] === done[0].chosen[0]); if (i >= 0) { state.ui.buildId = ids[i]; state.ui.wizard = ''; } });
+    return false;
+  },
+  'sim-action-open'() {
+    const ctx = simContext();
+    if (!ctx) return false;
+    const weapon = ctx.plan ? [[t('Weapon attacks'), ctx.plan.parts.map((x) => `${x.chance != null ? Math.round(x.chance * 100) + '%' : x.n} × ${x.row.name} (${x.how})`).join(' + '),
+      t('{n} a turn on average', { n: ctx.plan.total.toFixed(1) }), '', t('At will')]] : [];
+    const rows = weapon.concat(ctx.spells.map((x) => [x.name, x.text + ' · ' + x.how, [t('{n} a turn on average', { n: x.total.toFixed(1) }), x.slot ? t('level {n} slot', { n: x.slot }) : t('at will'), x.points ? sorceryText(x.points) : ''].filter(Boolean).join(' · '),
+      pic(x.sp.i, 'pic small'), x.slot ? t('Spells') : t('At will')]));
+    openChooser(t('In each turn'), t('What the build does every turn of the test. A spell spends a slot each time; when none is left, the turn goes to what the build does at will.'),
+      [{ label: t('In each turn'), n: 1, min: 0, options: rows, chosen: [ctx.chosen ? ctx.chosen.name : t('Weapon attacks')] }],
+      (done) => { const name = done[0].chosen[0] || ''; state.ui.simAction = name === t('Weapon attacks') ? '' : name; });
+    return false;
+  },
 });
 </script>
   <script>
@@ -16837,9 +17316,25 @@ Object.assign(actions, {
 // ---------- actions ----------
 // An action returns false to skip the save + re-render, or { focus, top } hints for after it.
 Object.assign(actions, {
-  tab(el) { state.ui.tab = el.dataset.tab; state.ui.fromParty = false; },
+  tab(el) {
+    state.ui.tab = el.dataset.tab;
+    state.ui.fromParty = false;
+    // an entry of the Items or Spells menu opens the list on just that slot or level; the group itself, on all of it
+    const only = el.dataset.kind != null ? ['items', 'kind', el.dataset.kind] : el.dataset.lv != null ? ['spells', 'lv', el.dataset.lv ? [el.dataset.lv] : []] : null;
+    if (only) {
+      const f = libState(only[0]);
+      Object.keys(LIB_DEFAULTS[only[0]]).forEach((k) => { if (!LIB_VIEW_KEYS.includes(k)) f[k] = clone(LIB_DEFAULTS[only[0]][k]); });
+      f[only[1]] = only[2];
+      f.limit = PAGE;
+    }
+    // the menu it came from closes
+    const group = el.closest('.nav-group');
+    navShut = group ? [...group.parentNode.children].indexOf(group) : -1;
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  },
   lang(el) { state.ui.lang = el.dataset.lang; },
-  'build-select'(el) { state.ui.buildId = el.dataset.id; state.ui.fromParty = false; state.ui.wizard = ''; },
+  'build-select'(el) { state.ui.buildId = el.dataset.id; state.ui.fromParty = false; state.ui.wizard = ''; if (el.dataset.go) state.ui.tab = el.dataset.go; },
+  'party-open'(el) { state.ui.partyId = el.dataset.id; state.ui.tab = 'party'; },
   'build-new'() { const b = blankBuild(); state.builds.push(b); state.ui.buildId = b.id; state.ui.tab = 'builds'; state.ui.wizard = ''; },
   'build-dup'() {
     const b = curBuild();

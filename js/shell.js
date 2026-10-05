@@ -2,6 +2,40 @@
 // The scripts are plain (not modules) so the planner also runs from a file opened directly; they share the global scope.
 'use strict';
 
+// ---------- the menu ----------
+// Three groups with what is inside each, and the damage test. Clicking a group opens all of it (every item, every
+// spell, the three build pages side by side); an entry of its menu opens just that part.
+let navShut = -1;  // the group whose menu was just used: it stays shut until the pointer moves to another
+function navHtml() {
+  const tab = state.ui.tab;
+  const kind = lib.items.kind;
+  const lv = lib.spells.lv;
+  const entry = (label, attrs, on) => `<button class="${on ? 'on' : ''}" data-act="tab" ${attrs}>${esc(label)}</button>`;
+  const groups = [
+    [t('Builds'), 'data-tab="hub"', ['hub', 'builds', 'party', 'presets'].includes(tab), [
+      entry(t('Build Planner'), 'data-tab="builds"', tab === 'builds'), entry(t('Party Planner'), 'data-tab="party"', tab === 'party'), entry(t('Ready-made builds'), 'data-tab="presets"', tab === 'presets')]],
+    [t('Items'), 'data-tab="items" data-kind=""', tab === 'items', [entry(t('All items'), 'data-tab="items" data-kind=""', tab === 'items' && !kind),
+      ...KINDS.map(([v, l]) => entry(t(l), `data-tab="items" data-kind="${v}"`, tab === 'items' && kind === v))]],
+    [t('Spells'), 'data-tab="spells" data-lv=""', tab === 'spells', [entry(t('All spells'), 'data-tab="spells" data-lv=""', tab === 'spells' && !lv.length),
+      ...[0, 1, 2, 3, 4, 5, 6].map((n) => entry(n ? t('Level {n}', { n }) : t('Cantrips'), `data-tab="spells" data-lv="${n}"`, tab === 'spells' && lv.length === 1 && lv[0] === String(n)))]],
+  ];
+  return groups.map(([label, attrs, on, entries], i) => `<div class="nav-group${navShut === i ? ' shut' : ''}">
+      <button class="nav-top${on ? ' on' : ''}" data-act="tab" ${attrs} aria-haspopup="true">${esc(label)}<i>▾</i></button>
+      <div class="nav-menu">${entries.join('')}</div></div>`).join('')
+    + `<button class="nav-top${tab === 'damage' ? ' on' : ''}" data-act="tab" data-tab="damage">${t('Damage test')}</button>`;
+}
+// a menu that was just used opens again once the pointer goes to another group or leaves the menu
+(() => {
+  const open = (e) => {
+    const g = e.type === 'mouseleave' ? null : e.target.closest('.nav-group');
+    if (navShut < 0 || (g && [...g.parentNode.children].indexOf(g) === navShut)) return;
+    navShut = -1;
+    $$('#tabs .shut').forEach((x) => x.classList.remove('shut'));
+  };
+  $('#tabs').addEventListener('mouseover', open);
+  $('#tabs').addEventListener('mouseleave', open);
+})();
+
 // ---------- render ----------
 function render() {
   document.documentElement.lang = state.ui.lang;
@@ -9,9 +43,9 @@ function render() {
   $('#version').textContent = 'v' + APP_VERSION;
   $$('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
   $$('[data-i18n-title]').forEach((el) => { el.title = t(el.dataset.i18nTitle); });
-  $$('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === state.ui.tab));
+  $('#tabs').innerHTML = navHtml();
   $$('#langs button').forEach((b) => b.classList.toggle('on', b.dataset.lang === state.ui.lang));
-  const views = { party: renderParty, presets: renderPresets, items: renderItems, spells: renderSpells };
+  const views = { hub: renderHub, party: renderParty, presets: renderPresets, items: renderItems, spells: renderSpells, damage: renderDamage };
   $('#app').innerHTML = (views[state.ui.tab] || renderBuilds)();
   // the section menu sticks below the header, which is sticky itself on wide screens
   const top = $('.top');
