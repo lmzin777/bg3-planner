@@ -837,6 +837,11 @@ button.chip:hover { border-color: var(--gold); color: var(--text); }
 #dlg-list > div:not(.choose-grid) { display: grid; gap: 4px; }
 #dlg-list .pick-row { width: 100%; }
 .lslot-row .pslot { flex: 1; }
+.lvl-cls small + .pslot { grid-column: 1 / -1; }
+.lvl-cls small + .pslot b { color: var(--gold-hi); font-weight: 600; font-size: 13px; }
+.race-cantrip { max-width: 460px; margin-top: 12px; }
+.pslot.off { cursor: default; opacity: .55; }
+.pslot.off:hover { border-color: var(--line); }
 </style>
 </head>
 <body>
@@ -1679,6 +1684,8 @@ window.BG3_I18N = {
     'Click the ones this level learns; click again to take one back. What the class already knows is not listed.': 'Clique nas que este nível aprende; clique de novo para tirar. O que a classe já conhece não aparece na lista.',
     '— no swap —': '— sem troca —',
     'Choose both, or leave both empty to keep every spell.': 'Escolha as duas, ou deixe as duas vazias para manter todas as spells.',
+    'Each class shows the level it would reach here and what that level gives.': 'Cada classe mostra o nível que ela alcançaria aqui e o que esse nível dá.',
+    'What each subclass gives at {cls} level {n}.': 'O que cada subclasse dá no nível {n} de {cls}.',
     // dialogs and toasts
     'Cancel': 'Cancelar',
     'Confirm': 'Confirmar',
@@ -9043,7 +9050,7 @@ window.BG3_IMAGES_LOCAL = false;
 // The scripts are plain (not modules) so the planner also runs from a file opened directly; they share the global scope.
 'use strict';
 
-const APP_VERSION = '1.9';
+const APP_VERSION = '2.0';
 const STORE_KEY = 'bg3planner.v1';
 const PRESETS = window.BG3_PRESETS || [];
 const I18N = window.BG3_I18N || {};
@@ -9424,12 +9431,12 @@ function buildEditor(b) {
       <div class="check-head"><h2>${t('Character creation')}</h2><span></span>
         <button class="btn tiny" data-act="wiz-open">${t('Do it step by step')}</button></div>
       <div class="grid g4">
-        ${selectField(t('Origin'), 'creation.origin', c.origin, ORIGINS.map((o) => o[0]), choose, 'data-rerender')}
-        ${selectField(t('Race'), 'creation.race', c.race, Object.keys(RACES), choose, 'data-rerender')}
-        ${selectField(t('Subrace'), 'creation.subrace', c.subrace, subs, subs.length ? choose : t('No subrace'), subs.length || c.subrace ? 'data-rerender' : 'disabled')}
-        ${selectField(t('Background'), 'creation.background', c.background, Object.keys(BACKGROUNDS).map((k) => [k, k === 'Haunted One' ? t('Haunted One (Dark Urge only)') : k]), choose, 'data-rerender')}
+        ${creationField(t('Origin'), 'origin', c.origin, choose)}
+        ${creationField(t('Race'), 'race', c.race, choose)}
+        ${subs.length || c.subrace ? creationField(t('Subrace'), 'subrace', c.subrace, choose) : `<div class="field"><span>${t('Subrace')}</span><span class="pslot off"><b>${t('No subrace')}</b></span></div>`}
+        ${creationField(t('Background'), 'background', c.background, choose)}
       </div>
-      ${raceCantrips(b).length ? `<div class="grid g4">${selectField(t('Racial cantrip'), 'creation.cantrip', c.cantrip, raceCantrips(b), choose, 'data-rerender')}</div>` : ''}
+      ${raceCantripField(b)}
       ${creationInfo(b)}
       <h3 class="group">${t('Ability scores')}</h3>
       ${abilitiesBlock(b)}
@@ -9474,6 +9481,24 @@ function buildEditor(b) {
           <textarea data-path="notes" rows="9" placeholder="${t('Combat rotation, interactions, reminders…')}">${esc(b.notes)}</textarea></label>
       </div>
     </section>`)}`;
+}
+
+// Origin, race, subrace or background: what is chosen on a button that opens the list with what each option gives.
+const creationField = (label, key, value, empty) => `<div class="field"><span>${label}</span>${slotButton('creation-open', `data-k="${key}"`, value, '', empty)}</div>`;
+// What a race or subrace gives, as one line of text for a list of options.
+function raceSummary(d) {
+  return [d.speed ? t('Speed') + ' ' + d.speed : '', (d.prof || []).length ? t('Proficiencies') + ': ' + d.prof.join(', ') : '',
+    (d.skills || []).length || d.skillPick ? t('Skills') + ': ' + [...(d.skills || []), d.skillPick ? t('one skill of your choice') : ''].filter(Boolean).join(', ') : '',
+    (d.spells || []).length ? t('Spells') + ': ' + d.spells.map(([n, lv]) => n + ' (' + t('level {n}', { n: lv }) + ')').join(', ') : '',
+    d.cantrip ? t('Cantrip') + ': ' + t('one from the {cls} list', { cls: d.cantrip }) : '',
+    ...(d.features || []).map(([n, text]) => n + ': ' + text)].filter(Boolean).join(' · ');
+}
+// The options of one of those four lists: [name, what it gives, a short fact].
+function creationOptions(b, key) {
+  if (key === 'origin') return ORIGINS.map(([name]) => { const o = DATA.origins[name] || {}; return [name, o.text || '', o.cls ? t('Default class') + ': ' + o.cls : '']; });
+  if (key === 'race') return Object.keys(RACES).map((name) => [name, raceSummary(DATA.races[name] || {})]);
+  if (key === 'subrace') return (RACES[b.creation.race] || []).map((name) => [name, raceSummary(DATA.subraces[name] || {})]);
+  return Object.keys(BACKGROUNDS).map((name) => [name, (DATA.backgrounds[name].text || '') + (name === 'Haunted One' ? ' ' + t('Haunted One (Dark Urge only)') + '.' : ''), BACKGROUNDS[name].join(', ')]);
 }
 
 // The six ability cards with the points spent and a way back to the start.
@@ -10991,9 +11016,7 @@ function levelNumbers(info) {
 // The subclass select of a level, where the class picks its subclass or the level already names one.
 function subclassSelect(l, x, i) {
   if (!picksSubclass(x) && !l.sub.trim()) return '';
-  const subs = Object.keys((CLASS_DATA[l.cls] || {}).subclasses || {}).map(subLabel);
-  return `<select class="sub" data-path="levels.${i}.sub" data-rerender aria-label="${t('Subclass')}">${opt('', t('— subclass —'), l.sub)}${subs.map((s) => opt(s, s, l.sub)).join('')}${
-    l.sub && !subs.includes(l.sub) ? opt(l.sub, l.sub, l.sub) : ''}</select>`;
+  return slotButton('sub-open', `data-l="${i}"`, l.sub, '', t('— subclass —'));
 }
 // What a level chooses: one select per choice it grants. Lines of text that are not one of those choices (kept
 // from ready-made builds and older versions) show under them and can only be edited or removed.
@@ -11030,7 +11053,7 @@ function levelRows(b, only) {
     return `<div class="lvl${l.sub.trim() ? ' has-sub' : ''}${current === i + 1 ? ' cur' : ''}${current && i + 1 > current ? ' later' : ''}">
       <div class="lvl-n">${i + 1}${current === i + 1 ? `<small>${t('now')}</small>` : ''}</div>
       <div class="lvl-cls">
-        <select data-path="levels.${i}.cls" data-rerender aria-label="${t('Class for level {n}', { n: i + 1 })}">${opt('', t('— class —'), l.cls)}${CLASSES.map((c) => opt(c, c, l.cls)).join('')}</select>
+        ${slotButton('class-open', `data-l="${i}"`, l.cls, '', t('— class —'))}
         <small>${l.cls ? esc(l.cls) + ' ' + x.n : ''}</small>
         ${subSelect}
         ${fill}
@@ -11750,8 +11773,8 @@ function statsCard(b) {
         `<button class="${(b.current && b.current < charLevel(b) ? b.current : charLevel(b)) === n ? 'on' : ''}" data-act="stat-level" data-n="${n}">${n}</button>`).join('')}</div></div>
       <div><span class="lbl">${t('With the gear of')}</span>${actTabs(state.ui.act, 'act')}</div>
       <div class="field ac-field"><span>${t('Enemy Armour Class')}</span>${stepper(Number(state.ui.targetAc) || 16, 'data-ui="targetAc" data-v="16"', 5, 30)}</div>
-      ${elixirs.length ? `<label class="field"><span>${t('Elixir kept active')}</span><select data-path="elixir" data-rerender>${opt('', t('— none —'), b.elixir)}${
-        elixirs.map((c) => opt(c.n, c.n + (elixirAbility(c.n) ? ' ★' : ''), b.elixir)).join('')}${b.elixir && !elixirs.some((c) => c.n === b.elixir) ? opt(b.elixir, b.elixir, b.elixir) : ''}</select></label>` : ''}
+      ${elixirs.length ? `<div class="field"><span>${t('Elixir kept active')}</span>${slotButton('elixir-open', '', b.elixir,
+        CONSUMABLE_BY_NAME.get(norm(b.elixir)) ? pic(CONSUMABLE_BY_NAME.get(norm(b.elixir)).i, 'pic small') : '', t('— none —'))}</div>` : ''}
     </div>
     ${b.elixir && CONSUMABLE_BY_NAME.get(norm(b.elixir)) ? `<p class="muted">${esc(CONSUMABLE_BY_NAME.get(norm(b.elixir)).x)}</p>` : ''}
     ${togglesRow(b)}
@@ -12218,6 +12241,19 @@ function gainText(desc) {
   const gains = parts.filter((s) => GAIN_WORDS.test(s));
   return gains.length && gains.length < parts.length ? gains.join(' ') : parts.join(' ');
 }
+// A choice shown as a button: what is chosen, with its picture, and a caret. `act` opens the list of options.
+const slotButton = (act, attrs, value, img, empty) => `<button class="pslot" data-act="${act}"${attrs ? ' ' + attrs : ''}>${img || ''}<b>${
+  value ? esc(value) : empty || t('— choose —')}</b><i>▾</i></button>`;
+// A spell as a row of a list of options: name, description, facts, picture and, when asked, its level as heading.
+const spellRow = (s, grouped) => [s.n, s.d || '', spellMeta(s), pic(s.i, 'pic small'), grouped && s.lv ? t('Level {n}', { n: s.lv }) : ''];
+// The cantrip a High Elf or High Half-Elf picks at creation, as a slot with its picture and what it does.
+function raceCantripField(b) {
+  if (!raceCantrips(b).length) return '';
+  const name = b.creation.cantrip;
+  const s = SPELL_BY_NAME.get(norm(name));
+  return `<div class="lslot race-cantrip${name ? '' : ' open'}"><span class="lslot-l">${t('Racial cantrip')}</span>${
+    slotButton('race-cantrip-open', '', name, s ? pic(s.i, 'pic small') : '')}${s ? `<small>${esc([spellMeta(s), s.d].filter(Boolean).join(' — '))}</small>` : ''}</div>`;
+}
 const spellMeta = (s) => [s.lv ? t('Level {n}', { n: s.lv }) : t('Cantrip'), s.sc, s.rg, s.du, s.dm, s.co ? t('Concentration') : ''].filter(Boolean).join(' · ');
 // The spells a level may pick from, by name within each spell level: { cantrips, reach (spells up to the level it
 // can cast), school (those of the subclass's schools), bound (how many picks are held to the schools), order }.
@@ -12244,8 +12280,7 @@ function levelSpellLists(b, i, sp) {
 function slotCells(b, i, slots) {
   const x = levelInfo(b)[i];
   // every choice looks the same: what is chosen, on a button that opens the list of options
-  const button = (act, attrs, value, img, empty) => `<button class="pslot" data-act="${act}" data-l="${i}"${attrs ? ' ' + attrs : ''}>${img || ''}<b>${
-    value ? esc(value) : empty || t('— choose —')}</b><i>▾</i></button>`;
+  const button = (act, attrs, value, img, empty) => slotButton(act, `data-l="${i}"${attrs ? ' ' + attrs : ''}`, value, img, empty);
   // under the button, what the chosen option gives; the tooltip has its whole description
   const cell = (label, control, text, open, full) => `<div class="lslot${open ? ' open' : ''}"><span class="lslot-l">${esc(label)}</span>${control}${
     text ? `<small${full && full !== text ? ` title="${esc(full)}"` : ''}>${esc(text)}</small>` : ''}</div>`;
@@ -12402,7 +12437,7 @@ function featParts(name, desc, b) {
   const prof = proficiencies(b);
   const st = skillState(b);
   const known = new Set([...Object.keys(st.granted), ...st.chosen, ...pickedSkills(b)]);
-  const spells = (test) => SPELLS.filter(test).map((s) => [s.n, s.d || '']);
+  const spells = (test) => SPELLS.filter(test).map((s) => spellRow(s));
   const magic = /^Magic Initiate: (\w+)$/.exec(name);
   if (name === 'Skilled') parts.push({ label: t('Skills'), n: 3, options: ALL_SKILLS.filter((x) => !known.has(x)).map((x) => [x, '']) });
   if (name === 'Weapon Master') {
@@ -12416,7 +12451,7 @@ function featParts(name, desc, b) {
   if (name === 'Ritual Caster') parts.push({ label: t('Ritual spells'), n: 2, options: spells((s) => s.ri && (s.cl || []).length) });
   if (FEAT_OPTIONS[name]) {
     parts.push({ label: name === 'Elemental Adept' ? t('Damage type') : t('Cantrip'), n: 1,
-      options: FEAT_OPTIONS[name].map((x) => [x, (SPELL_BY_NAME.get(norm(x)) || {}).d || '']) });
+      options: FEAT_OPTIONS[name].map((x) => { const s = SPELL_BY_NAME.get(norm(x)); return s ? spellRow(s) : [x, '']; }) });
   }
   // a build that already has everything a list offers (every weapon type, say) has nothing to pick there
   parts.forEach((p) => { p.n = Math.min(p.n, p.options.length); if (p.min != null) p.min = Math.min(p.min, p.n); });
@@ -12513,6 +12548,50 @@ document.addEventListener('change', (e) => {
 Object.assign(actions, {
   'perm-toggle'() { state.ui.permOpen = !state.ui.permOpen; },
   'feat-options'(el) { openFeatOptions(+el.dataset.l); return false; },
+  // the class of a level: each class with the level it would reach there and what that level gives
+  'class-open'(el) {
+    const level = +el.dataset.l;
+    const b = curBuild();
+    const cur = b.levels[level].cls;
+    const rows = CLASSES.map((c) => {
+      const n = b.levels.slice(0, level).filter((y) => y.cls === c).length + 1;
+      const gains = ((CLASS_DATA[c] || { levels: {} }).levels[n] || []).join(' · ');
+      const multi = n === 1 && level > 0 && CLASS_PROF[c].multi.length ? t('Proficiencies gained') + ': ' + profNames(CLASS_PROF[c].multi) : '';
+      return [c, [gains, multi].filter(Boolean).join(' — '), `${c} ${n} · d${HIT_DIE[c]}`];
+    });
+    openChooser(t('Class for level {n}', { n: level + 1 }), t('Each class shows the level it would reach here and what that level gives.'),
+      [{ label: t('Class'), n: 1, min: 0, options: rows, chosen: cur ? [cur] : [] }], (done) => {
+        const l = curBuild().levels[level];
+        const v = done[0].chosen[0] || '';
+        // another class: the subclass and the choices of the one it had no longer apply
+        if (l.cls !== v) Object.assign(l, { cls: v, sub: '', picks: [] });
+      });
+    return false;
+  },
+  'sub-open'(el) {
+    const level = +el.dataset.l;
+    const l = curBuild().levels[level];
+    const d = CLASS_DATA[l.cls];
+    if (!d) return false;
+    const rows = Object.keys(d.subclasses).map((name) => [subLabel(name), (d.subclasses[name][d.subclassLevel] || []).join(' · ')]);
+    openChooser(`${l.cls} · ${t('Subclass')}`, t('What each subclass gives at {cls} level {n}.', { cls: l.cls, n: d.subclassLevel }),
+      [{ label: t('Subclass'), n: 1, min: 0, options: rows, chosen: l.sub ? [l.sub] : [] }], (done) => { curBuild().levels[level].sub = done[0].chosen[0] || ''; });
+    return false;
+  },
+  'race-cantrip-open'() {
+    const b = curBuild();
+    const rows = raceCantrips(b).map((n) => SPELL_BY_NAME.get(norm(n))).filter(Boolean).map((s) => spellRow(s));
+    openChooser(t('Racial cantrip'), '', [{ label: t('Cantrip'), n: 1, min: 0, options: rows, chosen: b.creation.cantrip ? [b.creation.cantrip] : [] }],
+      (done) => { curBuild().creation.cantrip = done[0].chosen[0] || ''; });
+    return false;
+  },
+  'elixir-open'() {
+    const b = curBuild();
+    const rows = CONSUMABLES.filter((c) => c.t === 'Elixir').map((c) => [c.n, c.x || '', elixirAbility(c.n) ? t('changes the numbers') : '', pic(c.i, 'pic small')]);
+    openChooser(t('Elixir kept active'), '', [{ label: t('Elixir kept active'), n: 1, min: 0, options: rows, chosen: b.elixir ? [b.elixir] : [] }],
+      (done) => { curBuild().elixir = done[0].chosen[0] || ''; });
+    return false;
+  },
   // a guided choice of a level (fighting style, manoeuvres, invocations…): every pick of it in one list
   'choice-open'(el) {
     const level = +el.dataset.l;
@@ -12567,7 +12646,7 @@ Object.assign(actions, {
     const sp = levelSlots(b, level).spells;
     if (!sp || !sp.swap) return false;
     const lists = levelSpellLists(b, level, sp);
-    const row = (s) => [s.n, s.d || '', spellMeta(s), pic(s.i, 'pic small'), t('Level {n}', { n: s.lv })];
+    const row = (s) => spellRow(s, true);
     const olds = swapOlds(b, level, sp).map((n) => SPELL_BY_NAME.get(norm(n)) || { n, d: '', lv: 0 });
     openChooser(`${x.cls} ${x.n} · ${t('Replace a known spell (optional)')}`, t('Choose both, or leave both empty to keep every spell.'), [
       { label: t('Spell to forget'), n: 1, min: 0, options: olds.map((s) => (s.lv ? row(s) : [s.n, ''])), chosen: sp.swap.old ? [sp.swap.old] : [] },
@@ -12584,8 +12663,7 @@ Object.assign(actions, {
     if (!sp) return false;
     const learn = sp.learn;
     const lists = levelSpellLists(b, level, sp);
-    const row = (s) => [s.n, s.d || '', spellMeta(s), pic(s.i, 'pic small'), s.lv ? t('Level {n}', { n: s.lv }) : ''];
-    const part = (key, label, n, list, chosen) => ({ key, label, n, min: 0, options: list.map(row), chosen });
+    const part = (key, label, n, list, chosen) => ({ key, label, n, min: 0, options: list.map((s) => spellRow(s, true)), chosen });
     const parts = [];
     if (learn.cantrips) parts.push(part('cantrip', 'Cantrips', learn.cantrips, lists.cantrips, sp.cantrip.slice()));
     const chosen = lists.order(sp.spell);
@@ -12969,6 +13047,8 @@ const wizCard = (path, value, on, title, body) =>
 const wizList = (items) => (items.length ? `<ul>${items.map((x) => `<li>${x}</li>`).join('')}</ul>` : '');
 const wizTraits = (d) => wizList([d.speed ? t('Speed') + ' ' + esc(d.speed) : '', (d.prof || []).length ? t('Proficiencies') + ': ' + esc(d.prof.join(', ')) : '',
   (d.skills || []).length || d.skillPick ? t('Skills') + ': ' + esc([...(d.skills || []), d.skillPick ? t('one skill of your choice') : ''].filter(Boolean).join(', ')) : '',
+  (d.spells || []).length ? t('Spells') + ': ' + esc(d.spells.map(([n, lv]) => n + ' (' + t('level {n}', { n: lv }) + ')').join(', ')) : '',
+  d.cantrip ? t('Cantrip') + ': ' + t('one from the {cls} list', { cls: d.cantrip }) : '',
   ...(d.features || []).map(([n, text]) => `<b>${esc(n)}</b> ${esc(text)}`), d.note ? esc(d.note) : ''].filter(Boolean));
 
 function wizBody(b, key) {
@@ -12984,7 +13064,7 @@ function wizBody(b, key) {
   }
   if (key === 'subrace') {
     return `<div class="wiz-cards">${(RACES[c.race] || []).map((name) => wizCard('creation.subrace', name, c.subrace === name, name, wizTraits(DATA.subraces[name] || {}))).join('')}</div>
-      ${raceCantrips(b).length ? `<div class="grid g4">${selectField(t('Racial cantrip'), 'creation.cantrip', c.cantrip, raceCantrips(b), t('— choose —'), 'data-rerender')}</div>` : ''}`;
+      ${raceCantripField(b)}`;
   }
   if (key === 'class') {
     return `<div class="wiz-cards">${CLASSES.map((name) => {
@@ -13017,7 +13097,7 @@ function wizBody(b, key) {
   if (key === 'skills') return skillsPicker(b);
   if (key === 'level1') {
     return `<div class="levels">${levelRows(b, 0)}</div>
-      ${raceCantrips(b).length ? `<div class="grid g4">${selectField(t('Racial cantrip'), 'creation.cantrip', c.cantrip, raceCantrips(b), t('— choose —'), 'data-rerender')}</div>` : ''}`;
+      ${raceCantripField(b)}`;
   }
   if (key.startsWith('lv:')) return wizLevel(b, Number(key.slice(3)) - 1);
   const s = finalStats(b, 'act1');
@@ -13612,6 +13692,18 @@ Object.assign(actions, {
     const other = key === 'plus2' ? 'plus1' : 'plus2';
     c[key] = c[key] === el.dataset.ab ? '' : el.dataset.ab;
     if (c[key] && c[other] === c[key]) c[other] = '';
+  },
+  'creation-open'(el) {
+    const key = el.dataset.k;
+    const b = curBuild();
+    const title = { origin: 'Origin', race: 'Race', subrace: 'Subrace', background: 'Background' }[key];
+    openChooser(t(title), '', [{ label: t(title), n: 1, min: 0, options: creationOptions(b, key), chosen: b.creation[key] ? [b.creation[key]] : [] }], (done) => {
+      const now = curBuild();
+      const before = now.creation[key];
+      now.creation[key] = done[0].chosen[0] || '';
+      creationChanged(now, 'creation.' + key, before);
+    });
+    return false;
   },
   // the − and + of a number: a base ability score, a manual bonus, the enemy Armour Class
   step(el) {

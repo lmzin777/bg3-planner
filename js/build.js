@@ -81,12 +81,12 @@ function buildEditor(b) {
       <div class="check-head"><h2>${t('Character creation')}</h2><span></span>
         <button class="btn tiny" data-act="wiz-open">${t('Do it step by step')}</button></div>
       <div class="grid g4">
-        ${selectField(t('Origin'), 'creation.origin', c.origin, ORIGINS.map((o) => o[0]), choose, 'data-rerender')}
-        ${selectField(t('Race'), 'creation.race', c.race, Object.keys(RACES), choose, 'data-rerender')}
-        ${selectField(t('Subrace'), 'creation.subrace', c.subrace, subs, subs.length ? choose : t('No subrace'), subs.length || c.subrace ? 'data-rerender' : 'disabled')}
-        ${selectField(t('Background'), 'creation.background', c.background, Object.keys(BACKGROUNDS).map((k) => [k, k === 'Haunted One' ? t('Haunted One (Dark Urge only)') : k]), choose, 'data-rerender')}
+        ${creationField(t('Origin'), 'origin', c.origin, choose)}
+        ${creationField(t('Race'), 'race', c.race, choose)}
+        ${subs.length || c.subrace ? creationField(t('Subrace'), 'subrace', c.subrace, choose) : `<div class="field"><span>${t('Subrace')}</span><span class="pslot off"><b>${t('No subrace')}</b></span></div>`}
+        ${creationField(t('Background'), 'background', c.background, choose)}
       </div>
-      ${raceCantrips(b).length ? `<div class="grid g4">${selectField(t('Racial cantrip'), 'creation.cantrip', c.cantrip, raceCantrips(b), choose, 'data-rerender')}</div>` : ''}
+      ${raceCantripField(b)}
       ${creationInfo(b)}
       <h3 class="group">${t('Ability scores')}</h3>
       ${abilitiesBlock(b)}
@@ -131,6 +131,24 @@ function buildEditor(b) {
           <textarea data-path="notes" rows="9" placeholder="${t('Combat rotation, interactions, reminders…')}">${esc(b.notes)}</textarea></label>
       </div>
     </section>`)}`;
+}
+
+// Origin, race, subrace or background: what is chosen on a button that opens the list with what each option gives.
+const creationField = (label, key, value, empty) => `<div class="field"><span>${label}</span>${slotButton('creation-open', `data-k="${key}"`, value, '', empty)}</div>`;
+// What a race or subrace gives, as one line of text for a list of options.
+function raceSummary(d) {
+  return [d.speed ? t('Speed') + ' ' + d.speed : '', (d.prof || []).length ? t('Proficiencies') + ': ' + d.prof.join(', ') : '',
+    (d.skills || []).length || d.skillPick ? t('Skills') + ': ' + [...(d.skills || []), d.skillPick ? t('one skill of your choice') : ''].filter(Boolean).join(', ') : '',
+    (d.spells || []).length ? t('Spells') + ': ' + d.spells.map(([n, lv]) => n + ' (' + t('level {n}', { n: lv }) + ')').join(', ') : '',
+    d.cantrip ? t('Cantrip') + ': ' + t('one from the {cls} list', { cls: d.cantrip }) : '',
+    ...(d.features || []).map(([n, text]) => n + ': ' + text)].filter(Boolean).join(' · ');
+}
+// The options of one of those four lists: [name, what it gives, a short fact].
+function creationOptions(b, key) {
+  if (key === 'origin') return ORIGINS.map(([name]) => { const o = DATA.origins[name] || {}; return [name, o.text || '', o.cls ? t('Default class') + ': ' + o.cls : '']; });
+  if (key === 'race') return Object.keys(RACES).map((name) => [name, raceSummary(DATA.races[name] || {})]);
+  if (key === 'subrace') return (RACES[b.creation.race] || []).map((name) => [name, raceSummary(DATA.subraces[name] || {})]);
+  return Object.keys(BACKGROUNDS).map((name) => [name, (DATA.backgrounds[name].text || '') + (name === 'Haunted One' ? ' ' + t('Haunted One (Dark Urge only)') + '.' : ''), BACKGROUNDS[name].join(', ')]);
 }
 
 // The six ability cards with the points spent and a way back to the start.

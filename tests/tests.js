@@ -674,6 +674,21 @@
     ok(/gain Proficiency/i.test(gainText('You have sworn to serve a crown. Gain Proficiency in History and Heavy Armour.')) && !/sworn/.test(gainText('You have sworn to serve a crown. Gain Proficiency in History and Heavy Armour.')), 'what an option gives, without the flavour');
     eq(gainText('A tale of the road.'), 'A tale of the road.', 'nothing concrete to pick out: the whole text');
   });
+  test('every choice with a list shows what each option is', () => {
+    ok(/Wizard/.test(wizTraits(DATA.subraces['High Elf'])) && /Thaumaturgy/.test(wizTraits(DATA.subraces['Zariel Tiefling'])), 'a subrace card names the cantrip and spells it gives');
+    const elf = build(['Fighter'], { race: 'Elf', subrace: 'High Elf', cantrip: 'Fire Bolt' });
+    ok(/data-act="race-cantrip-open"/.test(raceCantripField(elf)) && /<img class="pic small"[^>]*><b>Fire Bolt<\/b>/.test(raceCantripField(elf)) && /1d10 Fire/.test(raceCantripField(elf)), 'the racial cantrip: picture, name and what it does');
+    eq(raceCantripField(build(['Fighter'], { race: 'Human' })), '');
+    const row = levelRows(build(['Fighter', 'Fighter', 'Fighter']), 2);
+    ok(/data-act="class-open"/.test(row) && /data-act="sub-open"/.test(row) && !/<select/.test(row), 'class and subclass open a list too: no bare select left in a level');
+    const magic = FEATS.find(([n]) => n === 'Magic Initiate: Wizard');
+    const part = featParts(magic[0], magic[1], elf)[0];
+    ok(part.options.length > 5 && part.options.every((o) => /^<img/.test(o[3]) && /Cantrip/.test(o[2])), 'the spells inside a feat come with picture and facts');
+    ok(/data-act="elixir-open"/.test(statsCard(elf)) && !/data-path="elixir"/.test(statsCard(elf)));
+    eq(['origin', 'race', 'subrace', 'background'].map((k) => creationOptions(elf, k).length), [ORIGINS.length, 11, 2, 12]);
+    ok(creationOptions(elf, 'race').every((o) => /Speed/.test(o[1])) && /Perception/.test(creationOptions(elf, 'race').find((o) => o[0] === 'Elf')[1]) && /Stealth/.test(creationOptions(elf, 'subrace')[1][1]) && /Arcana, History/.test(creationOptions(elf, 'background').find((o) => o[0] === 'Sage')[2]), 'each race, subrace and background says what it gives');
+    ok(!/<select data-path="creation\./.test(buildEditor(elf)) && (buildEditor(elf).match(/data-act="creation-open"/g) || []).length === 4);
+  });
   test('base scores move with − and + and stay inside the 27 points', () => {
     const b = build(['Fighter'], { abilities: { str: 15, dex: 15, con: 14, int: 8, wis: 8, cha: 8 } });
     const off = (ab, d) => new RegExp('data-d="' + d + '"[^>]*disabled').test(abilCard(b, ab, ab, ab));

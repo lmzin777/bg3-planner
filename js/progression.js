@@ -88,9 +88,7 @@ function levelNumbers(info) {
 // The subclass select of a level, where the class picks its subclass or the level already names one.
 function subclassSelect(l, x, i) {
   if (!picksSubclass(x) && !l.sub.trim()) return '';
-  const subs = Object.keys((CLASS_DATA[l.cls] || {}).subclasses || {}).map(subLabel);
-  return `<select class="sub" data-path="levels.${i}.sub" data-rerender aria-label="${t('Subclass')}">${opt('', t('— subclass —'), l.sub)}${subs.map((s) => opt(s, s, l.sub)).join('')}${
-    l.sub && !subs.includes(l.sub) ? opt(l.sub, l.sub, l.sub) : ''}</select>`;
+  return slotButton('sub-open', `data-l="${i}"`, l.sub, '', t('— subclass —'));
 }
 // What a level chooses: one select per choice it grants. Lines of text that are not one of those choices (kept
 // from ready-made builds and older versions) show under them and can only be edited or removed.
@@ -127,7 +125,7 @@ function levelRows(b, only) {
     return `<div class="lvl${l.sub.trim() ? ' has-sub' : ''}${current === i + 1 ? ' cur' : ''}${current && i + 1 > current ? ' later' : ''}">
       <div class="lvl-n">${i + 1}${current === i + 1 ? `<small>${t('now')}</small>` : ''}</div>
       <div class="lvl-cls">
-        <select data-path="levels.${i}.cls" data-rerender aria-label="${t('Class for level {n}', { n: i + 1 })}">${opt('', t('— class —'), l.cls)}${CLASSES.map((c) => opt(c, c, l.cls)).join('')}</select>
+        ${slotButton('class-open', `data-l="${i}"`, l.cls, '', t('— class —'))}
         <small>${l.cls ? esc(l.cls) + ' ' + x.n : ''}</small>
         ${subSelect}
         ${fill}

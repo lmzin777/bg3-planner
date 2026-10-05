@@ -751,6 +751,8 @@ window.BG3_I18N = {
     'Click the ones this level learns; click again to take one back. What the class already knows is not listed.': 'Clique nas que este nível aprende; clique de novo para tirar. O que a classe já conhece não aparece na lista.',
     '— no swap —': '— sem troca —',
     'Choose both, or leave both empty to keep every spell.': 'Escolha as duas, ou deixe as duas vazias para manter todas as spells.',
+    'Each class shows the level it would reach here and what that level gives.': 'Cada classe mostra o nível que ela alcançaria aqui e o que esse nível dá.',
+    'What each subclass gives at {cls} level {n}.': 'O que cada subclasse dá no nível {n} de {cls}.',
     // dialogs and toasts
     'Cancel': 'Cancelar',
     'Confirm': 'Confirmar',

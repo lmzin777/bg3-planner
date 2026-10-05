@@ -51,6 +51,8 @@ const wizCard = (path, value, on, title, body) =>
 const wizList = (items) => (items.length ? `<ul>${items.map((x) => `<li>${x}</li>`).join('')}</ul>` : '');
 const wizTraits = (d) => wizList([d.speed ? t('Speed') + ' ' + esc(d.speed) : '', (d.prof || []).length ? t('Proficiencies') + ': ' + esc(d.prof.join(', ')) : '',
   (d.skills || []).length || d.skillPick ? t('Skills') + ': ' + esc([...(d.skills || []), d.skillPick ? t('one skill of your choice') : ''].filter(Boolean).join(', ')) : '',
+  (d.spells || []).length ? t('Spells') + ': ' + esc(d.spells.map(([n, lv]) => n + ' (' + t('level {n}', { n: lv }) + ')').join(', ')) : '',
+  d.cantrip ? t('Cantrip') + ': ' + t('one from the {cls} list', { cls: d.cantrip }) : '',
   ...(d.features || []).map(([n, text]) => `<b>${esc(n)}</b> ${esc(text)}`), d.note ? esc(d.note) : ''].filter(Boolean));
 
 function wizBody(b, key) {
@@ -66,7 +68,7 @@ function wizBody(b, key) {
   }
   if (key === 'subrace') {
     return `<div class="wiz-cards">${(RACES[c.race] || []).map((name) => wizCard('creation.subrace', name, c.subrace === name, name, wizTraits(DATA.subraces[name] || {}))).join('')}</div>
-      ${raceCantrips(b).length ? `<div class="grid g4">${selectField(t('Racial cantrip'), 'creation.cantrip', c.cantrip, raceCantrips(b), t('— choose —'), 'data-rerender')}</div>` : ''}`;
+      ${raceCantripField(b)}`;
   }
   if (key === 'class') {
     return `<div class="wiz-cards">${CLASSES.map((name) => {
@@ -99,7 +101,7 @@ function wizBody(b, key) {
   if (key === 'skills') return skillsPicker(b);
   if (key === 'level1') {
     return `<div class="levels">${levelRows(b, 0)}</div>
-      ${raceCantrips(b).length ? `<div class="grid g4">${selectField(t('Racial cantrip'), 'creation.cantrip', c.cantrip, raceCantrips(b), t('— choose —'), 'data-rerender')}</div>` : ''}`;
+      ${raceCantripField(b)}`;
   }
   if (key.startsWith('lv:')) return wizLevel(b, Number(key.slice(3)) - 1);
   const s = finalStats(b, 'act1');

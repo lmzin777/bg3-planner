@@ -144,6 +144,19 @@ function gainText(desc) {
   const gains = parts.filter((s) => GAIN_WORDS.test(s));
   return gains.length && gains.length < parts.length ? gains.join(' ') : parts.join(' ');
 }
+// A choice shown as a button: what is chosen, with its picture, and a caret. `act` opens the list of options.
+const slotButton = (act, attrs, value, img, empty) => `<button class="pslot" data-act="${act}"${attrs ? ' ' + attrs : ''}>${img || ''}<b>${
+  value ? esc(value) : empty || t('— choose —')}</b><i>▾</i></button>`;
+// A spell as a row of a list of options: name, description, facts, picture and, when asked, its level as heading.
+const spellRow = (s, grouped) => [s.n, s.d || '', spellMeta(s), pic(s.i, 'pic small'), grouped && s.lv ? t('Level {n}', { n: s.lv }) : ''];
+// The cantrip a High Elf or High Half-Elf picks at creation, as a slot with its picture and what it does.
+function raceCantripField(b) {
+  if (!raceCantrips(b).length) return '';
+  const name = b.creation.cantrip;
+  const s = SPELL_BY_NAME.get(norm(name));
+  return `<div class="lslot race-cantrip${name ? '' : ' open'}"><span class="lslot-l">${t('Racial cantrip')}</span>${
+    slotButton('race-cantrip-open', '', name, s ? pic(s.i, 'pic small') : '')}${s ? `<small>${esc([spellMeta(s), s.d].filter(Boolean).join(' — '))}</small>` : ''}</div>`;
+}
 const spellMeta = (s) => [s.lv ? t('Level {n}', { n: s.lv }) : t('Cantrip'), s.sc, s.rg, s.du, s.dm, s.co ? t('Concentration') : ''].filter(Boolean).join(' · ');
 // The spells a level may pick from, by name within each spell level: { cantrips, reach (spells up to the level it
 // can cast), school (those of the subclass's schools), bound (how many picks are held to the schools), order }.
@@ -170,8 +183,7 @@ function levelSpellLists(b, i, sp) {
 function slotCells(b, i, slots) {
   const x = levelInfo(b)[i];
   // every choice looks the same: what is chosen, on a button that opens the list of options
-  const button = (act, attrs, value, img, empty) => `<button class="pslot" data-act="${act}" data-l="${i}"${attrs ? ' ' + attrs : ''}>${img || ''}<b>${
-    value ? esc(value) : empty || t('— choose —')}</b><i>▾</i></button>`;
+  const button = (act, attrs, value, img, empty) => slotButton(act, `data-l="${i}"${attrs ? ' ' + attrs : ''}`, value, img, empty);
   // under the button, what the chosen option gives; the tooltip has its whole description
   const cell = (label, control, text, open, full) => `<div class="lslot${open ? ' open' : ''}"><span class="lslot-l">${esc(label)}</span>${control}${
     text ? `<small${full && full !== text ? ` title="${esc(full)}"` : ''}>${esc(text)}</small>` : ''}</div>`;
@@ -328,7 +340,7 @@ function featParts(name, desc, b) {
   const prof = proficiencies(b);
   const st = skillState(b);
   const known = new Set([...Object.keys(st.granted), ...st.chosen, ...pickedSkills(b)]);
-  const spells = (test) => SPELLS.filter(test).map((s) => [s.n, s.d || '']);
+  const spells = (test) => SPELLS.filter(test).map((s) => spellRow(s));
   const magic = /^Magic Initiate: (\w+)$/.exec(name);
   if (name === 'Skilled') parts.push({ label: t('Skills'), n: 3, options: ALL_SKILLS.filter((x) => !known.has(x)).map((x) => [x, '']) });
   if (name === 'Weapon Master') {
@@ -342,7 +354,7 @@ function featParts(name, desc, b) {
   if (name === 'Ritual Caster') parts.push({ label: t('Ritual spells'), n: 2, options: spells((s) => s.ri && (s.cl || []).length) });
   if (FEAT_OPTIONS[name]) {
     parts.push({ label: name === 'Elemental Adept' ? t('Damage type') : t('Cantrip'), n: 1,
-      options: FEAT_OPTIONS[name].map((x) => [x, (SPELL_BY_NAME.get(norm(x)) || {}).d || '']) });
+      options: FEAT_OPTIONS[name].map((x) => { const s = SPELL_BY_NAME.get(norm(x)); return s ? spellRow(s) : [x, '']; }) });
   }
   // a build that already has everything a list offers (every weapon type, say) has nothing to pick there
   parts.forEach((p) => { p.n = Math.min(p.n, p.options.length); if (p.min != null) p.min = Math.min(p.min, p.n); });
@@ -439,6 +451,50 @@ document.addEventListener('change', (e) => {
 Object.assign(actions, {
   'perm-toggle'() { state.ui.permOpen = !state.ui.permOpen; },
   'feat-options'(el) { openFeatOptions(+el.dataset.l); return false; },
+  // the class of a level: each class with the level it would reach there and what that level gives
+  'class-open'(el) {
+    const level = +el.dataset.l;
+    const b = curBuild();
+    const cur = b.levels[level].cls;
+    const rows = CLASSES.map((c) => {
+      const n = b.levels.slice(0, level).filter((y) => y.cls === c).length + 1;
+      const gains = ((CLASS_DATA[c] || { levels: {} }).levels[n] || []).join(' · ');
+      const multi = n === 1 && level > 0 && CLASS_PROF[c].multi.length ? t('Proficiencies gained') + ': ' + profNames(CLASS_PROF[c].multi) : '';
+      return [c, [gains, multi].filter(Boolean).join(' — '), `${c} ${n} · d${HIT_DIE[c]}`];
+    });
+    openChooser(t('Class for level {n}', { n: level + 1 }), t('Each class shows the level it would reach here and what that level gives.'),
+      [{ label: t('Class'), n: 1, min: 0, options: rows, chosen: cur ? [cur] : [] }], (done) => {
+        const l = curBuild().levels[level];
+        const v = done[0].chosen[0] || '';
+        // another class: the subclass and the choices of the one it had no longer apply
+        if (l.cls !== v) Object.assign(l, { cls: v, sub: '', picks: [] });
+      });
+    return false;
+  },
+  'sub-open'(el) {
+    const level = +el.dataset.l;
+    const l = curBuild().levels[level];
+    const d = CLASS_DATA[l.cls];
+    if (!d) return false;
+    const rows = Object.keys(d.subclasses).map((name) => [subLabel(name), (d.subclasses[name][d.subclassLevel] || []).join(' · ')]);
+    openChooser(`${l.cls} · ${t('Subclass')}`, t('What each subclass gives at {cls} level {n}.', { cls: l.cls, n: d.subclassLevel }),
+      [{ label: t('Subclass'), n: 1, min: 0, options: rows, chosen: l.sub ? [l.sub] : [] }], (done) => { curBuild().levels[level].sub = done[0].chosen[0] || ''; });
+    return false;
+  },
+  'race-cantrip-open'() {
+    const b = curBuild();
+    const rows = raceCantrips(b).map((n) => SPELL_BY_NAME.get(norm(n))).filter(Boolean).map((s) => spellRow(s));
+    openChooser(t('Racial cantrip'), '', [{ label: t('Cantrip'), n: 1, min: 0, options: rows, chosen: b.creation.cantrip ? [b.creation.cantrip] : [] }],
+      (done) => { curBuild().creation.cantrip = done[0].chosen[0] || ''; });
+    return false;
+  },
+  'elixir-open'() {
+    const b = curBuild();
+    const rows = CONSUMABLES.filter((c) => c.t === 'Elixir').map((c) => [c.n, c.x || '', elixirAbility(c.n) ? t('changes the numbers') : '', pic(c.i, 'pic small')]);
+    openChooser(t('Elixir kept active'), '', [{ label: t('Elixir kept active'), n: 1, min: 0, options: rows, chosen: b.elixir ? [b.elixir] : [] }],
+      (done) => { curBuild().elixir = done[0].chosen[0] || ''; });
+    return false;
+  },
   // a guided choice of a level (fighting style, manoeuvres, invocations…): every pick of it in one list
   'choice-open'(el) {
     const level = +el.dataset.l;
@@ -493,7 +549,7 @@ Object.assign(actions, {
     const sp = levelSlots(b, level).spells;
     if (!sp || !sp.swap) return false;
     const lists = levelSpellLists(b, level, sp);
-    const row = (s) => [s.n, s.d || '', spellMeta(s), pic(s.i, 'pic small'), t('Level {n}', { n: s.lv })];
+    const row = (s) => spellRow(s, true);
     const olds = swapOlds(b, level, sp).map((n) => SPELL_BY_NAME.get(norm(n)) || { n, d: '', lv: 0 });
     openChooser(`${x.cls} ${x.n} · ${t('Replace a known spell (optional)')}`, t('Choose both, or leave both empty to keep every spell.'), [
       { label: t('Spell to forget'), n: 1, min: 0, options: olds.map((s) => (s.lv ? row(s) : [s.n, ''])), chosen: sp.swap.old ? [sp.swap.old] : [] },
@@ -510,8 +566,7 @@ Object.assign(actions, {
     if (!sp) return false;
     const learn = sp.learn;
     const lists = levelSpellLists(b, level, sp);
-    const row = (s) => [s.n, s.d || '', spellMeta(s), pic(s.i, 'pic small'), s.lv ? t('Level {n}', { n: s.lv }) : ''];
-    const part = (key, label, n, list, chosen) => ({ key, label, n, min: 0, options: list.map(row), chosen });
+    const part = (key, label, n, list, chosen) => ({ key, label, n, min: 0, options: list.map((s) => spellRow(s, true)), chosen });
     const parts = [];
     if (learn.cantrips) parts.push(part('cantrip', 'Cantrips', learn.cantrips, lists.cantrips, sp.cantrip.slice()));
     const chosen = lists.order(sp.spell);

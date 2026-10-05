@@ -830,3 +830,8 @@ button.chip:hover { border-color: var(--gold); color: var(--text); }
 #dlg-list > div:not(.choose-grid) { display: grid; gap: 4px; }
 #dlg-list .pick-row { width: 100%; }
 .lslot-row .pslot { flex: 1; }
+.lvl-cls small + .pslot { grid-column: 1 / -1; }
+.lvl-cls small + .pslot b { color: var(--gold-hi); font-weight: 600; font-size: 13px; }
+.race-cantrip { max-width: 460px; margin-top: 12px; }
+.pslot.off { cursor: default; opacity: .55; }
+.pslot.off:hover { border-color: var(--line); }

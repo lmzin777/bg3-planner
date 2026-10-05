@@ -126,6 +126,18 @@ Object.assign(actions, {
     c[key] = c[key] === el.dataset.ab ? '' : el.dataset.ab;
     if (c[key] && c[other] === c[key]) c[other] = '';
   },
+  'creation-open'(el) {
+    const key = el.dataset.k;
+    const b = curBuild();
+    const title = { origin: 'Origin', race: 'Race', subrace: 'Subrace', background: 'Background' }[key];
+    openChooser(t(title), '', [{ label: t(title), n: 1, min: 0, options: creationOptions(b, key), chosen: b.creation[key] ? [b.creation[key]] : [] }], (done) => {
+      const now = curBuild();
+      const before = now.creation[key];
+      now.creation[key] = done[0].chosen[0] || '';
+      creationChanged(now, 'creation.' + key, before);
+    });
+    return false;
+  },
   // the − and + of a number: a base ability score, a manual bonus, the enemy Armour Class
   step(el) {
     const clamp = (n) => Math.max(+el.dataset.min, Math.min(+el.dataset.max, n));
