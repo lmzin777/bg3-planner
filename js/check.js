@@ -36,9 +36,10 @@ function levelPending(b, i) {
     const have = chosenOf(b, x.cls, c.group, i).length;
     if (have < c.n) out.push(c.group.name + ': ' + t('{n} of {max}', { n: have, max: c.n }));
   });
-  const learn = spellsAtLevel(x);
-  const need = learn && SPELLS.some((s) => (s.cl || []).includes(learn.list)) ? learn.spells + learn.cantrips : 0;
-  const have = l.picks.filter((p) => /^(spell|cantrip)s?\s*:/i.test(p.trim()) && !/\(replaces /i.test(p)).length;
+  // counted slot by slot: a spare spell line does not stand in for a cantrip that is still to choose
+  const sp = levelSlots(b, i).spells;
+  const need = sp ? sp.learn.spells + sp.learn.cantrips : 0;
+  const have = sp ? sp.spell.length + sp.cantrip.length : 0;
   if (have < need) out.push(t('spells and cantrips: {n} of {max}', { n: have, max: need }));
   return out;
 }

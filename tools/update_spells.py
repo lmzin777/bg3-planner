@@ -45,6 +45,24 @@ def learners(w):
     return sorted(out, key=lambda e: (e[1], e[0]))
 
 
+# {{#invoke: Damage display | main | damage 1 = weapon | damage 2 = 1d8 | damage 2 type = Thunder | … }}
+DISPLAY = re.compile(r"\s*\{\{\s*#invoke:\s*Damage display\s*\|\s*main(.*?)\}\}", re.S | re.I)
+
+
+def display(m):
+    """A "Damage display" block as text: "weapon damage + 1d8 Thunder + 2d8 Thunder (when the target moves)"."""
+    body = "\n" + m.group(1)
+    parts = []
+    for n in ("1", "2", "3", "4"):
+        dice = clean(field(body, "damage " + n))
+        if not dice:
+            continue
+        info = clean(field(body, "damage " + n + " info"))
+        text = "weapon damage" if dice.lower() == "weapon" else " ".join(x for x in (dice, clean(field(body, "damage " + n + " type"))) if x)
+        parts.append(text + (" (" + info[0].lower() + info[1:] + ")" if info else ""))
+    return " " + " + ".join(parts)
+
+
 def turns(value):
     """A duration field as text: "10" becomes "10 turns", wording such as "Until Long Rest" is kept."""
     value = clean(value)
@@ -92,11 +110,14 @@ def main():
         aoe_m, aoe = field(w, "aoe m"), field(w, "aoe").lower()
         area_m, area_shape = field(w, "area m"), field(w, "area shape").lower()
         damage = []
-        for n in ("", " 2", " 3"):
+        # the spell's own damage lines: the "Damage display" blocks inside "higher levels" carry lines of the same name
+        own = re.sub(DISPLAY, "", w)
+        for n in ("", " 1", " 2", " 3"):
             # "D8Cantrip" is the wiki's code for a cantrip die that grows with the character: 1d8 at first
-            dice = re.sub(r"^[dD](\d+)Cantrip$", r"1d\1", clean(field(w, "damage" + n)))
-            text = " ".join(x for x in (dice, clean(field(w, "damage" + n + " type"))) if x)
-            info = clean(field(w, "damage" + n + " info"))
+            dice = re.sub(r"^[dD](\d+)Cantrip$", r"1d\1", clean(field(own, "damage" + n)))
+            kind = clean(field(own, "damage" + n + " type"))
+            text = "Weapon damage" if dice.lower() == "weapon" else " ".join(x for x in (dice, kind) if x)
+            info = clean(field(own, "damage" + n + " info"))
             if text:
                 # the note starts in lower case, unless it opens with an abbreviation such as DEX
                 damage.append(text + (" (" + (info if info[:2].isupper() else info[0].lower() + info[1:]) + ")" if info else ""))
@@ -126,7 +147,8 @@ def main():
             # a die picture leaves its own name before the bonus ("d4 +1d4"): keep the bonus
             "d": re.sub(r"\bd(\d+) \+(\d+)d\1\b", r"+\2d\1", short(clean(field(w, "description")), 420)),
             "xd": short(clean(field(w, "extra description")), 300),
-            "hl": short(clean(field(w, "higher levels")), 260),
+            # the blocks are written out first: their "| damage 1 = …" lines would end the field early
+            "hl": short(clean(field(re.sub(DISPLAY, display, w), "higher levels")), 260),
             "vb": "HasVerbalComponent" in flags,
             "sb": yes(field(w, "scribing")),
             "cl": classes,

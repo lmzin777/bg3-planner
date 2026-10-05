@@ -709,6 +709,75 @@
     ok(!/data-s="lv:4" disabled/.test(wizardView(b)), 'level 4 opens once level 3 is complete');
     state.ui.wizard = '';
   });
+  test('every class and subclass can finish all twelve levels', () => {
+    // levels open in order, so a level that could never be completed would shut the rest of the build:
+    // fill every choice with the first options on offer and make sure nothing is left pending
+    const fill = (b, subs) => {
+      const left = [];
+      for (let i = 0; i < 12 && b.levels[i].cls; i++) {
+        const l = b.levels[i];
+        for (let pass = 0; pass < 2; pass++) {
+          const info = levelInfo(b);
+          const x = info[i];
+          if (picksSubclass(x) && !l.sub) l.sub = subs[l.cls] || subLabel(Object.keys(CLASS_DATA[l.cls].subclasses)[0]);
+          const slots = levelSlots(b, i);
+          slots.choices.forEach((sl) => {
+            const g = sl.c.group;
+            const merged = classChoices(b, x.cls).find((y) => y.name === g.name) || g;
+            const off = g.repeat ? [] : info.flatMap((y, j) => (j !== i && y.cls === x.cls ? chosenOf(b, x.cls, merged, j) : []));
+            writeSlot(b, i, 'choice', g.options.filter((o) => (!o[2] || o[2] <= x.n) && !off.includes(o[0])).map((o) => o[0]).slice(0, sl.c.n), sl.c.i);
+          });
+          if (slots.feat && !slots.feat.name) writeSlot(b, i, 'feat', ['Alert']);
+          if (slots.expertise && slots.expertise.values.length < 2) writeSlot(b, i, 'expertise', expertiseOptions(b, slots.expertise.values).slice(0, 2));
+          const sp = levelSlots(b, i).spells;
+          if (sp) {
+            const lists = levelSpellLists(b, i, sp);
+            if (sp.learn.cantrips) writeSlot(b, i, 'cantrip', lists.cantrips.slice(0, sp.learn.cantrips).map((y) => y.n));
+            const bound = lists.school.slice(0, lists.bound).map((y) => y.n);
+            if (sp.learn.spells) writeSlot(b, i, 'spell', [...bound, ...lists.reach.filter((y) => !bound.includes(y.n)).slice(0, sp.learn.spells - bound.length).map((y) => y.n)]);
+          }
+        }
+        const pending = levelPending(b, i);
+        if (pending.length) left.push('level ' + (i + 1) + ': ' + pending.join('; '));
+      }
+      return left;
+    };
+    const make = (plan) => {
+      const b = build(plan, { race: 'Human', background: 'Sage' });
+      const ci = DATA.classes[plan[0]];
+      b.creation.skills = (ci.skills === 'any' ? ALL_SKILLS : ci.skills).filter((x) => !['Arcana', 'History'].includes(x)).slice(0, ci.pick + 1).join(', ');
+      return b;
+    };
+    let runs = 0;
+    CLASSES.forEach((cls) => Object.keys(CLASS_DATA[cls].subclasses).forEach((sub) => {
+      eq(fill(make(Array(12).fill(cls)), { [cls]: subLabel(sub) }), [], cls + ' / ' + sub);
+      const other = CLASSES[(CLASSES.indexOf(cls) + 5) % CLASSES.length];
+      eq(fill(make([...Array(6).fill(other), ...Array(6).fill(cls)]), { [cls]: subLabel(sub) }), [], other + ' 6 + ' + cls + ' / ' + sub + ' 6');
+      runs += 2;
+    }));
+    ok(runs > 100, runs + ' builds completed');
+  });
+  test('the texts taken from the wiki carry no leftovers of its markup', () => {
+    const odd = /\{\{|\}\}|\[\[|\]\]|\.png|\bProf\b(?! Bonus)|\bd\d+ \+\dd\d+|\bd\d+\dd\d+\b|:\*|\b(\w{4,}) \1\b|^\s|\s$/;
+    const hits = [];
+    const look = (where, text) => { if (text && !String(text).startsWith('thumb/') && odd.test(String(text))) hits.push(where + ': ' + String(text).slice(0, 80)); };
+    Object.keys(FEATURES).forEach((n) => { look('feature', n); look('feature ' + n, FEATURES[n]); });
+    CLASSES.forEach((c) => {
+      Object.values(CLASS_DATA[c].levels).forEach((list) => list.forEach((g) => look(c, g)));
+      Object.keys(CLASS_DATA[c].subclasses).forEach((sub) => Object.values(CLASS_DATA[c].subclasses[sub]).forEach((list) => (list || []).forEach((g) => look(sub, g))));
+    });
+    CHOICES.forEach((g) => g.options.forEach((o) => { look(g.name, o[0]); look(g.name + ' / ' + o[0], o[1]); }));
+    FEATS.forEach(([n, d]) => look('feat ' + n, d));
+    SPELLS.forEach((sp) => ['n', 'd', 'dm', 'rg', 'du', 'hl'].forEach((k) => look('spell ' + sp.n, sp[k])));
+    CONSUMABLES.forEach((c) => { look('consumable ' + c.n, c.x); look('consumable ' + c.n, c.h); });
+    PERMANENT.forEach((x) => { look('permanent ' + x.n, x.x); look('permanent ' + x.n, x.h); });
+    ITEMS.forEach((it) => [it.sp, it.x, it.h, ...(it.ps || []).map((y) => y[1])].forEach((text) => look('item ' + it.n, text)));
+    eq(hits.slice(0, 5), []);
+    const dm = (name) => SPELL_BY_NAME.get(norm(name)).dm;
+    eq([dm('Magic Missile'), dm('Ice Storm'), dm('Sacred Flame'), dm('Thunderous Smite')], ['1d4 + 1 Force, 1d4 + 1 Force, 1d4 + 1 Force', '2d8 Bludgeoning, 4d6 Cold', '1d8 Radiant', 'Weapon damage, 2d6 Thunder'], 'every damage line of a spell is read');
+    ok(/9 m radius/.test(SPELL_BY_NAME.get('dancing lights').d) && /weapon damage \+ 1d8 Thunder/.test(SPELL_BY_NAME.get('booming blade').hl));
+    ok(CLASS_DATA.Cleric.subclasses['War Domain'][1].includes('Gain Martial Weapons proficiency') && CLASS_DATA.Bard.subclasses['College of Valour'][3].includes('Martial Weapons Proficiency'));
+  });
   test('base scores move with − and + and stay inside the 27 points', () => {
     const b = build(['Fighter'], { abilities: { str: 15, dex: 15, con: 14, int: 8, wis: 8, cha: 8 } });
     const off = (ab, d) => new RegExp('data-d="' + d + '"[^>]*disabled').test(abilCard(b, ab, ab, ab));

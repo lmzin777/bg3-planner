@@ -200,7 +200,7 @@ def permanent(w):
             effect = rclean(parts[0].split("{{HorizontalRuleImage}}")[0])
             effect = re.sub(r"^.{0,60}? - ", "", effect, count=1)
             how = rclean(parts[1].split("{{HorizontalRuleImage}}")[0]) if len(parts) > 1 else ""
-            out.append({"n": tidy(title), "a": act, "x": short(re.sub(r"\s*;\s*", " ", effect), 300), "h": short(re.sub(r"\s*;\s*", " ", how), 260)})
+            out.append({"n": tidy(title), "a": act, "x": short(re.sub(r"\s*;\s*", " ", effect).strip(), 300), "h": short(re.sub(r"\s*;\s*", " ", how).strip(), 260)})
     return out
 
 

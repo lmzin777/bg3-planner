@@ -149,7 +149,7 @@ def clean(s):
                 return args[0] + " temporary hit points"
             if name in ("r", "resource") and args and not any(re.match(r"icon\s*only", k, re.I) for k in named):
                 return resource_name(args[0].split(":")[0], any(k.lower().startswith("forceplural") for k in named))
-            if name == "dist":
+            if name == "dist" or (name == "radius" and (named.get("m") or named.get("ft"))):
                 return named["m"] + " m" if named.get("m") else named.get("ft", "") + " ft"
             if name in ("damagetext", "damage text") and len(args) > 1:
                 return args[0] + " " + args[1]
@@ -157,13 +157,30 @@ def clean(s):
                 return (args[0] + " " if args else "") + "Saving Throw"
             if name == "ability check":
                 return (args[0] + " " if args else "") + "Check"
-            return args[0] if args else re.sub(r"([a-z])([A-Z])", r"\1 \2", parts[0])
+            # {{MartialWeaponsProf}} is the icon of a proficiency: its words are "Martial Weapons"
+            return args[0] if args else re.sub(r" Prof$", "", re.sub(r"([a-z])([A-Z])", r"\1 \2", parts[0]))
         s = re.sub(r"\{\{([^{}]*)\}\}", sub, s)
     s = re.sub(r"\{\{[^}]*$", "", s)  # a template call cut off by the field boundary
     s = re.sub(r"\[\[(?:[^\]|]*\|)?([^\]]*)\]\]", r"\1", s)
     s = re.sub(r"'{2,}|<[^>]+>", "", s)
     s = re.sub(r"^\s*\*+\s*", "", s, flags=re.M)
-    return re.sub(r"\s+", " ", re.sub(r"\s*\n\s*", "; ", s)).strip()
+    return polish(re.sub(r"\s+", " ", re.sub(r"\s*\n\s*", "; ", s)).strip())
+
+
+def polish(s):
+    """Leftovers of icon templates and list markup: "d4 +1d4" (a die picture before its bonus), "Icon.png",
+    a word said twice ("Fire fire damage"), ":*" bullets, and stray separators at either end."""
+    s = re.sub(r"\b[dD](\d+) \+(\d+)d\1\b", r"+\2d\1", s)
+    s = re.sub(r"\bd(\d+)(\d)d\1\b", r"\2d\1", s)
+    s = re.sub(r"\s*\bIcon\.png\b", "", s)
+    s = re.sub(r"\b\w+\.png\s*", "", s)
+    s = re.sub(r"\s*:\*\s*", " ", s)
+    s = re.sub(r"\b(\w+(?:_\w+)+)_\([a-z_]+\)", lambda m: m.group(1).replace("_", " "), s)
+    if len(s.split()) > 4:  # prose, not a name
+        s = re.sub(r"\b(\w{3,}) \1\b", r"\1", s, flags=re.I)
+        s = re.sub(r"(?:(?<=\. )|^)(?:[Rr]anged|Radius|Range)\.\s*", "", s)
+        s = re.sub(r"^[-;:\s]+", "", s)
+    return re.sub(r"\s{2,}", " ", s).strip().rstrip(";").strip()
 
 
 def short(s, n):
