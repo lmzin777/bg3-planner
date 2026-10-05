@@ -334,7 +334,9 @@ function placeLine(b, x) {
     j = levelsOf(x.cls).find((k) => { const e = levelSlots(b, k).expertise; return e && e.j < 0; });
   } else {
     const group = CHOICES.find((g) => prefixRe(g.name).test(text));
-    if (group) j = levelsOf(x.cls).find((k) => levelSlots(b, k).choices.some((sl) => sl.c.group.name === group.name && sl.entries.length < sl.c.n));
+    // the level may have gone to another class: the choice still belongs to a class that offers it
+    const every = info.map((y, k) => k).filter((k) => info[k].cls);
+    if (group) j = [...levelsOf(x.cls), ...every].find((k) => levelSlots(b, k).choices.some((sl) => sl.c.group.name === group.name && sl.entries.length < sl.c.n));
   }
   if (j == null) return false;
   b.levels[j].picks.push(text);

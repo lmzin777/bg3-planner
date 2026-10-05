@@ -806,6 +806,13 @@
     tidyBuild(r);
     eq([r.levels[1].picks, r.levels[2].picks, r.levels.flatMap((l) => l.notes)], [[], ['Fighting Style: Archery', 'Spell: Longstrider', "Spell: Hunter's Mark"], []], 'Ranger 2 moved from level 2 to level 3; a line that only names a feature is dropped');
 
+    // a level handed to another class: what it had chosen goes to the class that offers that choice
+    const s2 = build(['Ranger', 'Ranger'], dex);
+    s2.levels[0].picks.push('Favoured Enemy: Bounty Hunter', 'Natural Explorer: Urban Tracker');
+    s2.levels[0].cls = 'Cleric';
+    tidyBuild(s2);
+    eq([s2.levels[0].picks, s2.levels[1].picks, s2.levels[0].notes], [[], ['Favoured Enemy: Bounty Hunter', 'Natural Explorer: Urban Tracker'], []], 'level 2 is Ranger 1 now');
+
     // classes that prepare: their spell lines are spells kept ready, not spells learned
     const c = build(['Cleric', 'Cleric', 'Cleric'], { abilities: { str: 10, dex: 12, con: 14, int: 8, wis: 15, cha: 13 }, plus2: 'wis' });
     c.levels[0].sub = 'Life Domain';
