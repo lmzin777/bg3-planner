@@ -400,7 +400,7 @@
     rogue.gear.act1.slots.meleeMain.name = 'Rapier';
     rogue.gear.act1.slots.rangedMain.name = 'Shortbow';
     rogue.levels[3].picks.push('Feat: Sharpshooter');
-    eq(availableToggles(rogue, 'act1').map((x) => x.key), ['adv', 'sneak', 'feat:Sharpshooter']);
+    eq(availableToggles(rogue, 'act1').map((x) => x.key), ['adv', 'haste', 'sneak', 'feat:Sharpshooter']);
     rogue.active = ['sneak', 'feat:Sharpshooter'];
     const r = finalStats(rogue, 'act1').attacks.rows;
     eq([r[0].extraDice[0][0], r[1].extraDice[0][0]], ['3d6', '3d6'], 'Sneak Attack on finesse and ranged weapons');
@@ -892,6 +892,79 @@
     eq(turn(st, 'ranged'), 10.2);           // Extra Attack: 2 × (0.65 × 7.5 + 0.05 × 4.5); +8 hits on 8 or more
   });
 
+  // ---------- the damage of a turn ----------
+  test('spells, extra actions and the enemy enter the damage of a turn', () => {
+    const kept = { target: state.ui.target, honour: state.ui.honour };
+    state.ui.target = '';
+    state.ui.honour = true;
+    const made = (classes, creation, subs, gear, picks) => {
+      const b = build(classes, Object.assign({ race: 'Human', background: 'Soldier' }, creation));
+      Object.keys(subs || {}).forEach((i) => { b.levels[i].sub = subs[i]; });
+      Object.keys(gear || {}).forEach((k) => { b.gear.act1.slots[k].name = gear[k]; });
+      Object.keys(picks || {}).forEach((i) => { b.levels[i].picks = picks[i]; });
+      return b;
+    };
+    const round = (n) => Math.round(n * 10000) / 10000;
+    const plain = { name: '', ac: 16, saves: { str: 3, dex: 3, con: 3, int: 3, wis: 3, cha: 3 }, res: {} };
+    const enemy = (name) => { state.ui.target = name; const tg = targetOf(); state.ui.target = ''; return tg; };
+    const spells = (b, tg) => spellOptions(finalStats(b, 'act1'), tg).map((x) => [x.name, round(x.total)]);
+    const plan = (b, style, tg) => { const p = turnPlan(finalStats(b, 'act1'), style, tg || 16); return [round(p.total), p.parts.map((x) => [x.how, round(x.n)])]; };
+
+    // Wizard 5: Intelligence 17 (+3), proficiency +3: spell attack +6, spell save DC 14. Against AC 16, saves +3.
+    const wiz = made(Array(5).fill('Wizard'), { abilities: { str: 8, dex: 14, con: 14, int: 15, wis: 12, cha: 10 }, plus2: 'int', plus1: 'wis' }, { 1: 'Evocation School' }, {},
+      { 0: ['Cantrip: Fire Bolt', 'Spell: Magic Missile'], 4: ['Spell: Fireball'] });
+    eq(spells(wiz, plain), [
+      ['Fireball', 21],        // 8d6 = 28; the save fails on 10 or less (50%): 28 × (0.5 + 0.5 × ½)
+      ['Magic Missile', 10.5], // three darts of 1d4 + 1, no roll
+      ['Fire Bolt', 6.6]]);    // 2d10 at character level 5: 0.55 × 11 + 0.05 × 11
+    const st = finalStats(wiz, 'act1');
+    eq([castsText(st, 0), castsText(st, 1), castsText(st, 3)], ['at will', '9 per Long Rest', '2 per Long Rest'], 'slots 4 / 3 / 2: a level 1 spell can use any of the nine');
+    eq([round(bestTurn(st, 'caster', plain).total), bestTurn(st, 'caster', plain).cantrip.name], [6.6, 'Fire Bolt'], 'with no weapon, the cantrip is the turn');
+    const raphael = enemy('Raphael');
+    eq([raphael.ac, raphael.saves.dex, raphael.saves.cha, raphael.res.Fire], [21, 3, 8, 'i'], 'Dexterity 16, not proficient; Charisma 19 + 4');
+    eq(spells(wiz, raphael), [['Magic Missile', 10.5]], 'immune to Fire: only the Force damage is left');
+
+    // Warlock 5 with Agonising Blast: two beams of 1d10 + 3. The patron's spells are not known by themselves.
+    const lock = made(Array(5).fill('Warlock'), { abilities: { str: 8, dex: 14, con: 14, int: 10, wis: 12, cha: 15 }, plus2: 'cha', plus1: 'con' }, { 0: 'The Fiend' }, {},
+      { 0: ['Cantrip: Eldritch Blast'], 1: ['Eldritch Invocation: Agonising Blast'] });
+    eq(spells(lock, plain), [['Eldritch Blast', 9.9]]);  // 2 × (0.55 × 8.5 + 0.05 × 5.5)
+    ok(levelSpellLists(lock, 4, levelSlots(lock, 4).spells).reach.some((x) => x.n === 'Fireball'), 'Fireball is on the list a Fiend Warlock chooses from');
+
+    // Fighter 5 (Champion), Longsword and shield: +6, 1d8 + 3, critical hit on 19.
+    const f = made(Array(5).fill('Fighter'), { abilities: { str: 15, dex: 14, con: 15, int: 8, wis: 10, cha: 8 }, plus2: 'str', plus1: 'con' }, { 2: 'Champion' },
+      { chest: 'Chain Mail', meleeMain: 'Longsword', meleeOff: 'Studded Shield' }, { 0: ['Fighting Style: Defence'] });
+    eq(plan(f, 'melee'), [9.15, [['Attack action', 2]]]);
+    f.active = ['surge'];
+    eq(plan(f, 'melee'), [18.3, [['Attack action', 2], ['Action Surge', 2]]], 'a second action, with its Extra Attack');
+    f.active = ['haste'];
+    eq(plan(f, 'melee'), [13.725, [['Attack action', 2], ['Haste', 1]]], 'in Honour mode the action from Haste is one attack');
+    state.ui.honour = false;
+    eq(plan(f, 'melee'), [18.3, [['Attack action', 2], ['Haste', 2]]]);
+    state.ui.honour = true;
+    f.active = [];
+    const titan = enemy('Steel Watcher Titan');
+    eq([typeFactor(titan, 'Lightning', false), typeFactor(titan, 'Slashing', false), typeFactor(titan, 'Slashing', true), typeFactor(titan, 'Poison', true), typeFactor(titan, 'Fire', false)], [2, 0.5, 1, 0, 1]);
+    eq(plan(f, 'melee', titan)[0], 4.95, 'a common Longsword against resistance to non-magical Slashing: 2 × (0.6 × 7.5 + 0.1 × 4.5) ÷ 2, AC 15');
+    const monk = made(Array(6).fill('Monk'), { race: 'Elf', subrace: 'Wood Elf', abilities: { str: 8, dex: 15, con: 14, int: 8, wis: 15, cha: 10 }, plus2: 'dex', plus1: 'wis' }, { 2: 'Way of the Open Hand' });
+    eq(plan(monk, 'unarmed', titan)[0], 16.3, 'Ki-Empowered Strikes count as magical: 4 × (0.6 × 6.5 + 0.05 × 3.5)');
+    const ms = finalStats(monk, 'act1');
+    eq(turnSpends(ms, turnPlan(ms, 'unarmed', 16)), ['Flurry of Blows: 1 Ki a turn, 7 turns per Short Rest']);
+
+    // Great Weapon Master: one more attack on the turns a critical hit lands. Greatsword +6, 2d6 + 3.
+    const g = made(Array(5).fill('Fighter'), { abilities: { str: 15, dex: 14, con: 15, int: 8, wis: 10, cha: 8 }, plus2: 'str', plus1: 'con' }, {}, { meleeMain: 'Greatsword' }, { 3: ['Feat: Great Weapon Master'] });
+    eq(plan(g, 'melee'), [12.2704, [['Attack action', 2], ['Great Weapon Master', 0.0975]]], '2 × 5.85, and 5.85 on 1 − 0.95² of the turns');
+    ok(availableToggles(g, 'act1').some((x) => x.key === 'surge') && !availableToggles(wiz, 'act1').some((x) => x.key === 'surge'), 'Action Surge is offered to Fighters of level 2 and up');
+
+    // Fighter 5 / Warlock 5 with a pact weapon: the two Extra Attacks add up only outside Honour mode.
+    const fw = made([...Array(5).fill('Fighter'), ...Array(5).fill('Warlock')], { abilities: { str: 8, dex: 14, con: 14, int: 10, wis: 12, cha: 15 }, plus2: 'cha', plus1: 'con' }, { 5: 'The Fiend' },
+      { meleeMain: 'Longsword' }, { 7: ['Pact Boon: Pact of the Blade'] });
+    eq(plan(fw, 'melee')[1], [['Attack action', 2]]);
+    state.ui.honour = false;
+    eq(plan(fw, 'melee')[1], [['Attack action', 3]]);
+    Object.assign(state.ui, kept);
+    ok(ENEMIES.length > 20 && ENEMIES.every((e) => e.ac > 9 && e.hp.b > 0 && e.act >= 1 && e.act <= 3), 'the reference enemies carry their numbers');
+  });
+
   test('only the choices a level grants count: the rest finds its place or becomes a note', () => {
     const dex = { abilities: { str: 10, dex: 15, con: 14, int: 8, wis: 14, cha: 10 }, plus2: 'dex', plus1: 'wis' };
     const b = build(['Ranger'], dex);
@@ -1311,6 +1384,27 @@
     eq([b.creation.abilities.str, plus().disabled], [15, true], 'the + stops at 15');
     await click(q('[data-act="abil-reset"]'), 'reset');
     eq(pointsUsed(b), 0);
+  });
+
+  flow('the damage of a turn follows the enemy and what is switched on', async () => {
+    const b = build(Array(5).fill('Fighter'), { race: 'Human', background: 'Soldier', abilities: { str: 15, dex: 14, con: 15, int: 8, wis: 10, cha: 8 }, plus2: 'str', plus1: 'con' });
+    b.levels[0].picks = ['Fighting Style: Defence'];
+    b.levels[2].sub = 'Champion';
+    b.gear.act1.slots.meleeMain.name = 'Longsword';
+    state.ui.act = 'act1';
+    state.ui.target = '';
+    state.ui.targetAc = 16;
+    show(b);
+    const shown = () => Number(q('.turn b').textContent);
+    const base = shown();
+    ok(base > 0 && /AC 16/.test(q('.turn').textContent));
+    await click(all('[data-act="toggle-active"]').find((x) => /Action Surge/.test(x.textContent)), 'Action Surge');
+    ok(Math.abs(shown() - base * 2) < 0.11, 'a second Attack action doubles the turn: ' + base + ' → ' + shown());
+    await click(q('.pslot[data-act="enemy-open"]'), 'enemy');
+    await pick('Raphael');
+    ok(/Raphael/.test(q('.turn').textContent) && /AC 21/.test(q('.enemy-line').textContent) && shown() < base * 2, 'the numbers are now against Raphael: harder to hit, and a common sword is resisted');
+    await click(q('[data-act="honour-toggle"]'), 'rules');
+    eq(state.ui.honour, false);
   });
 
   flow('the party page: ticking an item as obtained', async () => {

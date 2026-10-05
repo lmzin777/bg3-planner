@@ -341,28 +341,6 @@ function hitChance(bonus, ac, crit, advantage) {
   const any = (hits + 21 - crit) / 20;
   return advantage ? { hit: 1 - (1 - any) ** 2, crit: 1 - (1 - pc) ** 2 } : { hit: any, crit: pc };
 }
-// What a turn of attacks is worth on average against an Armour Class: the Attack action (with Extra Attack)
-// with the main attack, plus the bonus action — the off-hand weapon, or a monk's Flurry of Blows.
-// A critical hit rolls every damage die twice.
-function turnPlan(stats, style, ac) {
-  const main = mainAttack(stats, style);
-  if (!main) return null;
-  const gains = stats.gains;
-  const extra = gains.includes('Improved Extra Attack') ? 3
-    : gains.includes('Extra Attack') || (gains.includes('Deepened Pact') && stats.pactBlade && main.slot === 'meleeMain') ? 2 : 1;
-  const one = (row) => {
-    const bonus = row.attackTotal + (row.attackDice || []).reduce((a, d) => a + avgDice(d), 0);
-    const p = hitChance(bonus, ac, stats.crit, stats.advantage);
-    const dice = avgDice(row.dice) + (row.extraDice || []).reduce((a, d) => a + avgDice(d[0]), 0);
-    return { p, each: p.hit * (dice + row.damageTotal) + p.crit * dice };
-  };
-  const parts = [Object.assign({ row: main, n: extra, how: t('Attack action') }, one(main))];
-  const off = stats.attacks.rows.find((r) => !r.thrown && r.slot === (main.slot === 'rangedMain' ? 'rangedOff' : main.slot === 'meleeMain' ? 'meleeOff' : ''));
-  if (main.slot === 'unarmed' && stats.monk) parts.push(Object.assign({ row: main, n: 2, how: 'Flurry of Blows' }, one(main)));
-  else if (off && !main.thrown) parts.push(Object.assign({ row: off, n: 1, how: t('bonus action') }, one(off)));
-  return { ac, parts, total: parts.reduce((a, x) => a + x.n * x.each, 0) };
-}
-
 // ---------- spellcasting ----------
 // The value of a column of the class table at a class level ("Ki Points" of a Monk 6).
 function classColumn(cls, n, re) {
@@ -584,6 +562,8 @@ function finalStats(b, act, opts) {
   return {
     act, level, feats, scores, mods, sources: ab.sources, pb, skills, saves, savesDice,
     gains, crit: level ? critThreshold(b, worn, gains) : 20, advantage: on.includes('adv') || gearAdvantage(worn),
+    // for the damage of a turn: the build and what is switched on, its feats and chosen options, what it wears
+    build: b, active: on, worn, fighter: classLevels(b).Fighter || 0, featNames: new Set(featsTaken(b).map((x) => x.name)), options: new Set(chosenOptions(b).map((x) => x[0])),
     monk: !!classLevels(b).Monk, pactBlade: hasPick(b, /pact of the blade/i) || levelInfo(b).some((x) => x.sub === 'The Hexblade'),
     hp: hitPoints(b, mods.con),
     initiative: initiative.reduce((a, p) => a + p[1], 0), initiativeParts: initiative,
@@ -617,8 +597,9 @@ function statsLive(b) {
     ${info.mage ? `<small class="extra">${t('{n} with Mage Armour', { n: info.mage })}</small>` : ''}
     ${info.situational.map((x) => `<small class="extra">${esc(x)}</small>`).join('')}</div>`;
   const box = (label, value, hint) => `<div class="stat"><span>${label}</span><b>${value}</b>${hint ? `<small>${hint}</small>` : ''}</div>`;
-  const ac = Number(state.ui.targetAc) || 16;
-  const turn = turnPlan(s, buildProfile(at ? atLevel(b, at) : b, state.ui.act).style, ac);
+  const target = targetOf();
+  const ac = target.ac;
+  const style = buildProfile(at ? atLevel(b, at) : b, state.ui.act).style;
   const chance = (r) => { const p = hitChance(r.attackTotal + (r.attackDice || []).reduce((a, d) => a + avgDice(d), 0), ac, s.crit, s.advantage); return t('{hit}% to hit AC {ac} · {crit}% critical', { hit: Math.round(p.hit * 100), ac, crit: Math.round(p.crit * 100) }); };
   const attacks = s.attacks.rows.map((r) => `<div class="atk">
       <div class="atk-name">${r.item ? pic(r.item.i, 'pic small') : ''}<b>${esc(r.name)}</b><small>${r.slot === 'unarmed' ? '' : t(SLOT_LABEL[r.slot])}${r.proficient ? '' : ` · <em>${t('not proficient')}</em>`}</small></div>
@@ -644,10 +625,9 @@ function statsLive(b) {
     <h3 class="group">${t('Saving throws')}</h3>
     <div class="skill-final">${s.saves.map((k) => `<span class="${k.proficient ? 'prof' : ''}" title="${k.proficient ? t('Proficient') : ''}">${k.short} <b>${signed(k.bonus)}${s.savesDice.map((d) => ' + ' + esc(d)).join('')}</b></span>`).join('')}</div>
     ${attacks ? `<h3 class="group">${t('Attacks')}</h3><div class="atks">${attacks}</div>
-      ${turn ? `<p class="turn"><b>${turn.total.toFixed(1)}</b>${t('average damage in a turn against AC {ac}', { ac })}: ${turn.parts.map((x) => `${x.n} × ${esc(x.row.name)} (${esc(x.how)}, ${x.each.toFixed(1)} ${t('each')})`).join(' + ')}${
-        s.advantage ? ' · ' + t('with Advantage') : ''}${s.crit < 20 ? ' · ' + t('critical hit on {n} or more', { n: s.crit }) : ''}</p>` : ''}
       ${s.attacks.extras.length ? `<p class="muted">${t('On top, when it applies: {list}', { list: esc(s.attacks.extras.join(' · ')) })}</p>` : ''}
       ${s.attacks.situational.map((x) => `<p class="muted">${esc(x)}</p>`).join('')}` : ''}
+    ${turnBox(s, style)}
     ${casting ? `<h3 class="group">${t('Spellcasting')}</h3><div class="atks">${casting}</div>${slots}${pact}
       ${known ? `<p class="points"><b>${t('Chosen in the level table')}</b> ${known}</p>` : ''}
       ${s.castingGear.length ? `<p class="muted">${t('Gear included: {list}', { list: partsText(s.castingGear) })}</p>` : ''}
@@ -667,7 +647,7 @@ function statsCard(b) {
       <div><span class="lbl">${t('At level')}</span><div class="acts lvls">${Array.from({ length: charLevel(b) }, (x, i) => i + 1).map((n) =>
         `<button class="${(b.current && b.current < charLevel(b) ? b.current : charLevel(b)) === n ? 'on' : ''}" data-act="stat-level" data-n="${n}">${n}</button>`).join('')}</div></div>
       <div><span class="lbl">${t('With the gear of')}</span>${actTabs(state.ui.act, 'act')}</div>
-      <div class="field ac-field"><span>${t('Enemy Armour Class')}</span>${stepper(Number(state.ui.targetAc) || 16, 'data-ui="targetAc" data-v="16"', 5, 30)}</div>
+      ${targetTools()}
       ${elixirs.length ? `<div class="field"><span>${t('Elixir kept active')}</span>${slotButton('elixir-open', '', b.elixir,
         CONSUMABLE_BY_NAME.get(norm(b.elixir)) ? pic(CONSUMABLE_BY_NAME.get(norm(b.elixir)).i, 'pic small') : '', t('— none —'))}</div>` : ''}
     </div>

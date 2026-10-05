@@ -848,3 +848,16 @@ button.chip:hover { border-color: var(--gold); color: var(--text); }
 .lnote span { flex: 1; min-width: 0; text-decoration: line-through; text-decoration-color: var(--line); }
 .lnote i { font-style: normal; font-size: 11px; white-space: nowrap; }
 .lslots.prep { margin: 4px 0 12px; }
+
+/* ---------- the enemy, spells against it ---------- */
+.enemy-line { flex-basis: 100%; margin: 0; font-size: 12.5px; color: var(--muted); }
+.stat-tools .enemy-field { min-width: min(220px, 100%); }
+.opts { display: grid; gap: 4px; }
+.opt { display: grid; grid-template-columns: minmax(150px, 1.1fr) minmax(0, 1fr) minmax(0, 1.2fr) auto; gap: 2px 12px; align-items: center; padding: 6px 10px;
+  background: var(--panel-2); border: 1px solid var(--line-soft); border-radius: 8px; font-size: 13px; }
+.opt b { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.opt .pic.small { width: 26px; height: 26px; }
+.opt span { color: var(--muted); min-width: 0; }
+.opt strong { font: 600 17px var(--serif); color: var(--gold-hi); font-variant-numeric: tabular-nums; }
+.opt small { grid-column: 1 / -1; color: var(--muted); font-size: 11.5px; }
+@media (max-width: 720px) { .opt { grid-template-columns: minmax(0, 1fr) auto; } .opt span { grid-column: 1 / -1; } }

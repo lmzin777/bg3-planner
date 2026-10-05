@@ -21,6 +21,9 @@ function itemCastAbility(b) {
   return ability;
 }
 
+// The spells a class has without choosing them: the ones its subclass lists level by level (domain, oath, circle
+// spells). A Warlock's patron only adds its spells to the list to choose from ("Expanded Spell List").
+const alwaysPrepared = (b, cls) => (cls === 'Warlock' ? [] : [...new Set(levelInfo(b).filter((x) => x.cls === cls).flatMap(levelGains))].filter((g) => SPELL_BY_NAME.has(norm(g))));
 // Groups of spells: [{ title, ability, dc, attack, note, spells: [{ name, sp (the spell record), source }] }].
 function spellbook(b, act, stats) {
   const info = levelInfo(b);
@@ -53,7 +56,7 @@ function spellbook(b, act, stats) {
     const title = caster ? caster.label || caster.sub || cls : cls;
     const ability = caster ? caster.ab : CLASS_CAST[cls] || itemCastAbility(b);
     const chosen = current.filter((x) => x.cls === cls);
-    const granted = [...new Set(info.filter((x) => x.cls === cls).flatMap(levelGains))].filter((g) => SPELL_BY_NAME.has(norm(g)));
+    const granted = alwaysPrepared(b, cls);
     const bonus = b.levels.filter((l, i) => info[i].cls === cls).flatMap((l) => l.picks).map((p) => /^bonus cantrip\s*:\s*(.+)$/i.exec(p.trim())).filter(Boolean).map((m) => m[1].trim());
     const ready = PREPARES.includes(cls) ? (b.prepared || {})[cls] || [] : [];
     if (!chosen.length && !granted.length && !bonus.length && !ready.length) return;

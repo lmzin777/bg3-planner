@@ -376,7 +376,7 @@ function tidyBuild(b) {
     if (!x.cls) return false;
     const names = given[x.cls] || (given[x.cls] = new Set(levelInfo(b).filter((y) => y.cls === x.cls).flatMap(levelGains).map(norm)));
     const spell = /^(?:prepared\s+)?(?:spell|cantrip)s?\s*:\s*([^(]+?)\s*$/i.exec(x.text);
-    if (spell && names.has(norm(spell[1]))) return true;  // a spell the subclass keeps always prepared
+    if (spell && alwaysPrepared(b, x.cls).some((n) => norm(n) === norm(spell[1]))) return true;  // a spell the subclass keeps always prepared
     const bare = x.text.replace(/\s+\d+d\d+$/, '');
     return (names.has(norm(bare)) || FEATURES[bare] != null) && !/^(?:feat|spell|cantrip|expertise|subclass|fighting style)s?$/i.test(bare);
   };
@@ -404,7 +404,7 @@ function preparedOptions(b, cls) {
   if (cls === 'Wizard') return currentSpells(b).filter((y) => y.cls === 'Wizard' && !y.cantrip).map((y) => SPELL_BY_NAME.get(norm(y.name))).filter(Boolean).sort(bySpellLevel);
   const max = maxSpellLevel(b, last);
   const sub = subLabel(info[last].sub);
-  const always = new Set(info.filter((y) => y.cls === cls).flatMap(levelGains).map(norm));
+  const always = new Set(alwaysPrepared(b, cls).map(norm));
   return SPELLS.filter((s) => s.lv && s.lv <= max && ((s.cl || []).includes(cls) || (s.lr || []).some(([who]) => who === sub)) && !always.has(norm(s.n))).sort(bySpellLevel);
 }
 // Wizard spells that can be copied from a scroll: of a level the Wizard has slots for, not learned by levelling.

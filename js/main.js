@@ -142,7 +142,7 @@ Object.assign(actions, {
   step(el) {
     const clamp = (n) => Math.max(+el.dataset.min, Math.min(+el.dataset.max, n));
     const d = +el.dataset.d;
-    if (el.dataset.ui) { state.ui[el.dataset.ui] = clamp((Number(state.ui[el.dataset.ui]) || +el.dataset.v || 0) + d); return; }
+    if (el.dataset.ui) { const now = state.ui[el.dataset.ui]; state.ui[el.dataset.ui] = clamp((now == null || now === '' ? +el.dataset.v || 0 : Number(now)) + d); return; }
     const b = curBuild();
     setPath(b, el.dataset.path, clamp((Number(getPath(b, el.dataset.path)) || 0) + d));
   },

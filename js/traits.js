@@ -113,6 +113,8 @@ function availableToggles(b, act) {
   const pb = profBonus(charLevel(b));
   const add = (key, label, hint, fx, scope) => { if (!out.some((x) => x.key === key)) out.push({ key, label, hint, fx, scope: scope || 'all' }); };
   if (charLevel(b)) add('adv', t('Advantage'), t('Roll every attack twice and keep the better result: hidden, flanking with a helper, Reckless Attack and the like.'), {});
+  if (charLevel(b)) add('haste', 'Haste', (SPELL_BY_NAME.get('haste') || {}).d || '', {});
+  if ((levels.Fighter || 0) >= 2) add('surge', 'Action Surge', featureText('Action Surge'), {});
   if (levels.Barbarian) add('rage', 'Rage', featureText('Rage'), { damage: Number(classColumn('Barbarian', levels.Barbarian, /rage damage/i)) || 0 }, 'melee');
   if (levels.Rogue) add('sneak', 'Sneak Attack', featureText('Sneak Attack'), { damageDice: classColumn('Rogue', levels.Rogue, /sneak attack/i) }, 'finesse');
   FEATS.forEach(([name, text]) => {

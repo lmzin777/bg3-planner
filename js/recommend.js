@@ -92,7 +92,7 @@ function profileText(p) {
 // (bonus and average damage per hit) and the best spell save DC and spell attack.
 function keyNumbers(s, act, style) {
   const r = mainAttack(s, style);
-  const turn = turnPlan(s, style, Number(state.ui.targetAc) || 16);
+  const turn = bestTurn(s, style, targetOf());
   return { ac: s.ac[act], hp: s.hp, initiative: s.initiative, saves: s.saves.reduce((a, k) => a + k.bonus, 0),
     turn: turn ? turn.total : 0, attack: r ? r.attackTotal : 0, damage: avgDamage(r),
     dc: s.casting.length ? Math.max(...s.casting.map((c) => c.dc)) : 0,
