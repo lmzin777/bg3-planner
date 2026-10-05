@@ -11,7 +11,7 @@ information" section of each class page; origin characters from the infobox of t
 import io, itertools, json, os, re, sys, time
 
 from update_classes import CLASSES, describe, rclean, sections, tidy
-from update_items import clean, field, page_texts
+from update_items import clean, field, page_texts, record
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "gamedata.js")
@@ -295,6 +295,7 @@ def main():
           f"window.BG3_DATA_DATE = {json.dumps(time.strftime('%Y-%m-%d'))};\n"
           "window.BG3_DATA = " + json.dumps(data, ensure_ascii=False, indent=1) + ";\n")
     io.open(OUT, "w", encoding="utf-8", newline="\n").write(js)
+    record("gamedata")
 
     print(f"Wrote {OUT} ({len(js) // 1024} KB)")
     for race in RACES:

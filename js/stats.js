@@ -283,8 +283,12 @@ function attackRows(b, act, ab, pb, swap) {
       const m = new RegExp('additional damage equal to your (' + ABILITY_WORDS + ') modifier', 'i').exec(s);
       if (m && !CONDITIONAL.test(s)) damage.push([abilityShort(abilityKey(m[1])) + ' · ' + it.n, mods[abilityKey(m[1])]]);
     });
+    // dice the weapon itself adds to every hit (the 1d4 Fire of the Everburn Blade)
+    const extras = String(it.ed || '').split(';').map((x) => x.trim()).filter(Boolean);
+    const extraDice = extras.map(parseDamage).filter(Boolean).map((x) => [x.dice, x.type, t('from the weapon')]);
+    extras.forEach((x) => { const m = /^(\d+)\s+(\w+)$/.exec(x); if (m) damage.push([m[2] + ' · ' + t('from the weapon'), Number(m[1])]); });
     rows.push({ slot, name: it.n, item: it, proficient, twoHands: !!twoHands, attack, attackTotal: attack.reduce((a, p) => a + p[1], 0),
-      dice: dmg.dice, type, damage, damageTotal: damage.reduce((a, p) => a + p[1], 0) });
+      dice: dmg.dice, type, damage, damageTotal: damage.reduce((a, p) => a + p[1], 0), extraDice: extraDice.slice() });
     // thrown, for builds that throw: Strength on the attack roll, the weapon's melee damage, and Tavern Brawler
     // adding Strength once more to both (the wiki's Attacks and Throw pages)
     if (brawler && it.s === 'melee' && (it.pp || []).includes('Thrown')) {
@@ -293,7 +297,7 @@ function attackRows(b, act, ab, pb, swap) {
       const tAttack = [['STR', mods.str]].concat(proficient ? [[t('Proficiency'), pb]] : [], enchant ? [[t('Enchantment'), enchant]] : [], [['Tavern Brawler', mods.str]], gearAttack.parts);
       const tDamage = [[abilityShort(dkey), mods[dkey]]].concat(base.flat ? [[t('Enchantment'), base.flat]] : [], [['Tavern Brawler', mods.str]]);
       rows.push({ slot, thrown: true, name: it.n + ' · ' + t('thrown'), item: it, proficient, attack: tAttack, attackTotal: tAttack.reduce((a, p) => a + p[1], 0),
-        dice: base.dice, type: base.type || type, damage: tDamage, damageTotal: tDamage.reduce((a, p) => a + p[1], 0) });
+        dice: base.dice, type: base.type || type, damage: tDamage, damageTotal: tDamage.reduce((a, p) => a + p[1], 0), extraDice: extraDice.slice() });
     }
   });
   // unarmed strike, for monks and Tavern Brawler builds

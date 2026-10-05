@@ -27,6 +27,7 @@ function renderBuilds() {
       <div class="side-list">${list || `<p class="muted">${t('No builds yet.')}</p>`}</div>
       ${state.trash.length ? `<button class="btn tiny wide" data-act="trash-open">${t('Recently deleted ({n})', { n: state.trash.length })}</button>` : ''}
       <p class="hint">${t('To start a variation, duplicate a build and edit the copy. Everything is saved automatically in this browser.')}</p>
+      ${dataDatesNote()}
     </aside>
     <div class="content" data-scope="build">${b ? (state.ui.wizard && state.ui.wizardFor === b.id ? wizardView(b) : buildEditor(b)) : emptyBuilds()}</div>
   </div>`;
@@ -150,6 +151,17 @@ function creationOptions(b, key) {
   if (key === 'race') return Object.keys(RACES).map((name) => [name, raceSummary(DATA.races[name] || {})]);
   if (key === 'subrace') return (RACES[b.creation.race] || []).map((name) => [name, raceSummary(DATA.subraces[name] || {})]);
   return Object.keys(BACKGROUNDS).map((name) => [name, (DATA.backgrounds[name].text || '') + (name === 'Haunted One' ? ' ' + t('Haunted One (Dark Urge only)') + '.' : ''), BACKGROUNDS[name].join(', ')]);
+}
+
+// When the game data was read from the wiki: the range of days, with each file's own day in the tooltip.
+function dataDatesNote() {
+  const dates = window.BG3_DATA_DATES || {};
+  const days = Object.values(dates).sort();
+  if (!days.length) return '';
+  const a = days[0];
+  const b = days[days.length - 1];
+  return `<p class="hint" title="${esc(Object.keys(dates).sort().map((k) => k + ' ' + dates[k]).join(' · '))}">${
+    a === b ? t('Game data read from bg3.wiki on {a}.', { a }) : t('Game data read from bg3.wiki between {a} and {b}.', { a, b })}</p>`;
 }
 
 // The six ability cards with the points spent and a way back to the start.

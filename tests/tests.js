@@ -775,6 +775,13 @@
     eq(hits.slice(0, 5), []);
     const dm = (name) => SPELL_BY_NAME.get(norm(name)).dm;
     eq([dm('Magic Missile'), dm('Ice Storm'), dm('Sacred Flame'), dm('Thunderous Smite')], ['1d4 + 1 Force, 1d4 + 1 Force, 1d4 + 1 Force', '2d8 Bludgeoning, 4d6 Cold', '1d8 Radiant', 'Weapon damage, 2d6 Thunder'], 'every damage line of a spell is read');
+    const flame = build(Array(5).fill('Fighter'), { abilities: { str: 15, dex: 10, con: 14, int: 8, wis: 12, cha: 8 }, plus2: 'str' });
+    flame.gear.act1.slots.meleeMain.name = 'Everburn Blade';
+    const hit = finalStats(flame, 'act1').attacks.rows[0];
+    eq([item('Everburn Blade').ed, hit.dice, hit.extraDice.map((x) => x[0] + ' ' + x[1]), avgDamage(hit)], ['1d4 Fire', '2d6', ['1d4 Fire'], 12.5], 'the dice a weapon adds to every hit are counted: 7 + 2.5 + 3');
+    flame.gear.act1.slots.meleeMain.name = 'Infernal Mace';
+    ok(finalStats(flame, 'act1').attacks.rows[0].damage.some((x) => /Poison/.test(x[0]) && x[1] === 3), 'a flat extra damage too');
+    ok(/;/.test(item('Amulet of Misty Step').h), 'an item found in more than one place lists them');
     ok(/9 m radius/.test(SPELL_BY_NAME.get('dancing lights').d) && /weapon damage \+ 1d8 Thunder/.test(SPELL_BY_NAME.get('booming blade').hl));
     ok(CLASS_DATA.Cleric.subclasses['War Domain'][1].includes('Gain Martial Weapons proficiency') && CLASS_DATA.Bard.subclasses['College of Valour'][3].includes('Martial Weapons Proficiency'));
   });

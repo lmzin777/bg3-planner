@@ -8,7 +8,7 @@ variants of a spell (for example each "Bestow Curse: ..." choice) are left out.
 """
 import io, json, os, re, sys, time
 
-from update_items import THUMBS, THUMB_SIZE, api, clean, drop_empty, field, names, remember_thumb, short
+from update_items import THUMBS, THUMB_SIZE, api, clean, drop_empty, field, names, record, remember_thumb, short
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "spells.js")
 CLASSES = ["Barbarian", "Bard", "Cleric", "Druid", "Fighter", "Monk", "Paladin", "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard"]
@@ -76,7 +76,7 @@ def turns(value):
 def conditions(w):
     """Conditions the spell applies, as [name, duration, saving throw that ends or resists it]."""
     out = []
-    for n in ("", " 1", " 2", " 3"):
+    for n in ("", " 1", " 2", " 3", " 4", " 5"):
         name = clean(field(w, "condition" + n))
         if name:
             out.append([name, turns(field(w, "condition" + n + " duration")), clean(field(w, "condition" + n + " save"))])
@@ -112,7 +112,7 @@ def main():
         damage = []
         # the spell's own damage lines: the "Damage display" blocks inside "higher levels" carry lines of the same name
         own = re.sub(DISPLAY, "", w)
-        for n in ("", " 1", " 2", " 3"):
+        for n in ("", " 1", " 2", " 3", " 4", " 5"):
             # "D8Cantrip" is the wiki's code for a cantrip die that grows with the character: 1d8 at first
             dice = re.sub(r"^[dD](\d+)Cantrip$", r"1d\1", clean(field(own, "damage" + n)))
             kind = clean(field(own, "damage" + n + " type"))
@@ -173,6 +173,7 @@ def main():
           f"window.BG3_SPELLS_DATE = {json.dumps(time.strftime('%Y-%m-%d'))};\n"
           "window.BG3_SPELLS = [\n" + body + "\n];\n")
     io.open(OUT, "w", encoding="utf-8", newline="\n").write(js)
+    record("spells")
 
     by_level = {}
     for s in spells:

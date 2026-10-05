@@ -11,7 +11,7 @@ that unlocks each one are collected from the wiki every time the script runs.
 import io, json, os, re, sys, time
 
 from update_classes import CLASSES, FEATURE_TEMPLATE, describe, grid, plain, rclean, sections, tidy
-from update_items import api, clean, field, page_texts, short
+from update_items import api, clean, field, page_texts, record, short
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "choices.js")
@@ -293,6 +293,7 @@ def main():
           "window.BG3_PERMANENT = [\n" + ",\n".join("  " + row(b) for b in bonuses) + "\n];\n"
           "window.BG3_SPELL_PICKS = " + row(learned) + ";\n")
     io.open(OUT, "w", encoding="utf-8", newline="\n").write(js)
+    record("choices")
 
     print(f"Wrote {OUT} ({len(js) // 1024} KB)")
     for c in choices:

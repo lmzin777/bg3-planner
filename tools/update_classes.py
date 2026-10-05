@@ -10,7 +10,7 @@ feature descriptions from the page of each feature, and feats from the table on 
 """
 import io, json, os, re, sys, time
 
-from update_items import api, clean, field, page_texts, short
+from update_items import api, clean, field, page_texts, record, short
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "classes.js")
 CLASSES = ["Barbarian", "Bard", "Cleric", "Druid", "Fighter", "Monk", "Paladin", "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard"]
@@ -357,6 +357,7 @@ def main():
           "window.BG3_FEATURES = {\n" + ",\n".join("  " + json.dumps(k, ensure_ascii=False) + ":" + json.dumps(v, ensure_ascii=False) for k, v in features.items()) + "\n};\n"
           "window.BG3_ACTIONS = " + json.dumps(sorted(n for n in ACTIONS if n in features), ensure_ascii=False) + ";\n")
     io.open(OUT, "w", encoding="utf-8", newline="\n").write(js)
+    record("classes")
 
     print(f"Wrote {OUT} ({len(js) // 1024} KB): {len(feat_list)} feats, {len(features)} feature descriptions")
     for c in CLASSES:

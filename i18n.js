@@ -770,6 +770,9 @@ window.BG3_I18N = {
     '{cls}: {n} spells prepared, it can prepare {max}': '{cls}: {n} spells preparadas, o limite é {max}',
     '{n} line(s) in the levels are not a choice of their level and do not count': '{n} linha(s) nos níveis não são escolha do nível e não contam',
 
+    'Game data read from bg3.wiki on {a}.': 'Dados do jogo lidos da bg3.wiki em {a}.',
+    'Game data read from bg3.wiki between {a} and {b}.': 'Dados do jogo lidos da bg3.wiki entre {a} e {b}.',
+    'from the weapon': 'da arma',
     // dialogs and toasts
     'Cancel': 'Cancelar',
     'Confirm': 'Confirmar',

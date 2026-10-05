@@ -5,7 +5,7 @@ Needs only the Python standard library and an internet connection. Takes a few s
 """
 import io, json, os, re, sys, time
 
-from update_items import RARITY, THUMBS, THUMB_SIZE, api, clean, drop_empty, field, remember_thumb, short
+from update_items import RARITY, THUMBS, THUMB_SIZE, api, clean, drop_empty, field, record, remember_thumb, short
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "consumables.js")
 KINDS = [("Elixirs", "Elixir"), ("Potions", "Potion"), ("Arrows", "Arrow"), ("Coatings", "Coating"), ("Grenades", "Grenade")]
@@ -64,6 +64,7 @@ def main():
           f"window.BG3_CONSUMABLES_DATE = {json.dumps(time.strftime('%Y-%m-%d'))};\n"
           "window.BG3_CONSUMABLES = [\n" + body + "\n];\n")
     io.open(OUT, "w", encoding="utf-8", newline="\n").write(js)
+    record("consumables")
     by_kind = {}
     for it in items:
         by_kind[it["t"]] = by_kind.get(it["t"], 0) + 1

@@ -115,6 +115,19 @@ def resource_name(code, plural=False):
     return RESOURCE_NAMES[key]
 
 
+def record(name):
+    """Notes in datainfo.js the day this data file was read from the wiki, for the planner to show."""
+    path = os.path.join(os.path.dirname(OUT), "datainfo.js")
+    try:
+        dates = json.loads(re.search(r"\{.*\}", io.open(path, encoding="utf-8").read(), re.S).group(0))
+    except (IOError, AttributeError, ValueError):
+        dates = {}
+    dates[name] = time.strftime("%Y-%m-%d")
+    io.open(path, "w", encoding="utf-8", newline="\n").write(
+        "// The day each data file was last read from bg3.wiki. Written by the scripts in tools/.\n"
+        "window.BG3_DATA_DATES = " + json.dumps(dates, indent=1, sort_keys=True) + ";\n")
+
+
 def field(text, key):
     """Value of a template parameter ("| key = value"), which may span several lines."""
     m = re.search(r"^\|\s*" + re.escape(key) + r"\s*=[ \t]*(.*(?:\n(?!\s*\||\s*\}\}).*)*)", text, re.M)
@@ -167,15 +180,21 @@ def clean(s):
     return polish(re.sub(r"\s+", " ", re.sub(r"\s*\n\s*", "; ", s)).strip())
 
 
+def places(w):
+    """Where the item is found: the first place and the further ones the page lists ("where to find2" …)."""
+    return short("; ".join(x for x in (clean(field(w, "where to find" + n)) for n in ("", "2", "3", "4")) if x), 260)
+
+
 def polish(s):
     """Leftovers of icon templates and list markup: "d4 +1d4" (a die picture before its bonus), "Icon.png",
     a word said twice ("Fire fire damage"), ":*" bullets, and stray separators at either end."""
-    s = re.sub(r"\b[dD](\d+) \+(\d+)d\1\b", r"+\2d\1", s)
+    s = re.sub(r"\b[dD](\d+) (\+?)(\d+)d\1\b", r"\2\3d\1", s)
     s = re.sub(r"\bd(\d+)(\d)d\1\b", r"\2d\1", s)
     s = re.sub(r"\s*\bIcon\.png\b", "", s)
     s = re.sub(r"\b\w+\.png\s*", "", s)
     s = re.sub(r"\s*:\*\s*", " ", s)
     s = re.sub(r"\b(\w+(?:_\w+)+)_\([a-z_]+\)", lambda m: m.group(1).replace("_", " "), s)
+    s = re.sub(r"\b[A-Z][a-z]+(?:_[A-Za-z]+)+\b", lambda m: m.group(0).replace("_", " "), s)
     if len(s.split()) > 4:  # prose, not a name
         s = re.sub(r"\b(\w{3,}) \1\b", r"\1", s, flags=re.I)
         s = re.sub(r"(?:(?<=\. )|^)(?:[Rr]anged|Radius|Range)\.\s*", "", s)
@@ -204,7 +223,7 @@ def main():
             continue
         ac = clean(field(w, "armour class"))
         items.append({"n": title, "s": slot, "t": kind, "p": clean(field(w, "proficiency")), "r": RARITY.get(clean(field(w, "rarity")).lower(), "common"),
-                      "l": clean(field(w, "where to find location")), "h": short(clean(field(w, "where to find")), 160), "d": ("AC " + ac) if ac else "",
+                      "l": clean(field(w, "where to find location")), "h": places(w), "d": ("AC " + ac) if ac else "",
                       "x": short(clean(field(w, "description")), 240), "i": THUMBS.get(title, ""),
                       "ps": names(field(w, "passives")), "sp": short(clean(field(w, "special")), 220),
                       "sd": clean(field(w, "stealth disadvantage")).lower() in ("yes", "true"),
@@ -227,11 +246,13 @@ def main():
         items.append({"n": title, "s": "ranged" if ranged else "melee", "t": kind, "c": "simple" if kind in SIMPLE else "martial",
                       "w": "two" if hand.startswith("two") else "versatile" if hand.startswith("vers") else "one",
                       "r": RARITY.get(clean(field(w, "rarity")).lower(), "common"),
-                      "l": clean(field(w, "where to find location")), "h": short(clean(field(w, "where to find")), 160), "d": dmg,
+                      "l": clean(field(w, "where to find location")), "h": places(w), "d": dmg,
                       "x": short(clean(field(w, "description")), 240), "i": THUMBS.get(title, ""),
                       "ps": [n for k in ("passives", "weapon passives", "passives main hand", "passives off hand") for n in names(field(w, k))],
                       "wa": [n for k in ("weapon actions", "special weapon actions") for n in names(field(w, k))],
                       "pp": [label for key, label in WEAPON_PROPS if clean(field(w, key)).lower() in ("yes", "true")],
+                      # dice the weapon adds to every hit ("1d4 Fire" of the Everburn Blade)
+                      "ed": "; ".join(x for x in (clean(field(w, k)) for k in ("extra damage", "extra damage 2", "extra damage 3")) if x),
                       "vd": clean(field(w, "versatile damage")), "en": clean(field(w, "enchantment")), "sp": short(clean(field(w, "special")), 220),
                       "wt": clean(field(w, "weight kg")), "pr": clean(field(w, "price"))})
 
@@ -280,6 +301,7 @@ def main():
           f"window.BG3_ITEMS_DATE = {json.dumps(time.strftime('%Y-%m-%d'))};\n"
           "window.BG3_ITEMS = [\n" + body + "\n];\n")
     io.open(OUT, "w", encoding="utf-8", newline="\n").write(js)
+    record("items")
 
     by_slot, by_act = {}, {}
     for it in items:
