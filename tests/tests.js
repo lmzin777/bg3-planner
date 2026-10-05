@@ -1063,7 +1063,154 @@
     state.ui.lang = lang;
   });
 
+  // ---------- flows: the same things done with real clicks on the page ----------
+  // A flow drives the planner the way a person does (click a slot, pick from the list, confirm) on a build
+  // that exists only in memory, and puts back what was on screen when it ends.
+  const flows = [];
+  const flow = (name, fn) => flows.push([name, fn]);
+  const wait = (ms) => new Promise((done) => setTimeout(done, ms));
+  const q = (sel, root) => (root || document).querySelector(sel);
+  const all = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+  const click = async (el, what) => { if (!el) throw new Error('nothing to click: ' + what); el.click(); await wait(70); };
+  const row = (i) => all('.lvl')[i];
+  const open = (i, act, n) => click(all('.pslot[data-act="' + act + '"]', row(i))[n || 0], act + ' at level ' + (i + 1));
+  const pick = (name) => click(all('#dlg-list .pick-row').find((r) => r.dataset.n === name), 'option ' + name);
+  const confirm = () => click(q('#choose-ok'), 'Confirm');
+  const dialogOpen = () => !q('#dialog').hidden;
+  const show = (b) => { state.builds = [b]; state.ui.buildId = b.id; state.ui.tab = 'builds'; state.ui.wizard = ''; state.ui.closed = {}; save(); render(); return b; };
+
+  flow('a whole build is chosen through the lists, level by level', async () => {
+    const b = show(build(['Fighter', 'Fighter', 'Fighter', 'Fighter', 'Rogue', 'Ranger', 'Ranger', 'Ranger', 'Cleric', 'Cleric'],
+      { origin: 'Custom (Tav)', race: 'Human', background: 'Urchin', skills: 'Athletics, Perception, Insight', abilities: { str: 15, dex: 14, con: 13, int: 8, wis: 14, cha: 8 }, plus2: 'str', plus1: 'wis' }));
+    eq(all('.lvl.locked').length, 11, 'only level 1 is open at first');
+    await open(0, 'choice-open');
+    ok(dialogOpen() && all('#dlg-list .pick-row').length === 6, 'six fighting styles for a Fighter');
+    await pick('Defence');
+    ok(!dialogOpen(), 'one choice out of one list closes by itself');
+    await open(2, 'sub-open');
+    await pick('Battle Master');
+    await open(2, 'choice-open');
+    await pick('Riposte'); await pick('Trip Attack'); await pick('Menacing Attack');
+    ok(dialogOpen(), 'three picks wait for Confirm');
+    await confirm();
+    await open(3, 'feat-open');
+    await pick('Ability Improvement');
+    ok(dialogOpen() && /Ability Improvement/.test(q('#dialog-box h2').textContent), "the feat's own choices follow at once");
+    await pick('STR'); await pick('CON');
+    await confirm();
+    await open(4, 'expertise-open');
+    await pick('Stealth'); await pick('Athletics');
+    await confirm();
+    await open(5, 'choice-open', 0);
+    await pick('Bounty Hunter');
+    await open(5, 'choice-open', 1);
+    await pick('Urban Tracker');
+    await open(6, 'choice-open');
+    await pick('Archery');
+    await open(6, 'spells-open');
+    await pick('Longstrider'); await pick("Hunter's Mark");
+    await confirm();
+    await open(7, 'sub-open');
+    await pick('Hunter');
+    await open(7, 'choice-open');
+    await pick('Colossus Slayer');
+    await open(7, 'spells-open');
+    await pick('Fog Cloud');  // one spell at Ranger 3: the click is enough
+    await open(8, 'sub-open');
+    await pick('Life Domain');
+    await open(8, 'spells-open');
+    await pick('Guidance'); await pick('Sacred Flame'); await pick('Light');
+    await confirm();
+    eq(b.levels.slice(0, 10).map((l) => l.picks), [
+      ['Fighting Style: Defence'], [], ['Manoeuvre: Riposte', 'Manoeuvre: Trip Attack', 'Manoeuvre: Menacing Attack'], ['Feat: Ability Improvement (+1 STR, +1 CON)'],
+      ['Expertise: Stealth + Athletics'], ['Favoured Enemy: Bounty Hunter', 'Natural Explorer: Urban Tracker'], ['Fighting Style: Archery', 'Spell: Longstrider', "Spell: Hunter's Mark"],
+      ["Hunter's Prey: Colossus Slayer", 'Spell: Fog Cloud'], ['Cantrip: Guidance', 'Cantrip: Sacred Flame', 'Cantrip: Light'], []]);
+    eq([b.levels[2].sub, b.levels[7].sub, b.levels[8].sub, firstOpenLevel(b)], ['Battle Master', 'Hunter', 'Life Domain', 10], 'every level with a class is complete');
+    // what is not a level choice: prepared spells, the elixir, the swap of a known spell
+    await click(q('.pslot[data-act="prepared-open"]'), 'prepared spells');
+    await pick('Bane'); await pick('Healing Word');
+    await confirm();
+    eq(b.prepared, { Cleric: ['Bane', 'Healing Word'] });
+    await click(q('.pslot[data-act="elixir-open"]'), 'elixir');
+    await pick('Elixir of Bloodlust');
+    eq(b.elixir, 'Elixir of Bloodlust');
+    await open(7, 'swap-open');
+    await pick('Longstrider'); await pick('Cure Wounds');
+    await confirm();
+    eq(b.levels[7].picks[2], 'Spell: Cure Wounds (replaces Longstrider)');
+    ok(/Cure Wounds/.test(q('#sec-spells').textContent) && !all('.lnote').length, 'the spellbook follows, and nothing was left as a note');
+  });
+
+  flow('levels open in order, and a shut level takes no clicks', async () => {
+    const b = show(build(['Fighter', 'Fighter', 'Fighter', 'Fighter']));
+    await open(3, 'class-open');
+    ok(!dialogOpen(), 'level 4 is shut while level 1 has its fighting style to choose');
+    ok(/Level 1 still has something to choose/.test(q('.lvl-lock').textContent));
+    await open(0, 'choice-open');
+    await pick('Duelling');
+    eq([all('.lvl.locked').length, firstOpenLevel(b)], [9, 2], 'levels 2 and 3 opened; level 3 waits for its subclass');
+    await click(q('[data-act="wiz-levels"]'), 'Level up step by step');
+    ok(/Level 3/.test(q('.wiz h1').textContent) && q('.levels-bar button[data-s="lv:4"]').disabled && !q('.levels-bar button[data-s="lv:2"]').disabled, 'the step by step opens at the level that is waiting');
+    ok(all('.wiz-nav button').find((x) => /Next/.test(x.textContent)).disabled, 'and Next waits too');
+    await click(q('.wiz .pslot[data-act="sub-open"]'), 'subclass in the step');
+    await pick('Champion');
+    ok(!all('.wiz-nav button').find((x) => /Next/.test(x.textContent)).disabled && b.levels[2].sub === 'Champion');
+    await click(q('[data-act="wiz-close"]'), 'leave');
+  });
+
+  flow('a level that changes class takes its choices along, and what fits nowhere becomes a note', async () => {
+    const b = build(['Ranger', 'Ranger', 'Ranger']);
+    b.levels[0].picks = ['Favoured Enemy: Bounty Hunter', 'Natural Explorer: Urban Tracker'];
+    b.levels[1].picks = ['Fighting Style: Archery', 'Spell: Longstrider', "Spell: Hunter's Mark", 'a remark of mine'];
+    show(b);
+    eq([b.levels[1].picks.length, b.levels[1].notes], [3, ['a remark of mine']], 'saving already sorted the lines');
+    await open(0, 'class-open');
+    ok(/Fighter 1/.test(all('#dlg-list .pick-row').find((r) => r.dataset.n === 'Fighter').textContent), 'each class shows the level it would reach');
+    await pick('Fighter');
+    eq(b.levels.slice(0, 3).map((l) => [l.cls, l.picks]), [['Fighter', []], ['Ranger', []], ['Ranger', ['Fighting Style: Archery', 'Spell: Longstrider', "Spell: Hunter's Mark"]]], 'Ranger 2 is now level 3, with what it had chosen');
+    eq(all('.lnote').length, 1);
+    await click(q('[data-act="note-del"]'), 'remove the note');
+    eq([all('.lnote').length, b.levels[1].notes], [0, []]);
+  });
+
+  flow('creation: the lists, the − and + buttons and the origin rules', async () => {
+    const b = show(build([]));
+    const choose = async (key, name) => { await click(q('.pslot[data-act="creation-open"][data-k="' + key + '"]'), key); await pick(name); };
+    await choose('origin', 'Karlach');
+    eq([b.creation.race, b.creation.subrace, b.creation.background], ['Tiefling', 'Zariel Tiefling', 'Outlander']);
+    await choose('race', 'Elf');
+    eq([b.creation.origin, b.creation.subrace], ['Custom (Tav)', ''], 'Karlach as an elf is a custom character');
+    await choose('subrace', 'High Elf');
+    await click(q('.pslot[data-act="race-cantrip-open"]'), 'racial cantrip');
+    ok(all('#dlg-list .pick-row').every((r) => q('img', r)), 'every cantrip of the list has its picture');
+    await pick('Fire Bolt');
+    eq(b.creation.cantrip, 'Fire Bolt');
+    const plus = () => all('.abil')[0].querySelector('.stepper button[data-d="1"]');
+    for (let k = 0; k < 9; k++) if (!plus().disabled) await click(plus(), 'STR +');
+    eq([b.creation.abilities.str, plus().disabled], [15, true], 'the + stops at 15');
+    await click(q('[data-act="abil-reset"]'), 'reset');
+    eq(pointsUsed(b), 0);
+  });
+
+  flow('the party page: ticking an item as obtained', async () => {
+    const b = preset('stealth-archer');
+    state.builds = [b];
+    const p = curParty();
+    const before = clone(p.members);
+    p.members[0].buildId = b.id;
+    state.ui.tab = 'party';
+    render();
+    const box = q('input[data-change="got"]');
+    ok(box, 'the route lists items to get');
+    const slot = b.gear[state.ui.partyAct].slots[box.dataset.slot];
+    const was = slot.got;
+    await click(box, 'obtained');
+    eq(slot.got, !was);
+    p.members = before;
+  });
+
   // ---------- report ----------
+  const report = () => {
   const failed = results.filter((r) => r[1]);
   document.title = 'TESTS: ' + (results.length - failed.length) + ' passed, ' + failed.length + ' failed';
   const box = document.createElement('div');
@@ -1072,4 +1219,17 @@
   box.innerHTML = '<h1 style="font:600 22px Georgia,serif;color:' + (failed.length ? '#d2604a' : '#6fbf73') + '">' + document.title + '</h1><ol>'
     + results.map(([name, err]) => '<li style="color:' + (err ? '#d2604a' : '#a2947f') + '">' + (err ? 'FAIL' : 'ok') + ' · ' + esc(name) + (err ? '<br><code>' + esc(err) + '</code>' : '') + '</li>').join('') + '</ol>';
   document.body.appendChild(box);
+  };
+  // the flows run one after the other; the page is put back as it was before the report is shown
+  (async () => {
+    document.title = 'TESTS: running the flows…';
+    const kept = { builds: state.builds, parties: clone(state.parties), ui: clone(state.ui) };
+    for (const [name, fn] of flows) {
+      try { await fn(); results.push([name, '']); } catch (err) { results.push([name, String(err && err.message ? err.message : err)]); }
+      if (typeof closeDialog === 'function') closeDialog();
+      Object.assign(state, { builds: kept.builds, parties: clone(kept.parties), ui: clone(kept.ui) });
+    }
+    render();
+    report();
+  })();
 })();
