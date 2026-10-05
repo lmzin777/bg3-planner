@@ -139,8 +139,16 @@ function wizardView(b) {
   const steps = wizSteps(b);
   let i = steps.findIndex((s) => s[0] === state.ui.wizard);
   if (i < 0) i = 0;
+  // levels go in order: the step of a level stays shut while a level before it has something to choose
+  const open = firstOpenLevel(b);
+  const shut = (s) => !!s && !!s[4] && open >= 0 && s[4] - 1 > open;
+  const shutHint = ` disabled title="${t('Finish level {n} first', { n: open + 1 })}"`;
+  if (shut(steps[i])) {
+    const home = (open ? ['lv:' + (open + 1)] : ['level1', 'subclass', 'class']).map((k) => steps.findIndex((s) => s[0] === k)).find((k) => k >= 0);
+    i = home == null ? 0 : home;
+  }
   const [key, title, hint, , n] = steps[i];
-  const chip = (s, k) => `<button class="${k === i ? 'on' : ''}${wizDone(b, s[0]) ? ' done' : ''}${s[4] ? ' lv' : ''}" data-act="wiz-go" data-s="${s[0]}"><i>${s[4] || (s[0] === 'done' ? '✓' : k + 1)}</i>${s[4] ? '' : t(s[1])}</button>`;
+  const chip = (s, k) => `<button class="${k === i ? 'on' : ''}${wizDone(b, s[0]) ? ' done' : ''}${s[4] ? ' lv' : ''}" data-act="wiz-go" data-s="${s[0]}"${shut(s) ? shutHint : ''}><i>${s[4] || (s[0] === 'done' ? '✓' : k + 1)}</i>${s[4] ? '' : t(s[1])}</button>`;
   return `<section class="card hero wiz">
     <div class="wiz-bar">${steps.map((s, k) => (s[4] ? '' : chip(s, k))).join('')}</div>
     ${steps.some((s) => s[4]) ? `<div class="wiz-bar levels-bar"><span class="lbl">${t('Levels')}</span>${steps.map((s, k) => (s[4] ? chip(s, k) : '')).join('')}</div>` : ''}
@@ -149,7 +157,7 @@ function wizardView(b) {
     <div class="modal-btns wiz-nav">
       <button class="btn" data-act="wiz-close">${t('Leave the step by step')}</button>
       <span>${i > 0 ? `<button class="btn" data-act="wiz-go" data-s="${steps[i - 1][0]}">${t('← Back')}</button>` : ''}
-        ${i < steps.length - 1 ? `<button class="btn primary" data-act="wiz-go" data-s="${steps[i + 1][0]}">${t('Next')} →</button>`
+        ${i < steps.length - 1 ? `<button class="btn primary" data-act="wiz-go" data-s="${steps[i + 1][0]}"${shut(steps[i + 1]) ? shutHint : ''}>${t('Next')} →</button>`
           : `<button class="btn primary" data-act="wiz-close">${t('Open in the Build Planner')}</button>`}</span>
     </div>
   </section>`;

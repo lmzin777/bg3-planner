@@ -539,6 +539,8 @@
     f.levels[3].picks.push('Feat: Skilled');
     eq(levelPending(f, 3), ['Skilled: options not chosen']);
     ok(wizDone(b, 'lv:2') && !wizDone(b, 'lv:3'));
+    b.levels[0].picks.push('Draconic Ancestry: Red (Fire)', 'Cantrip: Fire Bolt', 'Cantrip: Light', 'Cantrip: Mage Hand', 'Cantrip: Minor Illusion', 'Spell: Magic Missile', 'Spell: Mage Armour');
+    eq(levelPending(b, 0), [], 'level 1 is complete, so level 2 is open');
     state.ui.wizard = 'lv:2';
     ok(/Twinned Spell/.test(wizardView(b)) && /Nothing left to choose/.test(wizardView(b)), 'the level step renders');
     state.ui.wizard = '';
@@ -688,6 +690,23 @@
     eq(['origin', 'race', 'subrace', 'background'].map((k) => creationOptions(elf, k).length), [ORIGINS.length, 11, 2, 12]);
     ok(creationOptions(elf, 'race').every((o) => /Speed/.test(o[1])) && /Perception/.test(creationOptions(elf, 'race').find((o) => o[0] === 'Elf')[1]) && /Stealth/.test(creationOptions(elf, 'subrace')[1][1]) && /Arcana, History/.test(creationOptions(elf, 'background').find((o) => o[0] === 'Sage')[2]), 'each race, subrace and background says what it gives');
     ok(!/<select data-path="creation\./.test(buildEditor(elf)) && (buildEditor(elf).match(/data-act="creation-open"/g) || []).length === 4);
+  });
+  test('levels are done in order', () => {
+    const b = build(['Fighter', 'Fighter', 'Fighter']);
+    eq(firstOpenLevel(b), 0, 'level 1 still has its fighting style to choose');
+    const html = levelRows(b);
+    eq([(html.match(/class="lvl locked/g) || []).length, (html.match(/class="lvl-lock"/g) || []).length, (html.match(/class="lvl-cls" inert/g) || []).length], [11, 1, 11]);
+    b.levels[0].picks.push('Fighting Style: Defence');
+    eq([firstOpenLevel(b), (levelRows(b).match(/class="lvl locked/g) || []).length], [2, 9], 'Fighter 2 has nothing to choose; Fighter 3 needs its subclass');
+    ok(!/locked/.test(levelRows(b, 5)), 'a single row asked for on its own is never shut');
+    state.ui.wizard = 'lv:5';
+    const view = wizardView(b);
+    ok(/<h1>Level 3<\/h1>/.test(view), 'the step by step goes back to the level that is still open');
+    ok(/data-s="lv:4" disabled/.test(view) && !/data-s="lv:3" disabled/.test(view) && !/data-s="lv:2" disabled/.test(view), 'later level steps are shut, earlier ones are not');
+    b.levels[2].sub = 'Champion';
+    state.ui.wizard = 'lv:3';
+    ok(!/data-s="lv:4" disabled/.test(wizardView(b)), 'level 4 opens once level 3 is complete');
+    state.ui.wizard = '';
   });
   test('base scores move with − and + and stay inside the 27 points', () => {
     const b = build(['Fighter'], { abilities: { str: 15, dex: 15, con: 14, int: 8, wis: 8, cha: 8 } });

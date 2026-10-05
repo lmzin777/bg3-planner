@@ -842,6 +842,12 @@ button.chip:hover { border-color: var(--gold); color: var(--text); }
 .race-cantrip { max-width: 460px; margin-top: 12px; }
 .pslot.off { cursor: default; opacity: .55; }
 .pslot.off:hover { border-color: var(--line); }
+
+/* ---------- levels in order: a level after an incomplete one is read-only ---------- */
+.lvl.locked .lvl-cls, .lvl.locked .lvl-choices, .lvl.locked .lvl-n { opacity: .4; }
+.lvl-choices { display: grid; gap: 6px; min-width: 0; }
+.lvl-lock { margin: 4px 0 10px; padding: 9px 12px; border: 1px dashed var(--gold); border-radius: 8px; color: var(--gold-hi); font-size: 13px; }
+.wiz-bar button:disabled, .wiz-nav button:disabled { opacity: .35; cursor: default; }
 </style>
 </head>
 <body>
@@ -1686,6 +1692,8 @@ window.BG3_I18N = {
     'Choose both, or leave both empty to keep every spell.': 'Escolha as duas, ou deixe as duas vazias para manter todas as spells.',
     'Each class shows the level it would reach here and what that level gives.': 'Cada classe mostra o nível que ela alcançaria aqui e o que esse nível dá.',
     'What each subclass gives at {cls} level {n}.': 'O que cada subclasse dá no nível {n} de {cls}.',
+    'Level {n} still has something to choose ({x}). The levels after it open once it is complete.': 'O nível {n} ainda tem algo a escolher ({x}). Os níveis seguintes abrem quando ele estiver completo.',
+    'Finish level {n} first': 'Termine o nível {n} primeiro',
     // dialogs and toasts
     'Cancel': 'Cancelar',
     'Confirm': 'Confirmar',
@@ -9050,7 +9058,7 @@ window.BG3_IMAGES_LOCAL = false;
 // The scripts are plain (not modules) so the planner also runs from a file opened directly; they share the global scope.
 'use strict';
 
-const APP_VERSION = '2.0';
+const APP_VERSION = '2.1';
 const STORE_KEY = 'bg3planner.v1';
 const PRESETS = window.BG3_PRESETS || [];
 const I18N = window.BG3_I18N || {};
@@ -11034,10 +11042,15 @@ function levelChoicesBlock(b, i, withSub) {
     + (free ? `<div class="picks${l.picks.some((p, j) => !slots.owned.has(j) && p.length > 34) ? ' one' : ''}">${free}</div>` : '');
 }
 
+// Levels are done in order, as in the game: a level opens once every level before it has nothing left to choose.
+// The index of the first level that still has something to choose, or -1 when every level is complete.
+const firstOpenLevel = (b) => b.levels.findIndex((l, i) => levelPending(b, i).length > 0);
+
 // With `only`, just that level's row (the step-by-step creation shows level 1 alone).
 function levelRows(b, only) {
   const info = levelInfo(b);
   const seen = {};
+  const open = only == null ? firstOpenLevel(b) : -1;
   const current = b.current && b.current < charLevel(b) ? b.current : 0;
   return b.levels.map((l, i) => {
     const x = info[i];
@@ -11050,9 +11063,14 @@ function levelRows(b, only) {
     const subSelect = subclassSelect(l, x, i);
     // each gain opens its description; the ones the wiki describes carry it as a tooltip too
     const gain = (g) => { const text = featureText(g); return `<button class="gain${text ? '' : ' plain'}" data-act="gain-info" data-n="${esc(g)}"${text ? ` title="${esc(text)}"` : ''}>${esc(g)}</button>`; };
-    return `<div class="lvl${l.sub.trim() ? ' has-sub' : ''}${current === i + 1 ? ' cur' : ''}${current && i + 1 > current ? ' later' : ''}">
+    // a level after one that is not complete can be read, not changed
+    const locked = open >= 0 && i > open;
+    const lockNote = locked && i === open + 1 ? `<p class="lvl-lock">${t('Level {n} still has something to choose ({x}). The levels after it open once it is complete.',
+      { n: open + 1, x: esc(levelPending(b, open).join(' · ')) })}</p>` : '';
+    const choices = levelChoicesBlock(b, i);
+    return `${lockNote}<div class="lvl${locked ? ' locked' : ''}${l.sub.trim() ? ' has-sub' : ''}${current === i + 1 ? ' cur' : ''}${current && i + 1 > current ? ' later' : ''}">
       <div class="lvl-n">${i + 1}${current === i + 1 ? `<small>${t('now')}</small>` : ''}</div>
-      <div class="lvl-cls">
+      <div class="lvl-cls"${locked ? ' inert' : ''}>
         ${slotButton('class-open', `data-l="${i}"`, l.cls, '', t('— class —'))}
         <small>${l.cls ? esc(l.cls) + ' ' + x.n : ''}</small>
         ${subSelect}
@@ -11061,7 +11079,7 @@ function levelRows(b, only) {
       <div class="lvl-body">
         ${gains.length ? `<p class="lvl-gains"><b>${t('Gains')}</b> ${gains.map(gain).join('')}</p>` : ''}
         ${numbers.length ? `<p class="lvl-nums"><b>${t('Now')}</b> ${numbers.map(esc).join(' · ')}</p>` : ''}
-        ${levelChoicesBlock(b, i)}
+        ${choices ? `<div class="lvl-choices"${locked ? ' inert' : ''}>${choices}</div>` : ''}
       </div>
     </div>${i === 0 || firstOfClass ? classNote(b, i, l.cls) : ''}`;
   }).filter((row, i) => only == null || i === only).join('');
@@ -13135,8 +13153,16 @@ function wizardView(b) {
   const steps = wizSteps(b);
   let i = steps.findIndex((s) => s[0] === state.ui.wizard);
   if (i < 0) i = 0;
+  // levels go in order: the step of a level stays shut while a level before it has something to choose
+  const open = firstOpenLevel(b);
+  const shut = (s) => !!s && !!s[4] && open >= 0 && s[4] - 1 > open;
+  const shutHint = ` disabled title="${t('Finish level {n} first', { n: open + 1 })}"`;
+  if (shut(steps[i])) {
+    const home = (open ? ['lv:' + (open + 1)] : ['level1', 'subclass', 'class']).map((k) => steps.findIndex((s) => s[0] === k)).find((k) => k >= 0);
+    i = home == null ? 0 : home;
+  }
   const [key, title, hint, , n] = steps[i];
-  const chip = (s, k) => `<button class="${k === i ? 'on' : ''}${wizDone(b, s[0]) ? ' done' : ''}${s[4] ? ' lv' : ''}" data-act="wiz-go" data-s="${s[0]}"><i>${s[4] || (s[0] === 'done' ? '✓' : k + 1)}</i>${s[4] ? '' : t(s[1])}</button>`;
+  const chip = (s, k) => `<button class="${k === i ? 'on' : ''}${wizDone(b, s[0]) ? ' done' : ''}${s[4] ? ' lv' : ''}" data-act="wiz-go" data-s="${s[0]}"${shut(s) ? shutHint : ''}><i>${s[4] || (s[0] === 'done' ? '✓' : k + 1)}</i>${s[4] ? '' : t(s[1])}</button>`;
   return `<section class="card hero wiz">
     <div class="wiz-bar">${steps.map((s, k) => (s[4] ? '' : chip(s, k))).join('')}</div>
     ${steps.some((s) => s[4]) ? `<div class="wiz-bar levels-bar"><span class="lbl">${t('Levels')}</span>${steps.map((s, k) => (s[4] ? chip(s, k) : '')).join('')}</div>` : ''}
@@ -13145,7 +13171,7 @@ function wizardView(b) {
     <div class="modal-btns wiz-nav">
       <button class="btn" data-act="wiz-close">${t('Leave the step by step')}</button>
       <span>${i > 0 ? `<button class="btn" data-act="wiz-go" data-s="${steps[i - 1][0]}">${t('← Back')}</button>` : ''}
-        ${i < steps.length - 1 ? `<button class="btn primary" data-act="wiz-go" data-s="${steps[i + 1][0]}">${t('Next')} →</button>`
+        ${i < steps.length - 1 ? `<button class="btn primary" data-act="wiz-go" data-s="${steps[i + 1][0]}"${shut(steps[i + 1]) ? shutHint : ''}>${t('Next')} →</button>`
           : `<button class="btn primary" data-act="wiz-close">${t('Open in the Build Planner')}</button>`}</span>
     </div>
   </section>`;
@@ -13834,7 +13860,7 @@ Object.assign(actions, {
 
 document.addEventListener('click', async (e) => {
   const el = e.target.closest('[data-act]');
-  if (!el || el.disabled) return;
+  if (!el || el.disabled || el.closest('[inert]')) return;  // a shut level row takes no action
   const fn = actions[el.dataset.act];
   if (!fn) return;
   const res = await fn(el);

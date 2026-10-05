@@ -106,10 +106,15 @@ function levelChoicesBlock(b, i, withSub) {
     + (free ? `<div class="picks${l.picks.some((p, j) => !slots.owned.has(j) && p.length > 34) ? ' one' : ''}">${free}</div>` : '');
 }
 
+// Levels are done in order, as in the game: a level opens once every level before it has nothing left to choose.
+// The index of the first level that still has something to choose, or -1 when every level is complete.
+const firstOpenLevel = (b) => b.levels.findIndex((l, i) => levelPending(b, i).length > 0);
+
 // With `only`, just that level's row (the step-by-step creation shows level 1 alone).
 function levelRows(b, only) {
   const info = levelInfo(b);
   const seen = {};
+  const open = only == null ? firstOpenLevel(b) : -1;
   const current = b.current && b.current < charLevel(b) ? b.current : 0;
   return b.levels.map((l, i) => {
     const x = info[i];
@@ -122,9 +127,14 @@ function levelRows(b, only) {
     const subSelect = subclassSelect(l, x, i);
     // each gain opens its description; the ones the wiki describes carry it as a tooltip too
     const gain = (g) => { const text = featureText(g); return `<button class="gain${text ? '' : ' plain'}" data-act="gain-info" data-n="${esc(g)}"${text ? ` title="${esc(text)}"` : ''}>${esc(g)}</button>`; };
-    return `<div class="lvl${l.sub.trim() ? ' has-sub' : ''}${current === i + 1 ? ' cur' : ''}${current && i + 1 > current ? ' later' : ''}">
+    // a level after one that is not complete can be read, not changed
+    const locked = open >= 0 && i > open;
+    const lockNote = locked && i === open + 1 ? `<p class="lvl-lock">${t('Level {n} still has something to choose ({x}). The levels after it open once it is complete.',
+      { n: open + 1, x: esc(levelPending(b, open).join(' · ')) })}</p>` : '';
+    const choices = levelChoicesBlock(b, i);
+    return `${lockNote}<div class="lvl${locked ? ' locked' : ''}${l.sub.trim() ? ' has-sub' : ''}${current === i + 1 ? ' cur' : ''}${current && i + 1 > current ? ' later' : ''}">
       <div class="lvl-n">${i + 1}${current === i + 1 ? `<small>${t('now')}</small>` : ''}</div>
-      <div class="lvl-cls">
+      <div class="lvl-cls"${locked ? ' inert' : ''}>
         ${slotButton('class-open', `data-l="${i}"`, l.cls, '', t('— class —'))}
         <small>${l.cls ? esc(l.cls) + ' ' + x.n : ''}</small>
         ${subSelect}
@@ -133,7 +143,7 @@ function levelRows(b, only) {
       <div class="lvl-body">
         ${gains.length ? `<p class="lvl-gains"><b>${t('Gains')}</b> ${gains.map(gain).join('')}</p>` : ''}
         ${numbers.length ? `<p class="lvl-nums"><b>${t('Now')}</b> ${numbers.map(esc).join(' · ')}</p>` : ''}
-        ${levelChoicesBlock(b, i)}
+        ${choices ? `<div class="lvl-choices"${locked ? ' inert' : ''}>${choices}</div>` : ''}
       </div>
     </div>${i === 0 || firstOfClass ? classNote(b, i, l.cls) : ''}`;
   }).filter((row, i) => only == null || i === only).join('');

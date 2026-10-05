@@ -753,6 +753,8 @@ window.BG3_I18N = {
     'Choose both, or leave both empty to keep every spell.': 'Escolha as duas, ou deixe as duas vazias para manter todas as spells.',
     'Each class shows the level it would reach here and what that level gives.': 'Cada classe mostra o nível que ela alcançaria aqui e o que esse nível dá.',
     'What each subclass gives at {cls} level {n}.': 'O que cada subclasse dá no nível {n} de {cls}.',
+    'Level {n} still has something to choose ({x}). The levels after it open once it is complete.': 'O nível {n} ainda tem algo a escolher ({x}). Os níveis seguintes abrem quando ele estiver completo.',
+    'Finish level {n} first': 'Termine o nível {n} primeiro',
     // dialogs and toasts
     'Cancel': 'Cancelar',
     'Confirm': 'Confirmar',

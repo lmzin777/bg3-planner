@@ -835,3 +835,9 @@ button.chip:hover { border-color: var(--gold); color: var(--text); }
 .race-cantrip { max-width: 460px; margin-top: 12px; }
 .pslot.off { cursor: default; opacity: .55; }
 .pslot.off:hover { border-color: var(--line); }
+
+/* ---------- levels in order: a level after an incomplete one is read-only ---------- */
+.lvl.locked .lvl-cls, .lvl.locked .lvl-choices, .lvl.locked .lvl-n { opacity: .4; }
+.lvl-choices { display: grid; gap: 6px; min-width: 0; }
+.lvl-lock { margin: 4px 0 10px; padding: 9px 12px; border: 1px dashed var(--gold); border-radius: 8px; color: var(--gold-hi); font-size: 13px; }
+.wiz-bar button:disabled, .wiz-nav button:disabled { opacity: .35; cursor: default; }

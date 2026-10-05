@@ -267,7 +267,7 @@ Object.assign(actions, {
 
 document.addEventListener('click', async (e) => {
   const el = e.target.closest('[data-act]');
-  if (!el || el.disabled) return;
+  if (!el || el.disabled || el.closest('[inert]')) return;  // a shut level row takes no action
   const fn = actions[el.dataset.act];
   if (!fn) return;
   const res = await fn(el);
