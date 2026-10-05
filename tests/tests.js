@@ -703,6 +703,7 @@
     const view = wizardView(b);
     ok(/<h1>Level 3<\/h1>/.test(view), 'the step by step goes back to the level that is still open');
     ok(/data-s="lv:4" disabled/.test(view) && !/data-s="lv:3" disabled/.test(view) && !/data-s="lv:2" disabled/.test(view), 'later level steps are shut, earlier ones are not');
+    ok(!/class="[^"]*done[^"]*" data-act="wiz-go" data-s="lv:(?:[4-9]|1[0-2])"/.test(view) && /class="[^"]*done[^"]*" data-act="wiz-go" data-s="lv:2"/.test(view), 'a shut level is never shown as done');
     b.levels[2].sub = 'Champion';
     state.ui.wizard = 'lv:3';
     ok(!/data-s="lv:4" disabled/.test(wizardView(b)), 'level 4 opens once level 3 is complete');
