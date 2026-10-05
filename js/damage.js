@@ -97,7 +97,8 @@ function spellHits(s, level) {
       if (level >= Number(m[1]) && Number(m[1]) > at) { at = Number(m[1]); text = m[2].trim(); }
     }
   }
-  if (!text || /weapon/i.test(text)) return null;
+  // Hex and Divine Favour add their die to weapon hits while they last: not damage of their own cast
+  if (!text || /weapon/i.test(text) || /^(?:hex|divine favour)$/i.test(s.n)) return null;
   let beams = 1;
   for (const m of String(s.hl || '').matchAll(/(\d+) beams at character level (\d+)/gi)) if (level >= Number(m[2])) beams = Math.max(beams, Number(m[1]));
   const parts = text.split(/,\s*(?![^()]*\))/).map((x) => {

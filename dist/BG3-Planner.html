@@ -11642,7 +11642,7 @@ window.BG3_DATA_DATES = {
 // The scripts are plain (not modules) so the planner also runs from a file opened directly; they share the global scope.
 'use strict';
 
-const APP_VERSION = '3.0';
+const APP_VERSION = '3.1';
 const STORE_KEY = 'bg3planner.v1';
 const PRESETS = window.BG3_PRESETS || [];
 const I18N = window.BG3_I18N || {};
@@ -15866,7 +15866,8 @@ function spellHits(s, level) {
       if (level >= Number(m[1]) && Number(m[1]) > at) { at = Number(m[1]); text = m[2].trim(); }
     }
   }
-  if (!text || /weapon/i.test(text)) return null;
+  // Hex and Divine Favour add their die to weapon hits while they last: not damage of their own cast
+  if (!text || /weapon/i.test(text) || /^(?:hex|divine favour)$/i.test(s.n)) return null;
   let beams = 1;
   for (const m of String(s.hl || '').matchAll(/(\d+) beams at character level (\d+)/gi)) if (level >= Number(m[2])) beams = Math.max(beams, Number(m[1]));
   const parts = text.split(/,\s*(?![^()]*\))/).map((x) => {
