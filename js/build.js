@@ -97,7 +97,8 @@ function buildEditor(b) {
     </section>`)}
 
     ${sec('levels', () => `<section class="card">
-      <div class="check-head"><h2>${t('Level progression')}</h2><span></span>
+      <div class="check-head"><h2>${t('Level progression')}</h2><span>${b.levels.some((l) => (l.notes || []).length)
+        ? `<button class="btn tiny" data-act="notes-clear">${t('Remove the {n} line(s) that do not count', { n: b.levels.reduce((a, l) => a + (l.notes || []).length, 0) })}</button>` : ''}</span>
         <button class="btn tiny" data-act="wiz-levels">${t('Level up step by step')}</button></div>
       <div class="levels">${levelRows(b)}</div>
     </section>`)}

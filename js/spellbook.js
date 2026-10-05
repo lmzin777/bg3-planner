@@ -55,10 +55,12 @@ function spellbook(b, act, stats) {
     const chosen = current.filter((x) => x.cls === cls);
     const granted = [...new Set(info.filter((x) => x.cls === cls).flatMap(levelGains))].filter((g) => SPELL_BY_NAME.has(norm(g)));
     const bonus = b.levels.filter((l, i) => info[i].cls === cls).flatMap((l) => l.picks).map((p) => /^bonus cantrip\s*:\s*(.+)$/i.exec(p.trim())).filter(Boolean).map((m) => m[1].trim());
-    if (!chosen.length && !granted.length && !bonus.length) return;
+    const ready = PREPARES.includes(cls) ? (b.prepared || {})[cls] || [] : [];
+    if (!chosen.length && !granted.length && !bonus.length && !ready.length) return;
     const prepared = stats.casting.find((c) => c.label === (caster && (caster.sub || caster.cls)));
     const g = group(caster ? caster.sub || cls : cls, ability, prepared && prepared.prepared ? t('prepares {n} of its spells at a time', { n: prepared.prepared }) : '');
-    chosen.forEach((x) => put(g, x.name, t('chosen')));
+    chosen.forEach((x) => put(g, x.name, (x.scroll ? t('learned from a scroll') : t('chosen')) + (ready.includes(x.name) ? ' · ' + t('prepared') : '')));
+    ready.forEach((name) => put(g, name, t('prepared')));
     bonus.forEach((name) => put(g, name, t('bonus cantrip')));
     granted.forEach((name) => put(g, name, t('always prepared · {sub}', { sub: sub ? subLabel(sub) : cls })));
   });
@@ -104,8 +106,10 @@ function spellbookCard(b) {
     return `<div class="sb-row"${s ? ` title="${esc(s.d || '')}"` : ''}>${s ? pic(s.i, 'pic small') : '<span class="pic small none"></span>'}
       <b>${esc(x.name)}</b><small>${esc(facts)}</small><i>${esc(x.source)}</i></div>`;
   };
+  const prep = preparedSlots(b);
   return `<section class="card">
     <h2>${t('Spellbook')}</h2>
+    ${prep ? `<div class="lslots prep">${prep}</div>` : ''}
     ${groups.length ? `${slots || pact ? `<p class="points">${[slots, pact].filter(Boolean).join(' · ')}</p>` : ''}
       ${groups.map((g) => `<div class="sb-group"><h3 class="group">${esc(g.title)}${g.ability ? ` <span>${abilityShort(g.ability)} ${signed(stats.mods[g.ability])} · ${t('Spell save DC')} ${g.dc} · ${t('Spell attack')} ${signed(g.attack)}</span>` : ''}</h3>
         ${g.note ? `<p class="muted">${esc(g.note)}</p>` : ''}<div class="sb-list">${g.spells.map(row).join('')}</div></div>`).join('')}

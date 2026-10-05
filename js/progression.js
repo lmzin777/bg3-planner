@@ -90,21 +90,18 @@ function subclassSelect(l, x, i) {
   if (!picksSubclass(x) && !l.sub.trim()) return '';
   return slotButton('sub-open', `data-l="${i}"`, l.sub, '', t('— subclass —'));
 }
-// What a level chooses: one select per choice it grants. Lines of text that are not one of those choices (kept
-// from ready-made builds and older versions) show under them and can only be edited or removed.
+// What a level chooses: one slot per choice it grants.
 function levelChoicesBlock(b, i, withSub) {
   const l = b.levels[i];
   const x = levelInfo(b)[i];
   const slots = levelSlots(b, i);
   const sub = withSub ? subclassSelect(l, x, i) : '';
   const cells = (sub ? `<div class="lslot${l.sub.trim() ? '' : ' open'}"><span class="lslot-l">${t('Subclass')}</span>${sub}</div>` : '') + slotCells(b, i, slots);
-  const free = l.picks.map((p, j) => slots.owned.has(j) ? '' :
-    `<div class="pick"><input type="text" data-path="levels.${i}.picks.${j}" value="${esc(p)}" aria-label="${t('Note')}">
-      <button class="icon" data-act="wiki" title="${t('Search the wiki')}">↗</button>
-      <button class="icon x" data-act="pick-del" data-l="${i}" data-i="${j}" title="${t('Remove')}">×</button></div>`).join('');
-  return (cells ? `<div class="lslots">${cells}</div>` : '')
-    + (free ? `<div class="picks${l.picks.some((p, j) => !slots.owned.has(j) && p.length > 34) ? ' one' : ''}">${free}</div>` : '');
+  return cells ? `<div class="lslots">${cells}</div>` : '';
 }
+// Lines of a level that are not one of its choices: kept to be read, never counted, removed with the ×.
+const levelNotes = (b, i) => ((b.levels[i].notes || []).length ? `<div class="lnotes">${b.levels[i].notes.map((p, j) =>
+  `<div class="lnote"><span>${esc(p)}</span><i>${t('does not count')}</i><button class="icon x" data-act="note-del" data-l="${i}" data-i="${j}" title="${t('Remove')}">×</button></div>`).join('')}</div>` : '');
 
 // Levels are done in order, as in the game: a level opens once every level before it has nothing left to choose.
 // The index of the first level that still has something to choose, or -1 when every level is complete.
@@ -144,6 +141,7 @@ function levelRows(b, only) {
         ${gains.length ? `<p class="lvl-gains"><b>${t('Gains')}</b> ${gains.map(gain).join('')}</p>` : ''}
         ${numbers.length ? `<p class="lvl-nums"><b>${t('Now')}</b> ${numbers.map(esc).join(' · ')}</p>` : ''}
         ${choices ? `<div class="lvl-choices"${locked ? ' inert' : ''}>${choices}</div>` : ''}
+        ${levelNotes(b, i)}
       </div>
     </div>${i === 0 || firstOfClass ? classNote(b, i, l.cls) : ''}`;
   }).filter((row, i) => only == null || i === only).join('');

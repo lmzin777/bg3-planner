@@ -132,6 +132,7 @@ function wizLevel(b, i) {
     ${gains.length ? `<h3 class="group">${t('This level gives')}</h3><ul class="wiz-gains">${gains.map((g) => `<li><b>${esc(g)}</b> ${esc(featureText(g))}</li>`).join('')}</ul>` : ''}
     <h3 class="group">${t('Choices of this level')}</h3>
     ${levelChoicesBlock(b, i, true) || `<p class="muted">${t('This level has nothing to choose.')}</p>`}
+    ${levelNotes(b, i)}
     ${pending.length ? `<p class="points"><b class="warn">${t('Still to choose')}:</b> ${esc(pending.join(' · '))}</p>` : `<p class="okline">${t('Nothing left to choose at this level.')}</p>`}`;
 }
 

@@ -755,6 +755,21 @@ window.BG3_I18N = {
     'What each subclass gives at {cls} level {n}.': 'O que cada subclasse dá no nível {n} de {cls}.',
     'Level {n} still has something to choose ({x}). The levels after it open once it is complete.': 'O nível {n} ainda tem algo a escolher ({x}). Os níveis seguintes abrem quando ele estiver completo.',
     'Finish level {n} first': 'Termine o nível {n} primeiro',
+    // one source of truth, prepared spells
+    'does not count': 'não conta',
+    'Remove the {n} line(s) that do not count': 'Remover a(s) {n} linha(s) que não conta(m)',
+    'Prepared spells': 'Spells preparadas',
+    'Learned from scrolls': 'Aprendidas de pergaminhos',
+    'prepared': 'preparada',
+    'learned from a scroll': 'aprendida de pergaminho',
+    'A Wizard prepares from the spells it has learned.': 'O Wizard prepara entre as spells que aprendeu.',
+    'Spells the subclass keeps always prepared are not listed: they do not use a place.': 'As spells que a subclasse mantém sempre preparadas não aparecem: elas não ocupam vaga.',
+    'Wizard spells copied from scrolls, on top of the ones learned level by level.': 'Spells de Wizard copiadas de pergaminhos, além das aprendidas nível a nível.',
+    '{build} has no free place to learn {x} with that class': '{build} não tem vaga para aprender {x} com essa classe',
+    '{feat} is taken twice, at levels {a} and {b}': '{feat} foi escolhido duas vezes, nos níveis {a} e {b}',
+    '{cls}: {n} spells prepared, it can prepare {max}': '{cls}: {n} spells preparadas, o limite é {max}',
+    '{n} line(s) in the levels are not a choice of their level and do not count': '{n} linha(s) nos níveis não são escolha do nível e não contam',
+
     // dialogs and toasts
     'Cancel': 'Cancelar',
     'Confirm': 'Confirmar',

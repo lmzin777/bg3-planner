@@ -108,6 +108,12 @@ function buildIssues(b) {
         }
       });
     });
+    // the same feat twice is not possible in the game (Ability Improvement is)
+    const feats = featsTaken(b).filter((y) => y.name !== 'Ability Improvement');
+    feats.forEach((y, k) => { const first = feats.findIndex((z) => z.name === y.name); if (first < k) add('warn', progression, t('{feat} is taken twice, at levels {a} and {b}', { feat: y.name, a: feats[first].level + 1, b: y.level + 1 })); });
+    Object.keys(b.prepared || {}).forEach((cls) => { const max = preparedMax(b, cls); if (b.prepared[cls].length > max) add('warn', progression, t('{cls}: {n} spells prepared, it can prepare {max}', { cls, n: b.prepared[cls].length, max })); });
+    const loose = b.levels.reduce((a, l) => a + (l.notes || []).length, 0);
+    if (loose) add('note', progression, t('{n} line(s) in the levels are not a choice of their level and do not count', { n: loose }));
     // notes, not errors: a spell granted by race or feat may be written among the choices, and a planner
     // does not have to list every spell a wizard will learn
     knownSpells(b).forEach((k) => {

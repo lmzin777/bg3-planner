@@ -167,15 +167,16 @@ function levelSpellLists(b, i, sp) {
   const sub = subLabel(x.sub);
   const max = maxSpellLevel(b, i);
   const every = levelGains(x).some((g) => /magical secrets/i.test(g));  // Magical Secrets takes spells from every class
+  const arcanum = levelGains(x).some((g) => /mystic arcanum/i.test(g));  // the spell a Warlock learns at 11 is a level 6 one
   const here = new Set([...sp.cantrip, ...sp.spell, sp.swap ? sp.swap.name : ''].map(norm));
   // known through the class, or through the race, a bonus cantrip or a feat (those carry no class)
   const known = new Set(currentSpells(b).filter((y) => y.cls === x.cls || !y.cls).map((y) => norm(y.name)));
   const pool = SPELLS.filter((s) => (every ? (s.cl || []).length : (s.cl || []).includes(learn.list) || (s.lr || []).some(([who]) => who === sub))
     && (here.has(norm(s.n)) || !known.has(norm(s.n)))).sort((p, q) => p.lv - q.lv || p.n.localeCompare(q.n));
-  const reach = pool.filter((s) => s.lv && (max <= 0 || s.lv <= max));
+  const reach = pool.filter((s) => (arcanum ? s.lv === 6 : s.lv && (max <= 0 || s.lv <= max)));
   const inSchool = (s) => !learn.schools || learn.schools.includes(s.sc);
   const off = (name) => { const s = SPELL_BY_NAME.get(norm(name)); return s && !inSchool(s) ? 1 : 0; };
-  return { cantrips: pool.filter((s) => !s.lv), reach, school: reach.filter(inSchool), bound: learn.schools ? learn.spells - (learn.any || 0) : learn.spells,
+  return { arcanum, cantrips: pool.filter((s) => !s.lv), reach, school: reach.filter(inSchool), bound: learn.schools ? learn.spells - (learn.any || 0) : learn.spells,
     // Eldritch Knights and Arcane Tricksters: spells of their schools first, the free picks last
     order: (names) => (learn.schools ? names.slice().sort((p, q) => off(p) - off(q)) : names) };
 }
@@ -224,7 +225,7 @@ function slotCells(b, i, slots) {
     for (let k = 0; k < learn.cantrips; k++) out.push(spellCell('Cantrip' + (learn.cantrips > 1 ? ' ' + (k + 1) : ''), 'cantrip', sp.cantrip[k] || ''));
     const chosen = lists.order(sp.spell);
     for (let k = 0; k < learn.spells; k++) {
-      out.push(spellCell('Spell' + (learn.spells > 1 ? ' ' + (k + 1) : '') + (learn.schools ? ' · ' + (k >= lists.bound ? t('any school') : learn.schools.join(' / ')) : ''), 'spell', chosen[k] || ''));
+      out.push(spellCell((lists.arcanum ? 'Mystic Arcanum' : 'Spell') + (learn.spells > 1 ? ' ' + (k + 1) : '') + (learn.schools ? ' · ' + (k >= lists.bound ? t('any school') : learn.schools.join(' / ')) : ''), 'spell', chosen[k] || ''));
     }
     if (sp.swap && swapOlds(b, i, sp).length) {
       out.push(cell(t('Replace a known spell (optional)'),
@@ -295,6 +296,121 @@ function openFeatOptions(level) {
     if (cur && cur.j >= 0) now.levels[level].picks[cur.j] = text; else now.levels[level].picks.push(text);
   });
 }
+// ---------- one source of truth ----------
+// Every number reads the lines of the levels, so a line must be a choice its level really grants. Whatever is
+// not (left behind by a change of class, written by an older version) is first offered a place in another level
+// of the same class that has room for it — the choices follow the class when its levels shift — and otherwise
+// becomes a note of the level: shown, never counted.
+const featsTaken = (b) => b.levels.map((l, level) => ({ level, name: (levelSlots(b, level).feat || {}).name || '' })).filter((y) => y.name);
+function placeLine(b, x) {
+  const info = levelInfo(b);
+  const text = x.text;
+  const levelsOf = (cls) => info.map((y, k) => k).filter((k) => info[k].cls === cls);
+  const m = /^(?:prepared\s+)?(spell|cantrip)s?\s*:\s*([^(]+?)\s*(?:\((.*)\))?\s*$/i.exec(text);
+  if (m) {
+    const s = SPELL_BY_NAME.get(norm(m[2]));
+    // a line with an alternative or a remark ("… (optional)") is a note, not a decision
+    if (!s || !x.cls || m[3]) return false;
+    if (currentSpells(b).some((y) => y.cls === x.cls && norm(y.name) === norm(s.n))) return true;  // known already: nothing to add
+    const kind = s.lv ? 'spell' : 'cantrip';
+    const j = levelsOf(x.cls).find((k) => {
+      const sp = levelSlots(b, k).spells;
+      if (!sp || sp[kind].length >= (s.lv ? sp.learn.spells : sp.learn.cantrips)) return false;
+      const lists = levelSpellLists(b, k, sp);
+      return (s.lv ? lists.reach : lists.cantrips).some((y) => y.n === s.n);
+    });
+    if (j != null) { b.levels[j].picks.push((s.lv ? 'Spell: ' : 'Cantrip: ') + s.n); return true; }
+    if (!s.lv || !PREPARES.includes(x.cls)) return false;
+    // a class that prepares does not learn spells level by level: the line was a spell it plans to keep ready
+    if (!(x.cls === 'Wizard' ? scrollOptions(b) : preparedOptions(b, x.cls)).some((y) => y.n === s.n)) return false;
+    if (x.cls === 'Wizard') { if (!b.scrolls.includes(s.n)) b.scrolls.push(s.n); } else { const list = b.prepared[x.cls] || (b.prepared[x.cls] = []); if (!list.includes(s.n)) list.push(s.n); }
+    return true;
+  }
+  let j;
+  if (/^feats?\s*:/i.test(text)) {
+    const all = info.map((y, k) => k).filter((k) => info[k].cls);
+    j = [...all.filter((k) => info[k].cls === x.cls), ...all].find((k) => { const f = levelSlots(b, k).feat; return f && f.j < 0; });
+  } else if (/^expertise\b/i.test(text)) {
+    j = levelsOf(x.cls).find((k) => { const e = levelSlots(b, k).expertise; return e && e.j < 0; });
+  } else {
+    const group = CHOICES.find((g) => prefixRe(g.name).test(text));
+    if (group) j = levelsOf(x.cls).find((k) => levelSlots(b, k).choices.some((sl) => sl.c.group.name === group.name && sl.entries.length < sl.c.n));
+  }
+  if (j == null) return false;
+  b.levels[j].picks.push(text);
+  return true;
+}
+// Returns how many lines it had to move.
+function tidyBuild(b) {
+  b.prepared = b.prepared || {};
+  b.scrolls = b.scrolls || [];
+  const loose = [];
+  b.levels.forEach((l, i) => {
+    l.notes = l.notes || [];
+    if (!l.picks.length) return;
+    const owned = levelSlots(b, i).owned;
+    if (owned.size === l.picks.length) return;
+    l.picks.forEach((p, j) => { if (!owned.has(j) && p.trim()) loose.push({ i, text: p.trim(), cls: l.cls }); });
+    l.picks = l.picks.filter((p, j) => owned.has(j));
+  });
+  // a line that only names what the class gives by itself ("Extra Attack", "Sneak Attack 2d6") says nothing new
+  const given = {};
+  const automatic = (x) => {
+    if (!x.cls) return false;
+    const names = given[x.cls] || (given[x.cls] = new Set(levelInfo(b).filter((y) => y.cls === x.cls).flatMap(levelGains).map(norm)));
+    const spell = /^(?:prepared\s+)?(?:spell|cantrip)s?\s*:\s*([^(]+?)\s*$/i.exec(x.text);
+    if (spell && names.has(norm(spell[1]))) return true;  // a spell the subclass keeps always prepared
+    const bare = x.text.replace(/\s+\d+d\d+$/, '');
+    return (names.has(norm(bare)) || FEATURES[bare] != null) && !/^(?:feat|spell|cantrip|expertise|subclass|fighting style)s?$/i.test(bare);
+  };
+  loose.forEach((x) => { if (!placeLine(b, x) && !automatic(x)) b.levels[x.i].notes.push(x.text); });
+  // prepared and scroll spells are kept only while they can be prepared or copied
+  const levels = classLevels(b);
+  Object.keys(b.prepared).forEach((cls) => {
+    const ok = levels[cls] && PREPARES.includes(cls) ? new Set(preparedOptions(b, cls).map((s) => s.n)) : new Set();
+    b.prepared[cls] = [...new Set(b.prepared[cls])].filter((n) => ok.has(n));
+    if (!b.prepared[cls].length) delete b.prepared[cls];
+  });
+  if (b.scrolls.length) { const ok = new Set(levels.Wizard ? scrollOptions(b).map((s) => s.n) : []); b.scrolls = [...new Set(b.scrolls)].filter((n) => ok.has(n)); }
+  return loose.length;
+}
+const tidyAll = () => (state && state.builds ? state.builds.reduce((n, b) => n + tidyBuild(b), 0) : 0);
+
+// ---------- prepared spells ----------
+const bySpellLevel = (p, q) => p.lv - q.lv || p.n.localeCompare(q.n);
+// What a preparing class may keep ready: for a Wizard the spells it has learned; for the others any spell of
+// their list they have slots for, except the ones the subclass keeps always prepared.
+function preparedOptions(b, cls) {
+  const info = levelInfo(b);
+  const last = info.map((y) => y.cls).lastIndexOf(cls);
+  if (last < 0) return [];
+  if (cls === 'Wizard') return currentSpells(b).filter((y) => y.cls === 'Wizard' && !y.cantrip).map((y) => SPELL_BY_NAME.get(norm(y.name))).filter(Boolean).sort(bySpellLevel);
+  const max = maxSpellLevel(b, last);
+  const sub = subLabel(info[last].sub);
+  const always = new Set(info.filter((y) => y.cls === cls).flatMap(levelGains).map(norm));
+  return SPELLS.filter((s) => s.lv && s.lv <= max && ((s.cl || []).includes(cls) || (s.lr || []).some(([who]) => who === sub)) && !always.has(norm(s.n))).sort(bySpellLevel);
+}
+// Wizard spells that can be copied from a scroll: of a level the Wizard has slots for, not learned by levelling.
+function scrollOptions(b) {
+  const last = levelInfo(b).map((y) => y.cls).lastIndexOf('Wizard');
+  if (last < 0) return [];
+  const max = maxSpellLevel(b, last);
+  const learned = new Set(currentSpells(b).filter((y) => y.cls === 'Wizard' && !y.scroll).map((y) => norm(y.name)));
+  return SPELLS.filter((s) => s.lv && s.lv <= max && (s.cl || []).includes('Wizard') && !learned.has(norm(s.n))).sort(bySpellLevel);
+}
+// How many spells the class prepares: its level plus the modifier of its spellcasting ability, at least 1.
+const preparedMax = (b, cls) => ((finalStats(b, state.ui.act || 'act1').casting.find((c) => c.cls === cls) || {}).prepared || 0);
+// The buttons of the Spellbook card that open those lists.
+function preparedSlots(b) {
+  const levels = classLevels(b);
+  const cell = (label, act, attrs, value, open) => `<div class="lslot${open ? ' open' : ''}"><span class="lslot-l">${label}</span>${slotButton(act, attrs, value)}</div>`;
+  return PREPARES.filter((cls) => levels[cls] && preparedOptions(b, cls).length + (cls === 'Wizard' ? scrollOptions(b).length : 0)).map((cls) => {
+    const n = ((b.prepared || {})[cls] || []).length;
+    return cell(`${cls} · ${t('Prepared spells')}`, 'prepared-open', `data-c="${cls}"`, t('{n} of {max}', { n, max: preparedMax(b, cls) }), !n)
+      + (cls === 'Wizard' ? cell(`Wizard · ${t('Learned from scrolls')}`, 'scrolls-open', '', String((b.scrolls || []).length), false) : '');
+  }).join('');
+}
+
 // ---------- the chooser: a dialog that picks n options out of one or more lists ----------
 // dlg.parts = [{ label, n, min, options: [[name, description]], chosen: [], off: [names that cannot be taken] }]
 function chooserList() {
@@ -451,6 +567,26 @@ document.addEventListener('change', (e) => {
 Object.assign(actions, {
   'perm-toggle'() { state.ui.permOpen = !state.ui.permOpen; },
   'feat-options'(el) { openFeatOptions(+el.dataset.l); return false; },
+  'note-del'(el) { curBuild().levels[+el.dataset.l].notes.splice(+el.dataset.i, 1); },
+  'notes-clear'() { curBuild().levels.forEach((l) => { l.notes = []; }); },
+  // the spells a class keeps prepared: any of its list, up to its level plus the ability modifier
+  'prepared-open'(el) {
+    const cls = el.dataset.c;
+    const b = curBuild();
+    const max = preparedMax(b, cls);
+    openChooser(`${cls} · ${t('Prepared spells')}`, cls === 'Wizard' ? t('A Wizard prepares from the spells it has learned.') : t('Spells the subclass keeps always prepared are not listed: they do not use a place.'),
+      [{ label: t('Prepared spells'), n: max, min: 0, options: preparedOptions(b, cls).map((s) => spellRow(s, true)), chosen: ((b.prepared || {})[cls] || []).slice(0, max) }],
+      (done) => { const now = curBuild(); now.prepared[cls] = done[0].chosen.slice(); });
+    return false;
+  },
+  'scrolls-open'() {
+    const b = curBuild();
+    const options = scrollOptions(b);
+    openChooser(`Wizard · ${t('Learned from scrolls')}`, t('Wizard spells copied from scrolls, on top of the ones learned level by level.'),
+      [{ label: t('Learned from scrolls'), n: Math.max(1, options.length), min: 0, options: options.map((s) => spellRow(s, true)), chosen: (b.scrolls || []).slice() }],
+      (done) => { curBuild().scrolls = done[0].chosen.slice(); });
+    return false;
+  },
   // the class of a level: each class with the level it would reach there and what that level gives
   'class-open'(el) {
     const level = +el.dataset.l;
@@ -520,8 +656,9 @@ Object.assign(actions, {
     const level = +el.dataset.l;
     const f = levelSlots(curBuild(), level).feat;
     if (!f) return false;
+    const off = featsTaken(curBuild()).filter((y) => y.level !== level && y.name !== 'Ability Improvement').map((y) => y.name);
     openChooser(t('Feats'), t('Choose the feat for level {n}.', { n: level + 1 }),
-      [{ label: t('Feat'), n: 1, min: 0, options: FEATS.map(([n, d]) => [n, d]), chosen: f.name ? [f.name] : [] }], (done) => {
+      [{ label: t('Feat'), n: 1, min: 0, off, options: FEATS.map(([n, d]) => [n, d]), chosen: f.name ? [f.name] : [] }], (done) => {
         const name = done[0].chosen[0] || '';
         if (name === f.name) return;
         writeSlot(curBuild(), level, 'feat', [name]);

@@ -162,7 +162,6 @@ Object.assign(actions, {
     else return false;
     c.skills = list.join(', ');
   },
-  'pick-del'(el) { curBuild().levels[+el.dataset.l].picks.splice(+el.dataset.i, 1); },
   act(el) { state.ui.act = el.dataset.k; },
   'sec-toggle'(el) { const closed = state.ui.closed || (state.ui.closed = {}); closed[el.dataset.s] = !closed[el.dataset.s]; },
   // jump to a section of the build page, opening it when it was folded
@@ -339,5 +338,8 @@ document.addEventListener('change', (e) => {
   render();
 });
 
+// builds saved by older versions: a copy is kept, then every line finds its place or becomes a note
+takeSnapshot();
+if (tidyAll()) save();
 render();
 importFromAddress();

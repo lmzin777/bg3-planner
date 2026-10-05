@@ -778,6 +778,67 @@
     ok(/9 m radius/.test(SPELL_BY_NAME.get('dancing lights').d) && /weapon damage \+ 1d8 Thunder/.test(SPELL_BY_NAME.get('booming blade').hl));
     ok(CLASS_DATA.Cleric.subclasses['War Domain'][1].includes('Gain Martial Weapons proficiency') && CLASS_DATA.Bard.subclasses['College of Valour'][3].includes('Martial Weapons Proficiency'));
   });
+  test('only the choices a level grants count: the rest finds its place or becomes a note', () => {
+    const dex = { abilities: { str: 10, dex: 15, con: 14, int: 8, wis: 14, cha: 10 }, plus2: 'dex', plus1: 'wis' };
+    const b = build(['Ranger'], dex);
+    b.gear.act1.slots.rangedMain.name = 'Longbow';
+    const numbers = () => { const st = finalStats(b, 'act1'); return [st.attacks.rows.find((r) => r.slot === 'rangedMain').attackTotal, st.hp, st.initiative]; };
+    const clean = numbers();
+    // a fighting style Ranger 1 has not earned, a feat level 1 does not give, an undecided feat, a remark
+    b.levels[0].picks.push('Fighting Style: Archery', 'Feat: Tough', 'Feat (choose): Alert or Tough', 'ask the party first');
+    ok(String(numbers()) !== String(clean), 'before tidying, loose lines would move the numbers');
+    eq(tidyBuild(b), 4);
+    eq([b.levels[0].picks, b.levels[0].notes, numbers()], [[], ['Fighting Style: Archery', 'Feat: Tough', 'Feat (choose): Alert or Tough', 'ask the party first'], clean]);
+    eq(tidyBuild(b), 0, 'nothing left to move the second time');
+    ok(/class="lnote"/.test(levelRows(b)) && /does not count/.test(levelRows(b)) && buildIssues(b).some((x) => /4 line\(s\)/.test(x.text)), 'notes are shown and listed in the build check');
+
+    // the class levels shift: the choices follow the class to the level that now grants them
+    const r = build(['Ranger', 'Ranger', 'Ranger'], dex);
+    r.levels[1].picks.push('Fighting Style: Archery', 'Spell: Longstrider', "Spell: Hunter's Mark", 'Extra Attack');
+    r.levels[0].cls = 'Cleric';
+    tidyBuild(r);
+    eq([r.levels[1].picks, r.levels[2].picks, r.levels.flatMap((l) => l.notes)], [[], ['Fighting Style: Archery', 'Spell: Longstrider', "Spell: Hunter's Mark"], []], 'Ranger 2 moved from level 2 to level 3; a line that only names a feature is dropped');
+
+    // classes that prepare: their spell lines are spells kept ready, not spells learned
+    const c = build(['Cleric', 'Cleric', 'Cleric'], { abilities: { str: 10, dex: 12, con: 14, int: 8, wis: 15, cha: 13 }, plus2: 'wis' });
+    c.levels[0].sub = 'Life Domain';
+    c.levels[0].picks.push('Spell: Healing Word', 'Prepared Spell: Guiding Bolt', 'Spell: Fireball', 'Spell: Bless', 'Spell: Sanctuary (optional)');
+    tidyBuild(c);
+    eq([c.prepared, c.levels[0].notes], [{ Cleric: ['Healing Word', 'Guiding Bolt'] }, ['Spell: Fireball', 'Spell: Sanctuary (optional)']], 'Bless is always prepared by the Life Domain; Fireball is not a Cleric spell');
+    const stats = finalStats(c, 'act1');
+    eq([preparedMax(c, 'Cleric'), stats.casting[0].prepared], [6, 6], 'Cleric 3 with Wisdom 17: 3 + 3');
+    const book = spellbook(c, 'act1', stats).find((g) => g.title === 'Life Domain' || g.title === 'Cleric');
+    eq(book.spells.filter((x) => x.source === 'prepared').map((x) => x.name), ['Guiding Bolt', 'Healing Word']);
+    ok(/data-act="prepared-open"/.test(preparedSlots(c)) && !preparedOptions(c, 'Cleric').some((x) => x.n === 'Bless' || x.lv > 2), 'the list: Cleric spells it has slots for, without the always prepared ones');
+    c.prepared.Cleric = preparedOptions(c, 'Cleric').slice(0, 8).map((x) => x.n);
+    ok(buildIssues(c).some((x) => /8 spells prepared, it can prepare 6/.test(x.text)));
+    c.levels.forEach((l) => { l.cls = 'Fighter'; });
+    tidyBuild(c);
+    eq(c.prepared, {}, 'no Cleric levels, nothing prepared');
+
+    // a Wizard: learned level by level, plus the scrolls
+    const w = build(['Wizard', 'Wizard', 'Wizard', 'Wizard', 'Wizard']);
+    w.scrolls = ['Fireball', 'Cone of Cold', 'Cure Wounds'];
+    tidyBuild(w);
+    eq(w.scrolls, ['Fireball'], 'level 3 spells at Wizard 5; not level 5 ones, not other lists');
+    ok(preparedOptions(w, 'Wizard').some((x) => x.n === 'Fireball') && currentSpells(w).some((x) => x.name === 'Fireball' && x.scroll));
+
+    // the same feat twice
+    const f = build(Array(8).fill('Fighter'));
+    f.levels[3].picks.push('Feat: Alert');
+    f.levels[5].picks.push('Feat: Alert');
+    eq(featsTaken(f).map((x) => [x.level, x.name]), [[3, 'Alert'], [5, 'Alert']]);
+    ok(buildIssues(f).some((x) => x.text === 'Alert is taken twice, at levels 4 and 6'));
+    f.levels[5].picks = ['Feat: Ability Improvement (+2 STR)'];
+    f.levels[3].picks = ['Feat: Ability Improvement (+2 DEX)'];
+    ok(!buildIssues(f).some((x) => /taken twice/.test(x.text)), 'Ability Improvement can be taken again');
+
+    // the spell a Warlock learns at level 11 is its Mystic Arcanum: a level 6 one
+    const k = build(Array(11).fill('Warlock'));
+    const arc = levelSpellLists(k, 10, levelSlots(k, 10).spells);
+    ok(arc.arcanum && arc.reach.length > 3 && arc.reach.every((x) => x.lv === 6 && x.cl.includes('Warlock')));
+    ok(/Mystic Arcanum/.test(slotCells(k, 10, levelSlots(k, 10))));
+  });
   test('base scores move with − and + and stay inside the 27 points', () => {
     const b = build(['Fighter'], { abilities: { str: 15, dex: 15, con: 14, int: 8, wis: 8, cha: 8 } });
     const off = (ab, d) => new RegExp('data-d="' + d + '"[^>]*disabled').test(abilCard(b, ab, ab, ab));

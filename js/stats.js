@@ -456,6 +456,8 @@ function currentSpells(b) {
     if (p.replaces) { const i = out.findIndex((x) => norm(x.name) === norm(p.replaces) && x.cls === p.cls); if (i >= 0) out.splice(i, 1); }
     out.push({ name: p.name, cantrip: p.cantrip, cls: p.cls, level: p.level });
   });
+  // a Wizard also knows what was copied from scrolls: not learned at any level, so it is never one to swap
+  if (classLevels(b).Wizard) (b.scrolls || []).forEach((name) => { if (!out.some((x) => x.cls === 'Wizard' && norm(x.name) === norm(name))) out.push({ name, cantrip: false, cls: 'Wizard', level: 99, scroll: true }); });
   const extra = (name, source) => { const s = SPELL_BY_NAME.get(norm(name)); if (s && !out.some((x) => norm(x.name) === norm(name))) out.push({ name: s.n, cantrip: !s.lv, cls: '', source }); };
   if (b.creation.cantrip) extra(b.creation.cantrip, b.creation.subrace || b.creation.race);
   allPicks(b).forEach((p) => {
@@ -548,7 +550,7 @@ function finalStats(b, act, opts) {
   const sa = gearBonus(worn, 'spellAttack');
   const levels = classLevels(b);
   const casting = casters(b).map((c) => ({
-    label: c.sub || c.cls, ability: c.ab, dc: 8 + pb + mods[c.ab] + dc.n, attack: pb + mods[c.ab] + sa.n,
+    label: c.sub || c.cls, cls: c.cls, ability: c.ab, dc: 8 + pb + mods[c.ab] + dc.n, attack: pb + mods[c.ab] + sa.n,
     prepared: PREPARES.includes(c.cls) ? Math.max(1, mods[c.ab] + levels[c.cls]) : 0,
   }));
   const acInfo = Object.fromEntries(ACTS.map(([k]) => [k, armourClassInfo(b, k, k === act && !swap ? mods : null, k === act ? swap : null)]));

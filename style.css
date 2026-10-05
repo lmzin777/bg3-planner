@@ -841,3 +841,10 @@ button.chip:hover { border-color: var(--gold); color: var(--text); }
 .lvl-choices { display: grid; gap: 6px; min-width: 0; }
 .lvl-lock { margin: 4px 0 10px; padding: 9px 12px; border: 1px dashed var(--gold); border-radius: 8px; color: var(--gold-hi); font-size: 13px; }
 .wiz-bar button:disabled, .wiz-nav button:disabled { opacity: .35; cursor: default; }
+
+/* ---------- lines of a level that do not count, prepared spells ---------- */
+.lnotes { display: grid; gap: 4px; }
+.lnote { display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 10px; border: 1px dashed var(--line); border-radius: 8px; font-size: 13px; color: var(--muted); min-width: 0; }
+.lnote span { flex: 1; min-width: 0; text-decoration: line-through; text-decoration-color: var(--line); }
+.lnote i { font-style: normal; font-size: 11px; white-space: nowrap; }
+.lslots.prep { margin: 4px 0 12px; }

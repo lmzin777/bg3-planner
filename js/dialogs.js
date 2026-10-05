@@ -194,8 +194,8 @@ Object.assign(actions, {
       Object.assign(b.gear[dlg.act].slots[dlg.slot], { name: it.n, rarity: it.r || '', where: [it.l, it.h].filter(Boolean).join(' — '), got: false });
       toast(t('{x} added to {build}', { x: it.n, build: b.name }));
     } else {
-      b.levels[+dlg.level].picks.push((dlg.spell.lv ? 'Spell: ' : 'Cantrip: ') + dlg.spell.n);
-      toast(t('{x} added to {build}', { x: dlg.spell.n, build: b.name }));
+      const placed = placeLine(b, { i: +dlg.level, text: (dlg.spell.lv ? 'Spell: ' : 'Cantrip: ') + dlg.spell.n, cls: b.levels[+dlg.level].cls });
+      toast(placed ? t('{x} added to {build}', { x: dlg.spell.n, build: b.name }) : t('{build} has no free place to learn {x} with that class', { x: dlg.spell.n, build: b.name }));
     }
     closeDialog();
   },

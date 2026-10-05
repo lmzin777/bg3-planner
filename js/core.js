@@ -2,7 +2,7 @@
 // The scripts are plain (not modules) so the planner also runs from a file opened directly; they share the global scope.
 'use strict';
 
-const APP_VERSION = '2.3';
+const APP_VERSION = '2.4';
 const STORE_KEY = 'bg3planner.v1';
 const PRESETS = window.BG3_PRESETS || [];
 const I18N = window.BG3_I18N || {};
@@ -104,11 +104,15 @@ function blankBuild() {
     credit: '',
     summary: '',
     creation: { origin: '', race: '', subrace: '', background: '', skills: '', cantrip: '', abilities: { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 }, plus2: '', plus1: '', extra: { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 } },
-    levels: Array.from({ length: 12 }, () => ({ cls: '', sub: '', picks: [] })),
+    // picks: the choices the level grants, one line each; notes: lines that are not one of them and do not count
+    levels: Array.from({ length: 12 }, () => ({ cls: '', sub: '', picks: [], notes: [] })),
     gear: Object.fromEntries(ACTS.map(([k]) => [k, blankAct()])),
     setup: [],
     consumables: [],
     elixir: '',
+    // spells kept prepared by the classes that prepare, as {class: [names]}, and Wizard spells learned from scrolls
+    prepared: {},
+    scrolls: [],
     // permanent bonuses the build plans to get, as {name: { on, ab (the ability it was put on), extra, got }}
     permanent: {},
     // the level the character is at in the playthrough; 0 means "show the finished build"
@@ -147,7 +151,7 @@ function normalizeBuild(src) {
   if (Array.isArray(s.levels)) {
     b.levels = b.levels.map((l, i) => {
       const x = s.levels[i] || {};
-      return { cls: x.cls || '', sub: x.sub || '', picks: Array.isArray(x.picks) ? x.picks.map(String) : [] };
+      return { cls: x.cls || '', sub: x.sub || '', picks: Array.isArray(x.picks) ? x.picks.map(String) : [], notes: Array.isArray(x.notes) ? x.notes.map(String) : [] };
     });
   }
   ACTS.forEach(([k]) => {
@@ -161,6 +165,8 @@ function normalizeBuild(src) {
   if (s.permanent && typeof s.permanent === 'object') {
     Object.keys(s.permanent).forEach((k) => { const v = s.permanent[k]; if (v && v.on) b.permanent[k] = { on: true, ab: v.ab || '', extra: !!v.extra, got: !!v.got }; });
   }
+  if (s.prepared && typeof s.prepared === 'object') Object.keys(s.prepared).forEach((k) => { if (Array.isArray(s.prepared[k])) b.prepared[k] = s.prepared[k].map(String); });
+  if (Array.isArray(s.scrolls)) b.scrolls = s.scrolls.map(String);
   b.current = Math.max(0, Math.min(12, Number(s.current) || 0));
   b.active = Array.isArray(s.active) ? s.active.map(String) : [];
   // The elixir the build keeps active. Builds saved before this field existed take the strongest
@@ -213,6 +219,8 @@ function load() {
 state = load();
 let saveTimer = 0;
 function save() {
+  // every change goes through here: first each line of each level is checked to be a choice that level grants
+  if (typeof tidyAll === 'function') tidyAll();
   if (window.BG3_TEST) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
