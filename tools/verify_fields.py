@@ -2,6 +2,7 @@
 
     py tools/verify_fields.py            (spells, consumables and items; items take a few minutes)
     py tools/verify_fields.py spells     (only one of them)
+    py tools/verify_fields.py --ignored  (also shows what each field left aside on purpose holds, to review that choice)
 
 Each script is run for real, without writing its file, while this one notes which template fields it asks for.
 The fields that are filled in on the same pages and were never asked for are listed, most used first. A field
@@ -26,14 +27,14 @@ IGNORED = {
         "used by creatures": "which monsters cast it", "warning": "a remark for readers", "variants": "the variants are pages of their own",
         "targets": "what can be targeted, in words", "creature description": "the summoned creature's own actions", "grants": "follow-up actions the spell unlocks",
         "other ways to learn": "free text; items and feats are read from their own fields", "granted by spells": "follow-up of another spell",
-        "save dc": "who sets the DC: always the caster for a player", "condition dc": "same", "condition 1 dc": "same", "condition 2 dc": "same", "condition 3 dc": "same",
+        "save dc": "the caster's own DC, or a fixed number when an item or a monster casts it; the planner shows no DC per spell", "condition dc": "same", "condition 1 dc": "same", "condition 2 dc": "same", "condition 3 dc": "same",
         "range ft": "the same range in feet; range m is read", "aoe ft": "same", "area ft": "same", "force m": "how far a target is pushed", "force info": "same",
-        "hit cost": "what a smite spends when the attack hits; the planner shows the cost of casting", "on miss": "what happens on a miss, in words",
+        "on miss": "what happens on a miss, in words",
         "item": "the weapon a spell conjures", "item duration": "same",
     },
     "consumables": {
         "description": "the wiki's blurb; what the item does comes from the effect field", "quote": "flavour text", "weight kg": "not shown", "stats": "internal game id",
-        "single use": "every consumable is", "usage cost": "action or bonus action; not shown", "name": "same as the page title",
+        "single use": "every consumable is", "name": "same as the page title",
         "condition": "named in the effect text", "condition save": "same", "condition dc": "same", "condition2": "same", "condition2 duration": "same",
         "condition2 save": "same", "condition2 dc": "same", "technical description": "the long form of the effect",
         "area": "the surface or cloud left behind, named in the effect text", "area shape": "same", "area range m": "same", "area range ft": "same", "area duration": "same",
@@ -50,12 +51,23 @@ IGNORED = {
         "brief": "short form of a passive; the description is read", "properties": "flags of a passive", "recharge": "of a passive, said in its text",
         "region": "location pages, read only for their act", "prefix": "same", "region prefix": "same", "north": "same", "east": "same", "south": "same", "west": "same",
         "font-size": "layout", "author": "quotation", "height": "layout",
+        "extra description": "details of a passive; left out because the passive's text is also read for bonuses, and a remark there could be taken for one",
+        "dex override": "the armour adds the whole Dexterity modifier: said by its passive, which is read (checked on the 4 pages)",
+        "rarity honour": "rarity in Honour mode", "grants": "actions the item unlocks, named in its text", "toggleable": "flag of a passive",
+        "boost context": "internal", "toggle off context": "internal", "warning": "a remark for readers", "alt name": "location pages", "alt name prefix": "same",
+        "header": "page header", "technical description": "the long form of the effect", "legacy": "marks an older variant further down the same page; the first variant is the one read",
+        "condition2": "named in the item's own text", "condition2 duration": "same", "condition3": "same", "condition3 duration": "same",
+        "condition4": "same", "condition4 duration": "same", "range ft": "weapon range is not shown", "granted by items": "on the page of a reaction an item gives",
+        "area": "the surface a passive leaves", "area shape": "same", "area range m": "same", "area duration": "same", "cost": "of a reaction an item gives",
+        "where to find4 location": "the act is read from the first place", "where to find5 location": "same", "where to find4 x": "map coordinates",
+        "where to find4 y": "same", "uid3": "internal game id", "uuid3": "same", "stats3": "same", "filename5": "model file", "filename 2": "same",
     },
 }
 # Families of fields: "… learns at level N" is read by the spell script with a pattern of its own;
 # "reaction N …" describes the reaction a spell adds (Counterspell), which the planner does not list.
 PATTERNS = {
     "spells": [r"^(class|race) learns at level \d+$", r"^reaction \d+ "],
+    "items": [r"^reaction\d+ "],
 }
 
 
@@ -105,11 +117,28 @@ def check(name, module, fetchers):
             continue  # a field used on one or two pages is a quirk of those pages
         title, value = where[0]
         print(f"   - {key:28} on {len(where):4} pages   e.g. {title}: {value[:70]}")
+    if SHOW_IGNORED:
+        print("   left aside on purpose:")
+        for key in sorted((k for k in used if k in skip and k not in asked), key=lambda k: -len(used[k])):
+            seen = []
+            for title, value in used[key]:
+                if value not in seen:
+                    seen.append(value)
+                if len(seen) == 3:
+                    break
+            print(f"   · {key:26} {len(used[key]):4} pages · {skip[key]}")
+            print("       " + " | ".join(v[:60] for v in seen))
     return unread
 
 
+SHOW_IGNORED = False
+
+
 def main():
+    global SHOW_IGNORED
     sys.stdout.reconfigure(encoding="utf-8")
+    SHOW_IGNORED = "--ignored" in sys.argv
+    sys.argv = [a for a in sys.argv if a != "--ignored"]
     jobs = {
         "spells": (update_spells, [(update_spells, "spell_pages")]),
         "consumables": (update_consumables, [(update_consumables, "category_pages")]),

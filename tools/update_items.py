@@ -141,6 +141,7 @@ def template_body(text, name):
 
 
 def unobtainable(text):
+    # ("| legacy = unobtainable" is not a sign: it marks an older variant further down the same page)
     return re.search(r"\{\{\s*unobtainable", text, re.I) is not None
 
 
@@ -182,7 +183,7 @@ def clean(s):
 
 def places(w):
     """Where the item is found: the first place and the further ones the page lists ("where to find2" …)."""
-    return short("; ".join(x for x in (clean(field(w, "where to find" + n)) for n in ("", "2", "3", "4")) if x), 260)
+    return short("; ".join(x for x in (clean(field(w, "where to find" + n)) for n in ("", "2", "3", "4", "5")) if x), 260)
 
 
 def polish(s):

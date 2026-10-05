@@ -4,7 +4,7 @@
 //   cols: [names of the number columns], table: {class level: [value per column]}, slots: {class level: [slots per spell level]} }
 // BG3_FEATS = [[name, what it does], ...] · BG3_FEATURES = {feature name: what it does}
 // BG3_ACTIONS = [features that are used as an action, bonus action or reaction, rather than always on]
-window.BG3_CLASSES_DATE = "2026-10-04";
+window.BG3_CLASSES_DATE = "2026-10-05";
 window.BG3_CLASSES = {
  "Barbarian": {
   "levels": {
@@ -3127,7 +3127,7 @@ window.BG3_FEATS = [
   ["Dungeon Delver","You gain Advantage on Perception checks made to detect hidden objects and on Saving Throws made to avoid or resist traps.; You gain resistance to the damage dealt by traps."],
   ["Durable","Your Constitution ability score increases by 1, to a maximum of 20.; Regain full hit points every time you take a short rest."],
   ["Elemental Adept","Elemental Adept; Your spells and attacks ignore resistance to a damage type of your choice. In addition, when you deal that type of damage with a spell, you cannot roll a 1.; Damage resistance options are one of the following:; Elemental Adept: Acid; Elemental Adept: Cold; Elemental Adept: Lightning; Elemental Adept:…"],
-  ["Great Weapon Master","When an attack with a melee weapon lands a Critical Hit or kills a creature, you can make another melee weapon attack as a Bonus that turn.; When attacking with a Two-Handed or Versatile melee weapon (in both hands) that you are Proficient with, Attack Rolls take a -5 penalty, but their damage increases by 10."],
+  ["Great Weapon Master","When an attack with a melee weapon lands a Critical Hit or kills a creature, you can make another melee weapon attack as a Bonus Action that turn.; When attacking with a Two-Handed or Versatile melee weapon (in both hands) that you are Proficient with, Attack Rolls take a -5 penalty, but their damage increases by 10."],
   ["Heavily Armoured","Your Strength ability score increases by 1, to a maximum of 20.; Gain Proficiency with Heavy Armour."],
   ["Heavy Armour Master","Your Strength ability score increases by 1, to a maximum of 20.; Incoming damage from non-magical attacks also decreases by 3 while you're wearing heavy armour."],
   ["Lightly Armoured","Your Strength or Dexterity ability score increases by 1, to a maximum of 20.; Gain Proficiency with Light Armour."],
@@ -3144,7 +3144,7 @@ window.BG3_FEATS = [
   ["Mobile","Your Movement Speed increases by 3 m.; When you use the Dash action, Difficult Terrain doesn't slow you down.; If you move after making a melee attack, you don't provoke an Opportunity Attack from that target."],
   ["Moderately Armoured","Requires Light Armour Proficiency.; Your Strength or Dexterity ability score increases by 1, to a maximum of 20.; Gain Proficiency with Medium Armour and Shields."],
   ["Performer","Your Charisma ability score increases by 1, to a maximum of 20.; Gain Musical Instrument Proficiency."],
-  ["Polearm Master","When attacking with a Glaives, Halberds, Pikes, Quarterstaves, or Spears, you can use a Bonus to attack with the butt of your weapon.; You can also make an Opportunity Attack when a target comes within range."],
+  ["Polearm Master","When attacking with a Glaives, Halberds, Pikes, Quarterstaves, or Spears, you can use a Bonus Action to attack with the butt of your weapon.; You can also make an Opportunity Attack when a target comes within range."],
   ["Resilient","Resilient; You increase an Ability by 1, to a maximum of 20.; Gain Proficiency in that ability's Saving Throws.; The available passive features are:; Resilient: Strength; Resilient: Dexterity; Resilient: Constitution; Resilient: Intelligence; Resilient: Wisdom; Resilient: Charisma"],
   ["Ritual Caster","You learn two Ritual Spell spells of your choice."],
   ["Savage Attacker","When making melee weapon attacks, you roll your damage dice twice and use the highest result."],
@@ -3330,7 +3330,7 @@ window.BG3_FEATURES = {
   "Flurry of Blows: Stagger":"Punch twice in quick succession and Open Hand Technique: Staggered the target, making it unable to take Reactions.",
   "Flurry of Blows: Topple":"Punch twice in quick succession and potentially knock the target Prone (Condition).",
   "Fly":"Fly to a target position",
-  "Focused Conjuration":"Damage taken while you are Concentrating on a Conjuration spell will not break your Concentration.",
+  "Focused Conjuration":"Damage taken while you are Concentrating on a Conjuration spell will not break your Concentration. Conjuration Wizard Spells that require Concentrating: Arcane Gate Cloud of Daggers Cloudkill Evard's Black Tentacles Flaming Sphere Fog Cloud Sleet Storm Stinking Cloud Web",
   "Fog Cloud":"Create a cloud of dense fog to Heavily Obscured and Blinded creatures within.",
   "Font of Inspiration":"You regain all of your Bardic Inspirations after a Long or Short Rest.",
   "Freedom of Movement":"Snap an ally out of any Stunned. Difficult Terrain can't slow them down, and they can't be magically Paralysed or Restrained. If the target is restrained by non-magical means, it can spend 1.5 m of Movement to free itself.",
@@ -3410,7 +3410,7 @@ window.BG3_FEATURES = {
   "Mage Hand":"Create a spectral hand that can manipulate and interact with objects.",
   "Mage Hand Legerdemain":"When you cast Mage Hand, the spectral hand is invisible and permanent.",
   "Magic Arrow":"All of your ranged attacks are considered magical to overcome Resistance.",
-  "Magic Awareness":"Anyone within range adds a d4 1d4 bonus to Saving Throws.",
+  "Magic Awareness":"Anyone within range adds a 1d4 bonus to Saving Throws.",
   "Magic Weapon":"Infuse a weapon with arcane energy. The weapon becomes magical, receiving a +1 bonus to Attack Rolls and Damage Rolls.",
   "Magical Ambush":"While you are Hiding, your targets have Disadvantage on Saving Throws against your Spells.",
   "Magical Secrets":"Magical Secrets is a level 6 College of Lore, and level 10 base Bard class feature in which they learn 2 Spells from a set belonging to other classes.",
@@ -3498,7 +3498,7 @@ window.BG3_FEATURES = {
   "Shadow Arts: Darkvision":"Grant a creature the ability to see in the dark out to a range of 12 m.",
   "Shadow Arts: Hide":"Hide from enemies by succeeding at Stealth checks. Stick to the dark and avoid enemy sightlines. Attacking or casting a spell will reveal your location.",
   "Shadow Arts: Pass Without Trace":"Call forth a veil of shadow and silence that gives you and nearby allies a +10 bonus to Stealth checks.",
-  "Shadow Arts: Silence":"Create a sound-proof sphere. All within are Silenced and immune to Thunder damage.",
+  "Shadow Arts: Silence":"Create a sound-proof sphere. All within are Silenced and immune to Thunder damage. Using this spell might turn targets hostile.",
   "Shadow Step":"Teleport from shadow to shadow. Afterwards, you have Advantage on your next melee Attack Roll.",
   "Shadow Strike":"Teleport to a foe from a hidden position, striking them with the creeping, psychic ferocity of the shadows themselves.",
   "Shadow Strike: Unarmed":"Teleport to a foe from a hidden position, striking them with the creeping, psychic ferocity of the shadows themselves.",
@@ -3524,7 +3524,7 @@ window.BG3_FEATURES = {
   "Spirit Guardians":"Call forth spirits to protect you. Nearby enemies take 3d8 Radiant or 3d8 Necrotic damage per turn, and their Movement Speed is halved.",
   "Spiritual Weapon":"Summon a floating, spectral weapon that attacks your enemies alongside you.",
   "Spiteful Suffering":"Steep an enemy in the darkness that churns within you. The target takes 1d4 + Ability Score Modifier Charisma Modifier damage each turn and Attack Rolls against it have Advantage.",
-  "Split Enchantment":"You know your enchantments inside and out. You can target 2 creatures with Enchantment spells that would normally only target 1 creature.",
+  "Split Enchantment":"You know your enchantments inside and out. You can target 2 creatures with Enchantment spells that would normally only target 1 creature. Single target Enchantment Wizard Spells: Charm Person Crown of Madness Dominate Person Friends Hold Monster Hold Person Otto's Irresistible Dance Power Word Kill Tasha's Hideous Laughter",
   "Spreading Spores":"Seed an area in deadly spores that deal 2d8 Necrotic damage per turn to all creatures that inhale them, except you and your allies.",
   "Staggering Smite":"Possibly Staggering Smite your target. It can't take reactions and is more likely to miss.",
   "Stalker's Flurry":"When you miss with a weapon attack, you can make another one for free.",

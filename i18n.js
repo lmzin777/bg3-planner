@@ -773,6 +773,8 @@ window.BG3_I18N = {
     'Game data read from bg3.wiki on {a}.': 'Dados do jogo lidos da bg3.wiki em {a}.',
     'Game data read from bg3.wiki between {a} and {b}.': 'Dados do jogo lidos da bg3.wiki entre {a} e {b}.',
     'from the weapon': 'da arma',
+    'Bonus action on a hit': 'Bonus action ao acertar',
+    'Takes': 'Custa',
     // dialogs and toasts
     'Cancel': 'Cancelar',
     'Confirm': 'Confirmar',

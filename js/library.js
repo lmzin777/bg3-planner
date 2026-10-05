@@ -120,7 +120,7 @@ Object.keys(LIB_DEFAULTS).forEach((tab) => { libState(tab).limit = PAGE; });
 const KINDS = [['head', 'Head'], ['cloak', 'Cloak'], ['chest', 'Armour'], ['gloves', 'Gloves'], ['boots', 'Boots'], ['amulet', 'Amulet'], ['ring', 'Ring'],
   ['shield', 'Shield'], ['melee', 'Melee weapon'], ['ranged', 'Ranged weapon'], ['consumable', 'Consumable']];
 // The Items tab lists consumables next to the equipment; they take no gear slot, so the pickers never see them.
-const LIB_ITEMS = ITEMS.concat(CONSUMABLES.map((c) => ({ n: c.n, s: 'consumable', t: c.t + 's', r: c.r, a: 0, h: c.h, x: c.x, i: c.i, pr: c.pr, du: c.du })));
+const LIB_ITEMS = ITEMS.concat(CONSUMABLES.map((c) => ({ n: c.n, s: 'consumable', t: c.t + 's', r: c.r, a: 0, h: c.h, x: c.x, i: c.i, pr: c.pr, du: c.du, uc: c.uc })));
 // Where a spell comes from: a class list, a subclass or race, an item, or none of those (follow-up actions of other spells).
 const ORIGINS_OF_SPELLS = [['class', 'Class spells'], ['feature', 'Subclass and race'], ['item', 'From items'], ['other', 'Follow-up actions']];
 SPELLS.forEach((s) => { s.og = (s.cl || []).length ? 'class' : (s.lr || []).length || s.ft ? 'feature' : s.it ? 'item' : 'other'; });
@@ -229,7 +229,7 @@ function itemCard(it) {
       <a class="icon" href="${wikiLink(it.n)}" target="_blank" rel="noopener" title="${t('Open the wiki page')}">↗</a></header>
     <div class="tags">${isWeapon(it) ? fact(t('Damage'), it.d, 'dmg') : tag(it.d, 'dmg')}${fact(t('Two-handed'), it.vd)}${fact(t('Enchantment'), it.en)}${tag(hands)}${
       (it.pp || []).map((x) => tag(x)).join('')}${tag(it.p ? t('Needs {p} proficiency', { p: it.p }) : '')}${tag(it.sd ? t('Stealth disadvantage') : '', 'warn')}</div>
-    ${it.du ? `<div class="tags">${fact(t('Lasts'), it.du)}</div>` : ''}
+    ${it.du || it.uc ? `<div class="tags">${it.uc ? fact(t('Takes'), it.uc) : ''}${it.du ? fact(t('Lasts'), it.du) : ''}</div>` : ''}
     ${(it.g || []).length ? `<div class="tags effects">${it.g.map((k) => `<span>${t(TAG_LABEL[k])}</span>`).join('')}</div>` : ''}
     ${it.x ? `<p>${esc(it.x)}</p>` : ''}
     ${(it.ps || []).length ? `<ul class="fx">${it.ps.map(([n, text]) => `<li><b>${esc(n)}</b>${text ? ' ' + esc(text) : ''}</li>`).join('')}</ul>` : ''}

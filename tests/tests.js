@@ -785,6 +785,111 @@
     ok(/9 m radius/.test(SPELL_BY_NAME.get('dancing lights').d) && /weapon damage \+ 1d8 Thunder/.test(SPELL_BY_NAME.get('booming blade').hl));
     ok(CLASS_DATA.Cleric.subclasses['War Domain'][1].includes('Gain Martial Weapons proficiency') && CLASS_DATA.Bard.subclasses['College of Valour'][3].includes('Martial Weapons Proficiency'));
   });
+  // ---------- eight builds worked out by hand ----------
+  // Each number below is derived in the comment from the rules on the wiki (Hit points, Armour Class, Attacks,
+  // Saving throws, Spells) and the base values of the gear, not read back from the planner.
+  test('eight builds match the numbers worked out by hand', () => {
+    const made = (classes, creation, subs, gear, picks) => {
+      const b = build(classes, Object.assign({ race: 'Human', background: 'Soldier' }, creation));
+      Object.keys(subs || {}).forEach((i) => { b.levels[i].sub = subs[i]; });
+      Object.keys(gear || {}).forEach((k) => { b.gear.act1.slots[k].name = gear[k]; });
+      Object.keys(picks || {}).forEach((i) => { b.levels[i].picks = picks[i]; });
+      return b;
+    };
+    const saves = (st) => st.saves.map((k) => k.bonus);  // STR DEX CON INT WIS CHA
+    const hits = (st) => st.attacks.rows.map((r) => [r.name, r.attackTotal, damageText(r)]);
+    const turn = (st, style) => Math.round(turnPlan(st, style, 16).total * 1000) / 1000;
+    let st;
+
+    // Barbarian 5 (Berserker), no armour, Greataxe. STR 17 (+3), DEX 14 (+2), CON 16 (+3); proficiency +3.
+    st = finalStats(made(Array(5).fill('Barbarian'), { abilities: { str: 15, dex: 14, con: 15, int: 8, wis: 10, cha: 8 }, plus2: 'str', plus1: 'con' }, { 2: 'Berserker' }, { meleeMain: 'Greataxe' }), 'act1');
+    eq([st.hp, st.ac.act1, st.initiative, hits(st), saves(st)], [
+      55,                                   // 12 + 3, then 4 × (7 + 3)
+      15,                                   // Unarmoured Defence: 10 + DEX 2 + CON 3
+      2,
+      [['Greataxe', 6, '1d12 + 3']],        // STR 3 + proficiency 3
+      [6, 2, 6, -1, 0, -1]], 'Barbarian 5'); // proficient in STR and CON
+    eq(turn(st, 'melee'), 11.1);            // Extra Attack: 2 × (0.55 × 9.5 + 0.05 × 6.5); +6 hits AC 16 on 10 or more
+
+    // Monk 6 (Open Hand), Wood Elf, unarmed. DEX 17 (+3), WIS 16 (+3), CON 14 (+2), STR 8 (−1).
+    st = finalStats(made(Array(6).fill('Monk'), { race: 'Elf', subrace: 'Wood Elf', abilities: { str: 8, dex: 15, con: 14, int: 8, wis: 15, cha: 10 }, plus2: 'dex', plus1: 'wis' }, { 2: 'Way of the Open Hand' }), 'act1');
+    eq([st.hp, st.ac.act1, hits(st), saves(st)], [
+      45,                                   // 8 + 2, then 5 × (5 + 2)
+      16,                                   // 10 + DEX 3 + WIS 3
+      [['Unarmed strike', 6, '1d6 + 3']],   // Martial Arts die of Monk 3–8, Dexterity in place of Strength
+      [2, 6, 2, -1, 3, 0]], 'Monk 6');      // proficient in STR and DEX
+    eq(turn(st, 'unarmed'), 15);            // 2 attacks + 2 of Flurry of Blows, each 0.55 × 6.5 + 0.05 × 3.5
+
+    // Fighter 5 (Champion), Chain Mail, Studded Shield, Longsword, Defence. STR 17, DEX 14, CON 16.
+    st = finalStats(made(Array(5).fill('Fighter'), { abilities: { str: 15, dex: 14, con: 15, int: 8, wis: 10, cha: 8 }, plus2: 'str', plus1: 'con' }, { 2: 'Champion' },
+      { chest: 'Chain Mail', meleeMain: 'Longsword', meleeOff: 'Studded Shield' }, { 0: ['Fighting Style: Defence'] }), 'act1');
+    eq([st.hp, st.ac.act1, hits(st), st.crit], [
+      49,                                   // 10 + 3, then 4 × (6 + 3)
+      19,                                   // heavy armour 16 (no Dexterity) + shield 2 + Defence 1
+      [['Longsword', 6, '1d8 + 3']],        // one hand, the other holds the shield
+      19], 'Fighter 5');                    // Improved Critical Hit
+    eq(turn(st, 'melee'), 9.15);            // 2 × (0.55 × 7.5 + 0.10 × 4.5)
+    st = finalStats(made(['Fighter'], {}, {}, { chest: 'Chain Mail', meleeOff: 'Broken Shield' }), 'act1');
+    eq(st.ac.act1, 17, 'the Broken Shield gives 1, as its page says');
+
+    // Rogue 5 (Thief), Leather Armour, Shortsword and Dagger. DEX 17 (+3), CON 14, INT 12 (+1), WIS 14 (+2).
+    st = finalStats(made(Array(5).fill('Rogue'), { abilities: { str: 8, dex: 15, con: 14, int: 12, wis: 13, cha: 10 }, plus2: 'dex', plus1: 'wis' }, { 2: 'Thief' },
+      { chest: 'Leather Armour', meleeMain: 'Shortsword', meleeOff: 'Dagger' }), 'act1');
+    eq([st.hp, st.ac.act1, hits(st), saves(st)], [
+      38,                                   // 8 + 2, then 4 × (5 + 2)
+      14,                                   // 11 + DEX 3
+      [['Shortsword', 6, '1d6 + 3'], ['Dagger', 6, '1d4']],  // the off hand adds no modifier without Two-Weapon Fighting
+      [-1, 6, 2, 4, 2, 0]], 'Rogue 5');     // proficient in DEX and INT
+    eq(turn(st, 'melee'), 5.25);            // one attack 3.75, the off hand as a bonus action 1.5
+
+    // Wizard 5 (Evocation), no armour, Mage Armour learned. INT 17 (+3), DEX 14 (+2), CON 14, WIS 13 (+1).
+    const wiz = made(Array(5).fill('Wizard'), { abilities: { str: 8, dex: 14, con: 14, int: 15, wis: 12, cha: 10 }, plus2: 'int', plus1: 'wis' }, { 1: 'Evocation School' }, {}, { 0: ['Spell: Mage Armour'] });
+    st = finalStats(wiz, 'act1');
+    eq([st.hp, st.ac.act1, armourClassInfo(wiz, 'act1').mage, st.casting.map((c) => [c.dc, c.attack, c.prepared]), st.slots, saves(st)], [
+      32,                                   // 6 + 2, then 4 × (4 + 2)
+      12, 15,                               // 10 + DEX 2; with Mage Armour 13 + DEX 2
+      [[14, 6, 8]],                         // DC 8 + 3 + 3; attack 3 + 3; prepares 5 + 3
+      [4, 3, 2],
+      [-1, 2, 2, 6, 4, 0]], 'Wizard 5');    // proficient in INT and WIS
+
+    // Paladin 6 (Vengeance) / Sorcerer 6 (Draconic), Chain Mail, Studded Shield, Longsword.
+    // STR 16 (+3), DEX 8 (−1), CON 14 (+2), CHA 17 (+3); level 12, proficiency +4.
+    st = finalStats(made([...Array(6).fill('Paladin'), ...Array(6).fill('Sorcerer')], { abilities: { str: 15, dex: 8, con: 14, int: 8, wis: 10, cha: 15 }, plus2: 'cha', plus1: 'str' },
+      { 0: 'Oath of Vengeance', 6: 'Draconic Bloodline' }, { chest: 'Chain Mail', meleeMain: 'Longsword', meleeOff: 'Studded Shield' }), 'act1');
+    eq([st.hp, st.ac.act1, st.initiative, hits(st), st.casting.map((c) => [c.dc, c.attack, c.prepared]), st.slots, saves(st)], [
+      94,                                   // Paladin 12 + 5 × 8, Sorcerer 6 × 6, and 1 per Sorcerer level of Draconic Resilience
+      18,                                   // 16 + shield 2
+      -1,
+      [['Longsword', 7, '1d8 + 3']],
+      [[15, 7, 9], [15, 7, 0]],             // DC 8 + 4 + 3; the Paladin prepares 6 + 3
+      [4, 3, 3, 3, 1],                      // 6 Sorcerer levels + half of 6 Paladin levels = a level 9 caster
+      [6, 2, 5, 2, 7, 10]], 'Paladin 6 / Sorcerer 6');  // Aura of Protection adds CHA 3 to every save; WIS and CHA proficient
+    eq(turn(st, 'melee'), 9.45);            // Extra Attack: 2 × (0.60 × 7.5 + 0.05 × 4.5); +7 hits on 9 or more
+
+    // Warlock 5 (Fiend), Pact of the Blade, Leather Armour, Longsword in both hands. CHA 17 (+3), CON 15 (+2), DEX 14.
+    st = finalStats(made(Array(5).fill('Warlock'), { abilities: { str: 8, dex: 14, con: 14, int: 10, wis: 12, cha: 15 }, plus2: 'cha', plus1: 'con' }, { 0: 'The Fiend' },
+      { chest: 'Leather Armour', meleeMain: 'Longsword' }, { 2: ['Pact Boon: Pact of the Blade'] }), 'act1');
+    eq([st.hp, st.ac.act1, hits(st), st.pact, st.casting.map((c) => [c.dc, c.attack])], [
+      38,                                   // 8 + 2, then 4 × (5 + 2)
+      13,                                   // 11 + DEX 2
+      [['Longsword', 6, '1d10 + 3']],       // the pact weapon uses Charisma; versatile, held in both hands
+      { n: 2, level: 3 },
+      [[14, 6]]], 'Warlock 5');
+    eq(turn(st, 'melee'), 9.9);             // Deepened Pact: 2 × (0.55 × 8.5 + 0.05 × 5.5)
+
+    // Ranger 5 (Hunter), Studded Leather, Longbow, Archery. DEX 17 (+3), WIS 15 (+2), CON 14.
+    st = finalStats(made(Array(5).fill('Ranger'), { abilities: { str: 10, dex: 15, con: 14, int: 8, wis: 14, cha: 10 }, plus2: 'dex', plus1: 'wis' }, { 2: 'Hunter' },
+      { chest: 'Studded Leather Armour', rangedMain: 'Longbow' }, { 1: ['Fighting Style: Archery'] }), 'act1');
+    eq([st.hp, st.ac.act1, hits(st), st.casting.map((c) => [c.dc, c.attack]), st.slots, saves(st)], [
+      44,                                   // 10 + 2, then 4 × (6 + 2)
+      15,                                   // 12 + DEX 3
+      [['Longbow', 8, '1d8 + 3']],          // DEX 3 + proficiency 3 + Archery 2
+      [[13, 5]],                            // DC 8 + 3 + 2
+      [4, 2],
+      [3, 6, 2, -1, 2, 0]], 'Ranger 5');    // proficient in STR and DEX
+    eq(turn(st, 'ranged'), 10.2);           // Extra Attack: 2 × (0.65 × 7.5 + 0.05 × 4.5); +8 hits on 8 or more
+  });
+
   test('only the choices a level grants count: the rest finds its place or becomes a note', () => {
     const dex = { abilities: { str: 10, dex: 15, con: 14, int: 8, wis: 14, cha: 10 }, plus2: 'dex', plus1: 'wis' };
     const b = build(['Ranger'], dex);

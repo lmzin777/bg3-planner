@@ -4,7 +4,7 @@
 //   spells: [[name, character level]], spellAbility, cantrip (class list to choose one cantrip from) } · raceOrder: {race: [subraces]}
 // backgrounds: { skills, text } · origins: { text, cls, sub, race, subrace, background, abilities, plus2, plus1 }
 // classes: { saves, pick, skills (or 'any'), start / multi (equipment proficiencies), multiSkills, hp: [level 1, later levels] }
-window.BG3_DATA_DATE = "2026-10-04";
+window.BG3_DATA_DATE = "2026-10-05";
 window.BG3_DATA = {
  "races": {
   "Human": {
@@ -226,7 +226,7 @@ window.BG3_DATA = {
     ],
     [
      "Astral Knowledge",
-     "Gain in all Skills corresponding to a chosen Ability (Long Rest)"
+     "Gain Proficiency in all Skills corresponding to a chosen Ability (Long Rest)"
     ],
     [
      "Githyanki Psionics",

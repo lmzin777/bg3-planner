@@ -157,7 +157,7 @@ function raceCantripField(b) {
   return `<div class="lslot race-cantrip${name ? '' : ' open'}"><span class="lslot-l">${t('Racial cantrip')}</span>${
     slotButton('race-cantrip-open', '', name, s ? pic(s.i, 'pic small') : '')}${s ? `<small>${esc([spellMeta(s), s.d].filter(Boolean).join(' — '))}</small>` : ''}</div>`;
 }
-const spellMeta = (s) => [s.lv ? t('Level {n}', { n: s.lv }) : t('Cantrip'), s.sc, s.rg, s.du, s.dm, s.co ? t('Concentration') : ''].filter(Boolean).join(' · ');
+const spellMeta = (s) => [s.lv ? t('Level {n}', { n: s.lv }) : t('Cantrip'), s.sc, s.rg, s.du, s.dm, s.co ? t('Concentration') : '', s.ah ? t('Bonus action on a hit') : ''].filter(Boolean).join(' · ');
 // The spells a level may pick from, by name within each spell level: { cantrips, reach (spells up to the level it
 // can cast), school (those of the subclass's schools), bound (how many picks are held to the schools), order }.
 // Spells the class already knows elsewhere are left out, so nothing is learned twice.
@@ -628,7 +628,7 @@ Object.assign(actions, {
   },
   'elixir-open'() {
     const b = curBuild();
-    const rows = CONSUMABLES.filter((c) => c.t === 'Elixir').map((c) => [c.n, c.x || '', elixirAbility(c.n) ? t('changes the numbers') : '', pic(c.i, 'pic small')]);
+    const rows = CONSUMABLES.filter((c) => c.t === 'Elixir').map((c) => [c.n, c.x || '', [c.uc, elixirAbility(c.n) ? t('changes the numbers') : ''].filter(Boolean).join(' · '), pic(c.i, 'pic small')]);
     openChooser(t('Elixir kept active'), '', [{ label: t('Elixir kept active'), n: 1, min: 0, options: rows, chosen: b.elixir ? [b.elixir] : [] }],
       (done) => { curBuild().elixir = done[0].chosen[0] || ''; });
     return false;

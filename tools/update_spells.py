@@ -131,6 +131,8 @@ def main():
             "lv": 0 if level == "cantrip" else int(level),
             "sc": clean(field(w, "school")).capitalize(),
             "a": "reaction" if "reaction" in cost else "bonus" if "bonus" in cost else "action",
+            # a smite is cast with the attack and takes a bonus action more when it hits
+            "ah": "bonus" if "bonus" in field(w, "hit cost").lower() else "",
             "rg": (range_m + " m") if range_m else RANGE_WORD.get(field(w, "range").lower(), ""),
             "ao": (aoe_m + " m " + aoe).strip() if aoe else "",
             "du": duration,

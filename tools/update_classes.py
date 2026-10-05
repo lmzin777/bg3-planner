@@ -293,7 +293,10 @@ def describe(w):
     """What a feature does, from its page: the in-game description, else the wiki's summary, else its first sentence."""
     if re.search(r"\{\{\s*Disambig", w, re.I):
         return ""
-    text = " ".join(x for x in (rclean(field(w, "description")), rclean(field(w, "extra description"))) if x)
+    # the details under the description are in "extra description" on older pages and in "additional" on newer ones
+    # ("additional" may go on into whole sections of the page: only what comes before the first heading is the detail)
+    more = field(w, "extra description") or re.split(r"\s*==", field(w, "additional"), maxsplit=1)[0]
+    text = " ".join(x for x in (rclean(field(w, "description")), rclean(more)) if x)
     if not text:
         text = rclean(field(w, "summary"))
     if not text:
@@ -302,7 +305,7 @@ def describe(w):
             if len(line) > 60 and re.match(r"['A-Za-z]", line) and not line.startswith("File:"):
                 text = rclean(re.sub(r"\{\{\s*ref\s*\|.*?\}\}(?=[ .]|$)", "", line))
                 break
-    text = re.sub(r"\s*;\s*", " ", text)
+    text = re.sub(r"\s+", " ", re.sub(r"\s*;\s*", " ", text)).strip()
     return short(text, 340)
 
 
