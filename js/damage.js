@@ -27,8 +27,8 @@ const asTarget = (x) => (typeof x === 'number' ? { name: '', ac: x, saves: Objec
 function typeFactor(target, type, magical) {
   const r = (target.res || {})[type] || '';
   if (r === 'v') return 2;
-  if (r === 'i' || (r === 'in' && !magical)) return 0;
-  if (r === 'r' || (r === 'rn' && !magical)) return 0.5;
+  if (r === 'i' || ((r === 'in' || r === 'ip') && !magical)) return 0;
+  if (r === 'r' || (r === 'rn' && !magical) || ((r === 'rm' || r === 'ip') && magical)) return 0.5;
   return 1;
 }
 const targetLabel = (target) => (target.name ? target.name : t('AC {ac}', { ac: target.ac }));
@@ -86,10 +86,16 @@ function turnPlan(stats, style, against) {
 }
 
 // ---------- spells ----------
-// The damage a spell deals when cast, read from its damage line: [{ dice, flat, type, note }] and how many
-// beams. A cantrip uses the line of the character's level ("At character level 5, the damage increases to…").
-// Damage that comes later (per turn, when the target moves) and spells that only add to a weapon attack are left out.
-function spellHits(s, level) {
+// Damage a spell deals after the turn it is cast, and damage it adds to weapon hits instead of dealing itself.
+const LATER = /per turn|when the target moves|delayed|per [\d.]+ ?m moved|when hit by|when the wall breaks/i;
+const RIDER = /per (?:weapon )?attack/i;
+const SAVE_NOTE = /Saving Throw/i;
+const ANCESTRY = /^(?:Black|Blue|Brass|Bronze|Copper|Gold|Green|Red|Silver|White) \((\w+)\)$/;
+// What a spell does when cast with a slot of level `slot`, read from its damage line and its text on higher levels:
+// { parts: [{ dice, flat, type, note, up, like }] dealt on the cast, later: the same for following turns,
+//   beams, weapon: it rides on a weapon attack (a smite), rider: the die it adds to every hit }.
+// A cantrip uses the line of the character's level ("At character level 5, the damage increases to…").
+function spellHits(s, level, slot) {
   let text = s.dm || '';
   let at = 0;
   if (!s.lv) {
@@ -97,17 +103,54 @@ function spellHits(s, level) {
       if (level >= Number(m[1]) && Number(m[1]) > at) { at = Number(m[1]); text = m[2].trim(); }
     }
   }
-  // Hex and Divine Favour add their die to weapon hits while they last: not damage of their own cast
-  if (!text || /weapon/i.test(text) || /^(?:hex|divine favour)$/i.test(s.n)) return null;
+  // no damage line, but a text saying what it adds to weapon hits (Divine Favour)
+  const adds = !text && /weapons? (?:attacks? )?deal an additional (\d+d\d+) (\w+) damage/i.exec(s.d || '');
+  if (adds) return { rider: { dice: adds[1], flat: 0, type: adds[2], note: '' }, parts: [], later: [], beams: 1 };
+  if (!text) return null;
+  // "weapon damage + 1d8 Thunder + 2d8 Thunder (when the target moves)" is the same list, written with plus signs
+  text = text.replace(/\s\+\s(?=\d+d\d)/g, ', ');
   let beams = 1;
   for (const m of String(s.hl || '').matchAll(/(\d+) beams at character level (\d+)/gi)) if (level >= Number(m[2])) beams = Math.max(beams, Number(m[1]));
-  const parts = text.split(/,\s*(?![^()]*\))/).map((x) => {
+  const all = text.split(/,\s*(?![^()]*\))/).map((x) => {
+    if (/^weapon damage/i.test(x.trim())) return { weapon: true };
     const m = /^(\d+d\d+)?\s*(?:\+\s*(\d+))?\s*([A-Za-z]+)?\s*(?:\((.*)\))?$/.exec(x.trim());
     return m && (m[1] || m[2]) ? { dice: m[1] || '', flat: Number(m[2]) || 0, type: m[3] || '', note: m[4] || '' } : null;
-  }).filter((x) => x && !/per turn|when the target moves|delayed|each turn|at the start|at the end/i.test(x.note));
-  return parts.length ? { parts, beams } : null;
+  }).filter(Boolean);
+  const dealt = all.filter((x) => !x.weapon);
+  const rider = dealt.find((x) => RIDER.test(x.note));
+  if (rider) return { rider, parts: [], later: [], beams: 1 };
+  const parts = dealt.filter((x) => !LATER.test(x.note));
+  const later = dealt.filter((x) => LATER.test(x.note));
+  // a higher slot: for each level above the spell's own, one more dart or ray, or more dice of the kind it names
+  const up = s.lv && slot > s.lv ? slot - s.lv : 0;
+  const sentence = up ? String(s.hl || '').split(/[.;]\s*/).find((x) => UPCAST.test(x)) || '' : '';
+  if (sentence && /additional (?:\w+ )?(?:dart|ray)\b/i.test(sentence)) {
+    if (parts[0]) for (let k = 0; k < up; k++) parts.push(Object.assign({}, parts[0], { up: true }));
+  } else if (sentence) {
+    const grow = (x, d) => {
+      const more = /(\d+)d(\d+)/.exec(d);
+      const own = /(\d+)d(\d+)/.exec(x.dice);
+      if (!more) x.flat += Number(d) * up;
+      else if (own && own[2] === more[2]) x.dice = Number(own[1]) + Number(more[1]) * up + 'd' + own[2];
+      else (later.includes(x) ? later : parts).push({ dice: Number(more[1]) * up + 'd' + more[2], flat: 0, type: x.type, note: x.note, like: x });
+    };
+    // "an extra 2d4 Acid damage (1d4 Acid on impact and at the end of target's turn)": the brackets say how it is split
+    const inner = /\(([^)]*\d+d\d+[^)]*)\)/.exec(sentence);
+    const found = [...(inner ? inner[1] : sentence).matchAll(/(\d+d\d+|\b\d+)\s+([A-Z][a-z]+)/g)].filter((m) => DAMAGE_TYPES.includes(m[2]));
+    const bare = /\d+d\d+/.exec(sentence);
+    if (!found.length && bare && (parts[0] || later[0])) grow(parts[0] || later[0], bare[0]);
+    found.forEach((m) => {
+      const now = parts.filter((x) => x.type === m[2]);
+      const then = later.filter((x) => x.type === m[2]);
+      const to = inner ? [now[0], then[0]] : /\bboth\b/i.test(sentence) ? now : [now[0] || then[0] || parts[0] || later[0]];
+      to.filter(Boolean).forEach((x) => grow(x, m[1]));
+    });
+  }
+  const weapon = all.some((x) => x.weapon);
+  if (!parts.length && !later.length && !weapon) return null;
+  return { parts, later, beams, weapon };
 }
-// The damaging spells a build casts, with the group they are cast from: [{ sp, title, ability }].
+// The damaging spells a build casts, with the group they are cast from: [{ sp, title, ability, cls }].
 // Worked out once for a build and act while its choices stay the same.
 const spellMemo = new WeakMap();
 function damagingSpells(stats) {
@@ -118,50 +161,132 @@ function damagingSpells(stats) {
   const seen = new Set();
   const list = [];
   spellbook(b, stats.act, stats).forEach((g) => g.spells.forEach((x) => {
-    if (!x.sp || seen.has(x.sp.n) || !x.sp.dm || x.sp.a === 'reaction' || !spellHits(x.sp, 12)) return;
+    if (!x.sp || seen.has(x.sp.n) || x.sp.a === 'reaction' || !spellHits(x.sp, 12, 6)) return;
     seen.add(x.sp.n);
-    list.push({ sp: x.sp, title: g.title, ability: g.ability });
+    list.push({ sp: x.sp, title: g.title, ability: g.ability, cls: g.cls || '' });
   }));
   spellMemo.set(b, { sig, list });
   return list;
 }
-// One cast of a spell against the target, on average: an attack roll, a saving throw (failed: all of it;
-// passed: half or nothing, as the spell says) or damage that simply lands. Cast at the spell's own level.
-function spellDamage(stats, entry, target) {
+// The slot a spell is cast with: its own level, or the level chosen in Final numbers when the build has such a
+// slot. A Warlock's pact slots are all of one level, so its spells are always cast at that level. A spell that
+// gains nothing from a higher slot keeps its own.
+const UPCAST = /per level|for each spell slot level/i;
+function castLevel(stats, entry) {
   const s = entry.sp;
-  const hits = spellHits(s, stats.level);
+  if (!s.lv) return 0;
+  if (entry.cls === 'Warlock' && stats.pact) return Math.max(s.lv, stats.pact.level);
+  if (!UPCAST.test(s.hl || '')) return s.lv;
+  return Math.max(s.lv, Math.min(Number(state.ui.castLevel) || 0, (stats.slots || []).length));
+}
+const dicePart = (x) => [x.dice, x.flat ? (x.dice ? '+ ' : '') + x.flat : '', x.type].filter(Boolean).join(' ');
+// One cast of a spell against the target, on average. Each part of its damage goes by an attack roll, by a
+// saving throw (failed: all of it; passed: all, half or nothing, as the spell says) or simply lands; a spell with
+// both rolls an attack for its first part and asks a save for the rest (Ice Knife). `main` is the weapon attack
+// a smite rides on. A spell that only hurts turn after turn (Moonbeam) is worth one of those turns.
+function spellDamage(stats, entry, target, main) {
+  const s = entry.sp;
+  const slot = castLevel(stats, entry);
+  const hits = spellHits(s, stats.level, slot);
   if (!hits) return null;
+  if (hits.rider) return { name: s.n, sp: s, rider: hits.rider, slot, total: 0 };
   const cast = stats.casting.find((c) => c.label === entry.title);
   const mod = entry.ability ? stats.mods[entry.ability] : 0;
   const dc = cast ? cast.dc : 8 + stats.pb + mod;
   const attack = cast ? cast.attack : stats.pb + mod;
-  // Agonising Blast: the Charisma modifier on each beam of Eldritch Blast
-  const flat = s.n === 'Eldritch Blast' && (stats.options || new Set()).has('Agonising Blast') ? Math.max(0, stats.mods.cha) : 0;
-  const dmg = (x) => ({ dice: avgDice(x.dice) * typeFactor(target, x.type, true), flat: (x.flat + flat) * typeFactor(target, x.type, true) });
-  const noteSave = hits.parts.map((x) => /(STR|DEX|CON|INT|WIS|CHA)\w* Saving Throw/i.exec(x.note)).find(Boolean);
-  const saveKey = s.sv ? String(s.sv).toLowerCase().slice(0, 3) : noteSave ? noteSave[1].toLowerCase() : '';
-  let total = 0;
-  let how = '';
-  if (s.at) {
-    const p = hitChance(attack, target.ac, stats.crit, stats.advantage);
-    total = hits.beams * hits.parts.reduce((a, x) => { const d = dmg(x); return a + p.hit * (d.dice + d.flat) + p.crit * d.dice; }, 0);
-    how = t('{n}% to hit', { n: Math.round(p.hit * 100) });
-  } else if (saveKey && target.saves) {
-    // the target fails when its d20 plus the save bonus stays under the DC
-    const fail = Math.max(0, Math.min(1, (dc - 1 - target.saves[saveKey]) / 20));
-    const kept = /half|halv/i.test((s.os || '') + hits.parts.map((x) => x.note).join(' ')) ? 0.5 : 0;
-    total = hits.parts.reduce((a, x) => { const d = dmg(x); return a + (d.dice + d.flat) * (fail + (1 - fail) * kept); }, 0);
-    how = t('{ab} save, DC {dc}: {n}% fail', { ab: saveKey.toUpperCase(), dc, n: Math.round(fail * 100) }) + (kept ? ' · ' + t('half on a save') : '');
-  } else {
-    total = hits.beams * hits.parts.reduce((a, x) => { const d = dmg(x); return a + d.dice + d.flat; }, 0);
-    how = t('always lands');
+  const on = stats.active || [];
+  const opts = stats.options || new Set();
+  const gains = stats.gains || [];
+  const p = hitChance(attack, target.ac, stats.crit, stats.advantage);
+  const upText = slot > s.lv ? ' · ' + t('with a level {n} slot', { n: slot }) : '';
+  // the saving throw, and what stays of the damage when it is passed
+  const noteSave = [...hits.parts, ...hits.later].map((x) => /(STR|DEX|CON|INT|WIS|CHA)\w* Saving Throw/i.exec(x.note)).find(Boolean);
+  const saveKey = s.sv ? String(s.sv).toLowerCase().slice(0, 3) : noteSave ? noteSave[1].toLowerCase().slice(0, 3) : '';
+  let fail = saveKey ? Math.max(0, Math.min(1, (dc - 1 - target.saves[saveKey]) / 20)) : 0;
+  const heightened = !!saveKey && on.includes('meta:heighten') && opts.has('Heightened Spell');
+  if (heightened) fail = 1 - (1 - fail) ** 2;  // Disadvantage: the worse of two rolls
+  const potent = !s.lv && gains.includes('Potent Cantrip');
+  const kept = (x) => {
+    const said = SAVE_NOTE.test(x.note) ? x.note : s.os || '';
+    return Math.max(/full damage/i.test(said) ? 1 : /hal[fv]/i.test(said) ? 0.5 : 0, potent ? 0.5 : 0);
+  };
+  const saved = (x) => fail + (1 - fail) * kept(x);
+  const saveText = () => t('{ab} save, DC {dc}: {n}% fail', { ab: saveKey.toUpperCase(), dc, n: Math.round(fail * 100) });
+  const laterText = hits.parts.length || hits.weapon ? hits.later.map((x) => dicePart(x) + ' (' + x.note + ')').join(', ') : '';
+  if (hits.weapon) {
+    // a smite: one weapon attack with the spell's dice on top; a burst that asks a save comes when the attack hits
+    if (!main) return null;
+    const typed = (x) => (/weapon/i.test(x.type) ? main.type : x.type);
+    const ride = hits.parts.filter((x) => !SAVE_NOTE.test(x.note));
+    const burst = hits.parts.filter((x) => SAVE_NOTE.test(x.note));
+    const row = Object.assign({}, main, { extraDice: [...(main.extraDice || []), ...ride.map((x) => [x.dice, typed(x), s.n])] });
+    const d = rowDamage(stats, row, target);
+    const total = d.each + burst.reduce((a, x) => a + d.p.hit * (avgDice(x.dice) + x.flat) * typeFactor(target, typed(x), true) * saved(x), 0);
+    return { name: s.n, sp: s, slot, total, how: t('{n}% to hit', { n: Math.round(d.p.hit * 100) }) + (burst.length && saveKey ? ' · ' + saveText() : '') + upText,
+      text: [t('weapon hit'), ...hits.parts.map(dicePart)].join(' + '), later: laterText, area: false, bonuses: [] };
   }
-  const text = hits.parts.map((x) => [x.dice, x.flat + flat ? '+ ' + (x.flat + flat) : '', x.type].filter(Boolean).join(' ')).join(', ');
-  return { name: s.n, sp: s, total, how, text: (hits.beams > 1 ? hits.beams + ' × ' : '') + text, area: !!s.ao };
+  const now = hits.parts.length ? hits.parts : hits.later.filter((x) => /per turn/i.test(x.note));
+  if (!now.length) return null;
+  const perTurn = !hits.parts.length;
+  // what the build adds to the damage of its spells
+  const bonuses = [];
+  const add = (name, n) => { if (n > 0) bonuses.push(name + ' +' + n); return Math.max(0, n); };
+  let each = 0;   // on every damage roll
+  let once = 0;   // once in the cast
+  let onceAt = 0;
+  if (s.n === 'Eldritch Blast' && opts.has('Agonising Blast')) each += add('Agonising Blast', stats.mods.cha);
+  if (gains.includes('Empowered Evocation') && s.sc === 'Evocation') each += add('Empowered Evocation', stats.mods.int);
+  if (!s.lv && entry.cls === 'Cleric' && gains.includes('Potent Spellcasting')) once += add('Potent Spellcasting', stats.mods.wis);
+  const ancestry = [...opts].map((o) => ANCESTRY.exec(o)).find(Boolean);
+  if (ancestry && gains.includes('Elemental Affinity: Damage') && now.some((x) => x.type === ancestry[1])) {
+    onceAt = now.findIndex((x) => x.type === ancestry[1]);
+    once += add('Elemental Affinity', stats.mods.cha);
+  }
+  // how each part lands
+  const own = now.filter((x) => !x.up && !x.like);
+  const mixed = !!s.at && !!saveKey && own.length > 1;
+  const modeOf = (x, k) => {
+    if (!s.at) return saveKey ? 'save' : 'auto';
+    if (!mixed) return 'attack';
+    return (x.like ? now.indexOf(x.like) : k) === 0 ? 'attack' : 'save';
+  };
+  // more than one enemy: the ones caught in an area (not the part aimed at one of them)
+  const area = !!s.ao;
+  const targets = area ? Math.max(1, Number(state.ui.targets) || 1) : 1;
+  const modes = new Set();
+  let total = 0;
+  now.forEach((x, k) => {
+    const f = typeFactor(target, x.type, true);
+    const dice = avgDice(x.dice) * f;
+    const flat = (x.flat + each + (k === onceAt ? once : 0)) * f;
+    const mode = modeOf(x, k);
+    modes.add(mode);
+    if (mode === 'attack') total += hits.beams * (p.hit * (dice + flat) + p.crit * dice) * (mixed ? 1 : targets);
+    else if (mode === 'save') total += (dice + flat) * saved(x) * targets;
+    else total += hits.beams * (dice + flat) * targets;
+  });
+  // "3 × 1d4 + 1 Force" for darts and rays that are all alike
+  const same = now.length > 1 && now.every((x) => dicePart(x) === dicePart(now[0]));
+  // Twinned Spell: a spell that targets one creature also hits a second one
+  const twin = !area && !same && hits.beams === 1 && on.includes('meta:twin') && opts.has('Twinned Spell');
+  if (twin) total *= 2;
+  const halfText = now.some((x, k) => modeOf(x, k) === 'save' && kept(x) === 0.5) ? ' · ' + t('half on a save') : '';
+  const how = [modes.has('attack') ? t('{n}% to hit', { n: Math.round(p.hit * 100) }) : '',
+    modes.has('save') ? saveText() + halfText : '',
+    modes.has('auto') ? t('always lands') : ''].filter(Boolean).join(' · ') + upText + (perTurn ? ' · ' + t('each turn') : '')
+    + (targets > 1 ? ' · ' + t('{n} targets', { n: targets }) : '') + (twin ? ' · Twinned Spell' : '') + (heightened ? ' · Heightened Spell' : '');
+  const text = (hits.beams > 1 ? hits.beams + ' × ' : same ? now.length + ' × ' : '') + (same ? dicePart(now[0]) : now.map(dicePart).join(', '));
+  return { name: s.n, sp: s, slot, total, how, text, later: laterText, area, bonuses, twin, heightened, perTurn };
 }
-// Every damaging spell of the build against the target, strongest first.
-const spellOptions = (stats, target) => damagingSpells(stats).map((x) => spellDamage(stats, x, target)).filter((x) => x && x.total > 0).sort((x, y) => y.total - x.total);
-// How often a spell of that level can be cast: at will, or the slots of its level and above.
+// Every damaging spell of the build against the target, strongest first; the ones that add a die to weapon
+// hits come apart, in `riders`.
+function spellOptions(stats, target, main) {
+  const all = damagingSpells(stats).map((x) => spellDamage(stats, x, target, main)).filter(Boolean);
+  const list = all.filter((x) => !x.rider && x.total > 0).sort((x, y) => y.total - x.total);
+  list.riders = all.filter((x) => x.rider);
+  return list;
+}
+// How often a spell can be cast with a slot of that level: at will, or the slots of that level and above.
 function castsText(stats, lv) {
   if (!lv) return t('at will');
   const shared = (stats.slots || []).slice(lv - 1).reduce((a, n) => a + n, 0);
@@ -175,9 +300,9 @@ function castsText(stats, lv) {
 function bestTurn(stats, style, against) {
   const target = asTarget(against);
   const plan = turnPlan(stats, style, target);
-  const spells = stats.build ? spellOptions(stats, target) : [];
+  const spells = stats.build ? spellOptions(stats, target, plan ? plan.parts[0].row : null) : [];
   const cantrip = spells.find((x) => !x.sp.lv) || null;
-  return { target, plan, spells, cantrip, total: Math.max(plan ? plan.total : 0, cantrip ? cantrip.total : 0) };
+  return { target, plan, spells, riders: spells.riders || [], cantrip, total: Math.max(plan ? plan.total : 0, cantrip ? cantrip.total : 0) };
 }
 // What the plan spends and for how long it holds: Ki for Flurry of Blows, Action Surge, Haste, Rage.
 function turnSpends(stats, plan) {
@@ -190,10 +315,19 @@ function turnSpends(stats, plan) {
   if ((stats.active || []).includes('rage') && res['Rage Charges']) out.push(t('Rage: {n} per Long Rest, 10 turns each', { n: res['Rage Charges'] }));
   return out;
 }
+// What the Metamagic switched on costs, for the spells it changed.
+function spellSpends(stats, spells) {
+  const points = (stats.resources || []).find(([n]) => n === 'Sorcery Points');
+  const out = [];
+  if (spells.some((x) => x.twin)) out.push(t('Twinned Spell: Sorcery Points for each cast'));
+  if (spells.some((x) => x.heightened)) out.push(t('Heightened Spell: 3 Sorcery Points for each cast'));
+  if (out.length && points) out.push(t('{n} Sorcery Points per Long Rest', { n: points[1] }));
+  return out;
+}
 // The block under the attacks: the turn of weapon attacks, the best the build does at will, the spells.
 function turnBox(stats, style) {
   const best = bestTurn(stats, style, targetOf());
-  const { plan, spells, cantrip, target } = best;
+  const { plan, spells, riders, cantrip, target } = best;
   if (!plan && !spells.length) return '';
   const who = esc(targetLabel(target));
   const count = (x) => (x.chance != null ? Math.round(x.chance * 100) + '%' : x.n) + ' × ';
@@ -202,16 +336,35 @@ function turnBox(stats, style) {
     stats.advantage ? ' · ' + t('with Advantage') : ''}${stats.crit < 20 ? ' · ' + t('critical hit on {n} or more', { n: stats.crit }) : ''}</p>` : '';
   const spends = turnSpends(stats, plan);
   const row = (x) => `<div class="opt"><b>${pic(x.sp.i, 'pic small')}${esc(x.name)}</b><span>${esc(x.text)}</span><span>${esc(x.how)}</span>
-    <strong>${x.total.toFixed(1)}</strong><small>${x.sp.lv ? t('level {n} slot', { n: x.sp.lv }) + ' · ' : ''}${esc(castsText(stats, x.sp.lv))}${x.area ? ' · ' + t('each target in the area') : ''}</small></div>`;
-  const shown = spells.slice(0, 8);
+    <strong>${x.total.toFixed(1)}</strong><small>${[x.slot ? t('level {n} slot', { n: x.slot }) : '', castsText(stats, x.slot), x.area && !(Number(state.ui.targets) > 1) ? t('each target in the area') : '',
+      x.bonuses.join(', '), x.later ? t('then {x}', { x: x.later }) : ''].filter(Boolean).map(esc).join(' · ')}</small></div>`;
+  const shown = spells.slice(0, 10);
+  // a spell that adds a die to every weapon hit is worth what the hits of the turn make of it
+  const riderRow = (x) => {
+    const worth = plan ? plan.parts.reduce((a, part) => { const f = typeFactor(target, /weapon/i.test(x.rider.type) ? part.row.type : x.rider.type, true); return a + part.n * (part.p.hit + part.p.crit) * avgDice(x.rider.dice) * f; }, 0) : 0;
+    return `<div class="opt"><b>${pic(x.sp.i, 'pic small')}${esc(x.name)}</b><span>${esc(dicePart(x.rider))}</span><span>${t('on every hit')}</span>
+      <strong>+${worth.toFixed(1)}</strong><small>${[x.slot ? t('level {n} slot', { n: x.slot }) : '', castsText(stats, x.slot), x.sp.du || '', x.sp.co ? t('Concentration') : ''].filter(Boolean).map(esc).join(' · ')}</small></div>`;
+  };
+  // the slot the spells are cast with, and how many enemies an area catches
+  const top = (stats.slots || []).length;
+  const chosen = Math.min(Number(state.ui.castLevel) || 0, top);
+  const slotButtons = top > 1 ? `<span class="lbl">${t('Cast with a slot of')}</span><div class="acts mini">${[0, ...Array.from({ length: top - 1 }, (x, k) => k + 2)].map((n) =>
+    `<button class="${chosen === n ? 'on' : ''}" data-act="cast-level" data-n="${n}">${n ? t('level {n}', { n }) : t('its own level')}</button>`).join('')}</div>` : '';
+  const areaTools = spells.some((x) => x.area) ? `<span class="lbl">${t('Enemies in an area')}</span>${stepper(Math.max(1, Number(state.ui.targets) || 1), 'data-ui="targets" data-v="1"', 1, 8)}` : '';
+  const costs = spellSpends(stats, spells);
   return `${weapon}
     ${spends.length ? `<p class="muted">${spends.map(esc).join(' · ')}</p>` : ''}
     ${cantrip && plan && cantrip.total > plan.total ? `<p class="muted">${t('At will, {spell} does more than the weapon: {n} a turn.', { spell: esc(cantrip.name), n: cantrip.total.toFixed(1) })}</p>` : ''}
-    ${shown.length ? `<h3 class="group">${t('Spells against {who}', { who })}</h3><div class="opts">${shown.map(row).join('')}</div>
-      <p class="muted">${t('Average damage of one cast at the spell\'s own level, on one target. Damage that comes on later turns is not counted.')}</p>` : ''}`;
+    ${shown.length || riders.length ? `<h3 class="group">${t('Spells against {who}', { who })}</h3>
+      ${slotButtons || areaTools ? `<div class="cast-tools">${slotButtons}${areaTools}</div>` : ''}
+      ${stats.pact ? `<p class="muted">${t('Pact Magic casts every Warlock spell with a level {n} slot.', { n: stats.pact.level })}</p>` : ''}
+      <div class="opts">${shown.map(row).join('')}${riders.map(riderRow).join('')}</div>
+      ${costs.length ? `<p class="muted">${costs.map(esc).join(' · ')}</p>` : ''}
+      <p class="muted">${t('Average damage of one cast. Damage of the following turns is named after "then" and not added.')}</p>` : ''}`;
 }
 // "Fire immune, Slashing resistant (non-magical)".
-const resText = (e) => Object.keys(e.res || {}).map((k) => k + ' ' + ({ r: t('resistant'), rn: t('resistant (non-magical)'), i: t('immune'), in: t('immune (non-magical)'), v: t('vulnerable') })[e.res[k]]);
+const resText = (e) => Object.keys(e.res || {}).map((k) => k + ' ' + ({ r: t('resistant'), rn: t('resistant (non-magical)'), rm: t('resistant (magical)'), i: t('immune'), in: t('immune (non-magical)'),
+  ip: t('immune (non-magical), resistant (magical)'), v: t('vulnerable') })[e.res[k]]);
 // The enemy the numbers are measured against, chosen in Final numbers.
 function targetTools() {
   const target = targetOf();
@@ -222,15 +375,16 @@ function targetTools() {
       <div class="field ac-field"><span>${t('Its saving throws')}</span>${stepper(target.saves.str, 'data-ui="targetSave" data-v="3"', -3, 15)}</div>`}
     <div class="field"><span>${t('Rules')}</span><button class="btn tiny${honourMode() ? ' gold' : ''}" data-act="honour-toggle" title="${t('In Honour mode, Extra Attack from Deepened Pact does not add to a class\'s Extra Attack, and the action Haste gives cannot use Extra Attack.')}">${honourMode() ? t('Honour mode') : t('Standard rules')}</button></div>
     ${e ? `<p class="enemy-line">${t('Act {n}', { n: e.act })} · ${t('level {n}', { n: e.lv })} · AC ${e.ac} · HP ${[e.hp.b, e.hp.t ? e.hp.t + ' Tactician' : '', e.hp.h ? e.hp.h + ' Honour' : ''].filter(Boolean).join(' / ')} · ${
-      ABILS.map(([k, short]) => short + ' ' + signed(target.saves[k])).join(' ')}${res.length ? ' · ' + esc(res.join(', ')) : ''}</p>` : ''}`;
+      ABILS.map(([k, short]) => short + ' ' + signed(target.saves[k])).join(' ')}${res.length ? ' · ' + esc(res.join(', ')) : ''}${e.note ? `<br><em>${esc(e.note)}</em>` : ''}</p>` : ''}`;
 }
 
 Object.assign(actions, {
   'enemy-open'() {
-    const rows = ENEMIES.map((e) => [e.n, resText(e).join(', '), `AC ${e.ac} · HP ${e.hp.b} · ${t('level {n}', { n: e.lv })}`, '', t('Act {n}', { n: e.act })]);
+    const rows = ENEMIES.map((e) => [e.n, [resText(e).join(', '), e.note || ''].filter(Boolean).join(' — '), `AC ${e.ac} · HP ${e.hp.b} · ${t('level {n}', { n: e.lv })}`, '', t('Act {n}', { n: e.act })]);
     openChooser(t('Enemy'), t('Reference enemies, with the numbers of their page on bg3.wiki. Take the choice back and confirm to measure against just an Armour Class.'),
       [{ label: t('Enemy'), n: 1, min: 0, options: rows, chosen: state.ui.target ? [state.ui.target] : [] }], (done) => { state.ui.target = done[0].chosen[0] || ''; });
     return false;
   },
   'honour-toggle'() { state.ui.honour = !honourMode(); },
+  'cast-level'(el) { state.ui.castLevel = Number(el.dataset.n) || 0; },
 });

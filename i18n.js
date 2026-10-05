@@ -810,6 +810,24 @@ window.BG3_I18N = {
     'vulnerable': 'vulnerável',
     'Reference enemies, with the numbers of their page on bg3.wiki. Take the choice back and confirm to measure against just an Armour Class.': 'Inimigos de referência, com os números da página deles na bg3.wiki. Desmarque e confirme para medir só contra uma Armour Class.',
 
+    // upcasting, Metamagic, later damage
+    'with a level {n} slot': 'com slot de nível {n}',
+    'weapon hit': 'acerto da arma',
+    '{n} targets': '{n} alvos',
+    'Twinned Spell: Sorcery Points for each cast': 'Twinned Spell: Sorcery Points a cada conjuração',
+    'Heightened Spell: 3 Sorcery Points for each cast': 'Heightened Spell: 3 Sorcery Points a cada conjuração',
+    '{n} Sorcery Points per Long Rest': '{n} Sorcery Points por Long Rest',
+    'then {x}': 'depois {x}',
+    'Cast with a slot of': 'Conjurar com slot de',
+    'its own level': 'nível da própria spell',
+    'Enemies in an area': 'Inimigos numa área',
+    'Pact Magic casts every Warlock spell with a level {n} slot.': 'O Pact Magic conjura toda spell de Warlock com slot de nível {n}.',
+    'Average damage of one cast. Damage of the following turns is named after "then" and not added.': 'Dano médio de uma conjuração. O dano dos turnos seguintes aparece depois de "depois" e não é somado.',
+    'resistant (magical)': 'resistente (mágico)',
+    'immune (non-magical), resistant (magical)': 'imune (não mágico), resistente (mágico)',
+
+    'on every hit': 'em cada acerto',
+    'each turn': 'a cada turno',
     // dialogs and toasts
     'Cancel': 'Cancelar',
     'Confirm': 'Confirmar',

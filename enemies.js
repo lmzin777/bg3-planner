@@ -2,7 +2,8 @@
 // do not edit by hand, re-run the script instead.
 // n name · act · lv level · ac Armour Class · hp hit points (b balanced, t tactician, h honour) · ab ability scores
 // sv saving throws it is proficient in · pb proficiency bonus · res damage types: r resistant, rn resistant to
-// non-magical damage only, i immune, in immune to non-magical only, v vulnerable
+// non-magical damage only, rm resistant to magical only, i immune, in immune to non-magical only,
+// ip immune to non-magical and resistant to magical, v vulnerable · note what to know about the fight
 window.BG3_ENEMIES = [
   {"n":"Goblin Warrior","act":1,"lv":2,"ac":13,"hp":{"b":15,"t":19,"h":23},"ab":{"str":12,"dex":13,"con":11,"int":10,"wis":8,"cha":8},"sv":[],"pb":2,"res":{}},
   {"n":"Owlbear","act":1,"lv":3,"ac":13,"hp":{"b":91,"t":118},"ab":{"str":20,"dex":12,"con":17,"int":3,"wis":12,"cha":7},"sv":[],"pb":2,"res":{}},
@@ -12,9 +13,11 @@ window.BG3_ENEMIES = [
   {"n":"Dror Ragzlin","act":1,"lv":5,"ac":14,"hp":{"b":75,"t":97},"ab":{"str":18,"dex":12,"con":16,"int":12,"wis":10,"cha":15},"sv":["str","con","int","wis","cha"],"pb":3,"res":{}},
   {"n":"Minthara","act":1,"lv":6,"ac":16,"hp":{"b":52,"t":67,"h":67},"ab":{"str":16,"dex":15,"con":14,"int":10,"wis":12,"cha":17},"sv":["wis","cha"],"pb":3,"res":{}},
   {"n":"Bulette","act":1,"lv":5,"ac":17,"hp":{"b":125,"t":162},"ab":{"str":19,"dex":11,"con":21,"int":2,"wis":10,"cha":5},"sv":["str","dex"],"pb":3,"res":{}},
+  {"n":"Grym (Superheated)","act":1,"lv":10,"ac":18,"hp":{"b":300,"t":450},"ab":{"str":24,"dex":6,"con":24,"int":3,"wis":11,"cha":1},"sv":["dex","wis"],"pb":4,"res":{"Slashing":"r","Piercing":"r","Bludgeoning":"v","Acid":"r","Thunder":"r","Necrotic":"i","Fire":"i","Lightning":"i","Cold":"r","Psychic":"i","Poison":"i","Radiant":"i","Force":"r"},"note":"Only while Superheated, standing in lava. Otherwise Grym is immune to all damage."},
   {"n":"Inquisitor W'wargaz","act":1,"lv":6,"ac":17,"hp":{"b":112,"t":145},"ab":{"str":17,"dex":14,"con":15,"int":18,"wis":16,"cha":12},"sv":["str","con","int","wis"],"pb":3,"res":{}},
   {"n":"Yurgir","act":2,"lv":10,"ac":17,"hp":{"b":105,"t":136},"ab":{"str":22,"dex":16,"con":21,"int":15,"wis":15,"cha":16},"sv":["dex","con","wis"],"pb":4,"res":{"Slashing":"rn","Piercing":"rn","Bludgeoning":"rn","Fire":"i","Cold":"r","Poison":"i"}},
   {"n":"Thisobald Thorm","act":2,"lv":6,"ac":16,"hp":{"b":288,"t":374},"ab":{"str":18,"dex":14,"con":16,"int":10,"wis":16,"cha":6},"sv":["str","con","wis"],"pb":3,"res":{}},
+  {"n":"Gerringothe Thorm","act":2,"lv":8,"ac":16,"hp":{"b":606},"ab":{"str":12,"dex":18,"con":12,"int":16,"wis":12,"cha":8},"sv":["dex","int"],"pb":3,"res":{"Slashing":"rn","Piercing":"rn","Bludgeoning":"rn","Fire":"r"},"note":"With all 6 pieces of Coin Armour. She loses 100 hit points for each Visage killed."},
   {"n":"Malus Thorm","act":2,"lv":7,"ac":18,"hp":{"b":276,"t":358},"ab":{"str":14,"dex":18,"con":14,"int":14,"wis":16,"cha":8},"sv":["dex","wis"],"pb":3,"res":{"Slashing":"rn","Piercing":"rn","Bludgeoning":"rn","Fire":"r"}},
   {"n":"Ketheric Thorm","act":2,"lv":11,"ac":22,"hp":{"b":145,"t":218},"ab":{"str":18,"dex":13,"con":17,"int":12,"wis":15,"cha":20},"sv":["wis","cha"],"pb":4,"res":{"Necrotic":"r","Poison":"i"}},
   {"n":"Apostle of Myrkul","act":2,"lv":11,"ac":19,"hp":{"b":245,"t":390},"ab":{"str":23,"dex":12,"con":22,"int":15,"wis":17,"cha":21},"sv":["wis","cha"],"pb":4,"res":{"Necrotic":"r","Cold":"r","Poison":"i"}},

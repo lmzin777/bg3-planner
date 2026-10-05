@@ -894,9 +894,11 @@
 
   // ---------- the damage of a turn ----------
   test('spells, extra actions and the enemy enter the damage of a turn', () => {
-    const kept = { target: state.ui.target, honour: state.ui.honour };
+    const kept = { target: state.ui.target, honour: state.ui.honour, castLevel: state.ui.castLevel, targets: state.ui.targets };
     state.ui.target = '';
     state.ui.honour = true;
+    state.ui.castLevel = 0;
+    state.ui.targets = 1;
     const made = (classes, creation, subs, gear, picks) => {
       const b = build(classes, Object.assign({ race: 'Human', background: 'Soldier' }, creation));
       Object.keys(subs || {}).forEach((i) => { b.levels[i].sub = subs[i]; });
@@ -909,6 +911,7 @@
     const enemy = (name) => { state.ui.target = name; const tg = targetOf(); state.ui.target = ''; return tg; };
     const spells = (b, tg) => spellOptions(finalStats(b, 'act1'), tg).map((x) => [x.name, round(x.total)]);
     const plan = (b, style, tg) => { const p = turnPlan(finalStats(b, 'act1'), style, tg || 16); return [round(p.total), p.parts.map((x) => [x.how, round(x.n)])]; };
+    const targetToolsFor = (name) => { const was = state.ui.target; state.ui.target = name; const html = targetTools(); state.ui.target = was; return html; };
 
     // Wizard 5: Intelligence 17 (+3), proficiency +3: spell attack +6, spell save DC 14. Against AC 16, saves +3.
     const wiz = made(Array(5).fill('Wizard'), { abilities: { str: 8, dex: 14, con: 14, int: 15, wis: 12, cha: 10 }, plus2: 'int', plus1: 'wis' }, { 1: 'Evocation School' }, {},
@@ -924,10 +927,70 @@
     eq([raphael.ac, raphael.saves.dex, raphael.saves.cha, raphael.res.Fire], [21, 3, 8, 'i'], 'Dexterity 16, not proficient; Charisma 19 + 4');
     eq(spells(wiz, raphael), [['Magic Missile', 10.5]], 'immune to Fire: only the Force damage is left');
 
+    // A higher slot, more than one enemy in an area, and the spells that roll an attack and then ask a save.
+    state.ui.castLevel = 3;
+    eq(spells(wiz, plain), [['Fireball', 21], ['Magic Missile', 17.5], ['Fire Bolt', 6.6]], 'with a level 3 slot Magic Missile throws five darts; a cantrip and a level 3 spell stay as they are');
+    eq(castLevel(st, { sp: SPELL_BY_NAME.get('magic missile'), cls: 'Wizard' }), 3);
+    state.ui.castLevel = 6;
+    eq(castLevel(st, { sp: SPELL_BY_NAME.get('magic missile'), cls: 'Wizard' }), 3, 'no slot above level 3 at Wizard 5');
+    state.ui.castLevel = 0;
+    state.ui.targets = 3;
+    eq(spells(wiz, plain), [['Fireball', 63], ['Magic Missile', 10.5], ['Fire Bolt', 6.6]], 'three enemies in the Fireball');
+    state.ui.targets = 1;
+    const one = (name, more) => spellDamage(st, Object.assign({ sp: SPELL_BY_NAME.get(norm(name)), title: st.casting[0].label, ability: 'int', cls: 'Wizard' }, more), plain);
+    const worth = (name) => round(one(name).total);
+    eq(worth('Ice Knife'), 6.8, 'the shard by attack roll (0.55 × 5.5 + 0.05 × 5.5), the burst of 2d6 by a save that negates it (7 × 0.5)');
+    eq(worth('Scorching Ray'), 12.6, 'three rays: 3 × (0.55 × 7 + 0.05 × 7)');
+    eq(worth('Heat Metal'), 9, 'a passed save still takes the full 2d8');
+    eq([one('Moonbeam').perTurn, worth('Moonbeam')], [true, 8.25], 'only hurts turn after turn: 2d10 = 11, half on a save');
+    state.ui.castLevel = 2;
+    eq(worth('Ice Knife'), 8.55, 'one more d6 of Cold: 3.3 + 10.5 × 0.5');
+    state.ui.castLevel = 3;
+    eq([worth('Scorching Ray'), worth('Burning Hands')], [16.8, 13.125], 'a fourth ray; 5d6 = 17.5 × 0.75');
+    state.ui.targets = 3;
+    state.ui.castLevel = 0;
+    eq(worth('Ice Knife'), 13.8, 'only the burst catches the others: 3.3 + 3 × 3.5');
+    state.ui.targets = 1;
+    // what a higher slot adds, read from each spell's own text
+    const dice = (name, slot, level) => { const h = spellHits(SPELL_BY_NAME.get(norm(name)), level || 12, slot); return [h.parts.map((x) => x.dice), h.later.map((x) => x.dice), !!h.weapon]; };
+    eq(dice('Lightning Arrow', 4), [['5d8', '3d8'], [], false], 'both the arrow and the burst grow');
+    eq(dice('Flame Strike', 6), [['6d6', '6d6'], [], false]);
+    eq(dice('Ice Storm', 5), [['3d8', '4d6'], [], false], 'only the Bludgeoning part grows');
+    eq(dice("Melf's Acid Arrow", 3), [['5d4'], ['3d4'], false], 'one more d4 on impact and one at the end of the turn');
+    eq(dice('Searing Smite', 2), [['2d6'], ['1d6'], true], 'the first hit grows, the burning does not');
+    eq(dice('Moonbeam', 3), [[], ['3d10'], false]);
+    eq(dice('Booming Blade', 0, 5), [['1d8'], ['2d8'], true], 'the cantrip at character level 5');
+    eq(['Hex', "Hunter's Mark", 'Divine Favour'].map((n) => { const r = spellHits(SPELL_BY_NAME.get(norm(n)), 12, 1).rider; return r.dice + ' ' + r.type; }),
+      ['1d6 Necrotic', '1d6 Weapon', '1d4 Radiant'], 'spells that add a die to every hit');
+
+    // Sorcerer 6, Draconic Bloodline (Red): Charisma 17 (+3), DC 14, +6. Elemental Affinity adds 3 to Fire, once a cast.
+    const sorc = made(Array(6).fill('Sorcerer'), { abilities: { str: 8, dex: 14, con: 14, int: 10, wis: 12, cha: 15 }, plus2: 'cha', plus1: 'con' }, { 0: 'Draconic Bloodline' }, {},
+      { 0: ['Draconic Ancestry: Red (Fire)', 'Cantrip: Fire Bolt', 'Spell: Magic Missile'], 1: ['Metamagic: Twinned Spell', 'Metamagic: Distant Spell'], 2: ['Metamagic: Heightened Spell', 'Spell: Scorching Ray'], 4: ['Spell: Fireball'] });
+    eq(spells(sorc, plain), [
+      ['Fireball', 23.25],        // (28 + 3) × 0.75
+      ['Scorching Ray', 14.25],   // 12.6, and 3 more on one ray: 0.55 × 3
+      ['Magic Missile', 10.5],
+      ['Fire Bolt', 8.25]]);      // 0.55 × (11 + 3) + 0.05 × 11
+    eq(availableToggles(sorc, 'act1').filter((x) => /^meta:/.test(x.key)).map((x) => x.label), ['Twinned Spell', 'Heightened Spell']);
+    ok(!availableToggles(wiz, 'act1').some((x) => /^meta:/.test(x.key)), 'Metamagic is offered only to who chose it');
+    sorc.active = ['meta:twin', 'meta:heighten'];
+    eq(spells(sorc, plain), [
+      ['Fireball', 27.125],       // Disadvantage on the save: it fails 1 − 0.5² = 75% of the time; 31 × (0.75 + 0.25 × ½)
+      ['Fire Bolt', 16.5],        // a second target
+      ['Scorching Ray', 14.25],   // three rays already: not for Twinned Spell
+      ['Magic Missile', 10.5]]);
+    const sst = finalStats(sorc, 'act1');
+    eq(spellSpends(sst, spellOptions(sst, plain)), ['Twinned Spell: Sorcery Points for each cast', 'Heightened Spell: 3 Sorcery Points for each cast', '6 Sorcery Points per Long Rest']);
+    sorc.active = [];
+
     // Warlock 5 with Agonising Blast: two beams of 1d10 + 3. The patron's spells are not known by themselves.
     const lock = made(Array(5).fill('Warlock'), { abilities: { str: 8, dex: 14, con: 14, int: 10, wis: 12, cha: 15 }, plus2: 'cha', plus1: 'con' }, { 0: 'The Fiend' }, {},
-      { 0: ['Cantrip: Eldritch Blast'], 1: ['Eldritch Invocation: Agonising Blast'] });
-    eq(spells(lock, plain), [['Eldritch Blast', 9.9]]);  // 2 × (0.55 × 8.5 + 0.05 × 5.5)
+      { 0: ['Cantrip: Eldritch Blast', 'Spell: Hex', 'Spell: Burning Hands'], 1: ['Eldritch Invocation: Agonising Blast'] });
+    eq(spells(lock, plain), [
+      ['Burning Hands', 13.125],  // Pact Magic at Warlock 5 casts it with a level 3 slot: 5d6 = 17.5 × 0.75
+      ['Eldritch Blast', 9.9]]);  // 2 × (0.55 × 8.5 + 0.05 × 5.5)
+    eq(spellOptions(finalStats(lock, 'act1'), plain).riders.map((x) => [x.name, x.slot]), [['Hex', 3]], 'Hex is listed apart: it adds to the hits');
+    ok(/Hex/.test(turnBox(finalStats(lock, 'act1'), 'caster')) && /Pact Magic casts every Warlock spell with a level 3 slot/.test(turnBox(finalStats(lock, 'act1'), 'caster')));
     ok(levelSpellLists(lock, 4, levelSlots(lock, 4).spells).reach.some((x) => x.n === 'Fireball'), 'Fireball is on the list a Fiend Warlock chooses from');
 
     // Fighter 5 (Champion), Longsword and shield: +6, 1d8 + 3, critical hit on 19.
@@ -963,6 +1026,12 @@
     eq(plan(fw, 'melee')[1], [['Attack action', 3]]);
     Object.assign(state.ui, kept);
     ok(ENEMIES.length > 20 && ENEMIES.every((e) => e.ac > 9 && e.hp.b > 0 && e.act >= 1 && e.act <= 3), 'the reference enemies carry their numbers');
+    // the two fights that are a puzzle first, in the state where damage counts
+    const grym = enemy('Grym (Superheated)');
+    eq([typeFactor(grym, 'Bludgeoning', false), typeFactor(grym, 'Slashing', true), typeFactor(grym, 'Fire', true), typeFactor(grym, 'Force', true)], [2, 0.5, 0, 0.5]);
+    ok(/Superheated/.test(grym.enemy.note) && /Grym is immune/.test(targetToolsFor('Grym (Superheated)')), 'the note of the fight is shown with the enemy');
+    eq([enemy('Gerringothe Thorm').enemy.hp.b, /Coin Armour/.test(enemy('Gerringothe Thorm').enemy.note)], [606, true]);
+    eq([typeFactor({ res: { Fire: 'rm' } }, 'Fire', true), typeFactor({ res: { Fire: 'rm' } }, 'Fire', false), typeFactor({ res: { Fire: 'ip' } }, 'Fire', true), typeFactor({ res: { Fire: 'ip' } }, 'Fire', false)], [0.5, 1, 0.5, 0]);
   });
 
   test('only the choices a level grants count: the rest finds its place or becomes a note', () => {
@@ -1405,6 +1474,22 @@
     ok(/Raphael/.test(q('.turn').textContent) && /AC 21/.test(q('.enemy-line').textContent) && shown() < base * 2, 'the numbers are now against Raphael: harder to hit, and a common sword is resisted');
     await click(q('[data-act="honour-toggle"]'), 'rules');
     eq(state.ui.honour, false);
+    // a caster: the slot its spells are cast with
+    const w = build(Array(5).fill('Wizard'), { race: 'Human', background: 'Sage', abilities: { str: 8, dex: 14, con: 14, int: 15, wis: 12, cha: 10 }, plus2: 'int', plus1: 'wis' });
+    w.levels[0].picks = ['Cantrip: Fire Bolt', 'Spell: Magic Missile'];
+    w.levels[4].picks = ['Spell: Fireball'];
+    state.ui.target = '';
+    state.ui.castLevel = 0;
+    state.ui.targets = 1;
+    show(w);
+    const rowOf = (name) => all('.opts .opt').find((x) => x.querySelector('b').textContent.trim() === name);
+    eq(rowOf('Magic Missile').querySelector('strong').textContent, '10.5');
+    await click(q('[data-act="cast-level"][data-n="3"]'), 'level 3 slot');
+    eq([state.ui.castLevel, rowOf('Magic Missile').querySelector('strong').textContent], [3, '17.5']);
+    await click(q('.cast-tools [data-act="step"][data-d="1"]'), 'one more enemy in the area');
+    eq([state.ui.targets, rowOf('Fireball').querySelector('strong').textContent], [2, '42.0']);
+    state.ui.castLevel = 0;
+    state.ui.targets = 1;
   });
 
   flow('the party page: ticking an item as obtained', async () => {

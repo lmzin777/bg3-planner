@@ -62,6 +62,7 @@ function spellbook(b, act, stats) {
     if (!chosen.length && !granted.length && !bonus.length && !ready.length) return;
     const prepared = stats.casting.find((c) => c.label === (caster && (caster.sub || caster.cls)));
     const g = group(caster ? caster.sub || cls : cls, ability, prepared && prepared.prepared ? t('prepares {n} of its spells at a time', { n: prepared.prepared }) : '');
+    g.cls = cls;
     chosen.forEach((x) => put(g, x.name, (x.scroll ? t('learned from a scroll') : t('chosen')) + (ready.includes(x.name) ? ' · ' + t('prepared') : '')));
     ready.forEach((name) => put(g, name, t('prepared')));
     bonus.forEach((name) => put(g, name, t('bonus cantrip')));
