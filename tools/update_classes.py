@@ -32,6 +32,8 @@ def sections(text, level):
 
 
 def tidy(name):
+    # {{MartialWeaponsProf}} is the wiki's icon for a proficiency: keep its words, "Martial Weapons"
+    name = re.sub(r"\{\{\s*([A-Za-z]+?)Prof\s*\}\}", lambda m: re.sub(r"(?<=[a-z])(?=[A-Z])", " ", m.group(1)), name)
     name = clean(name.replace("&colon;", ":")).strip(" :-–")
     name = re.sub(r"\s*\((?:passive feature|Melee|Ranged|class action)\)", "", name)
     return re.sub(r"\(\s+", "(", name).strip()

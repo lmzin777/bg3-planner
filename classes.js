@@ -446,7 +446,7 @@ window.BG3_CLASSES = {
   "subclasses": {
    "Death Domain": {
     "1": [
-     "Gain Martial Weapons Prof Proficiency",
+     "Gain Martial Weapons Proficiency",
      "Reaper",
      "Domain Spells",
      "Bone Chill",
@@ -640,7 +640,7 @@ window.BG3_CLASSES = {
    "Tempest Domain": {
     "1": [
      "Gain Heavy Armour Proficiency",
-     "Gain Martial Weapons Prof Proficiency",
+     "Gain Martial Weapons Proficiency",
      "Wrath of the Storm",
      "Domain Spells",
      "Thunderwave",

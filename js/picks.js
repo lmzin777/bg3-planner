@@ -155,7 +155,8 @@ function levelSpellLists(b, i, sp) {
   const max = maxSpellLevel(b, i);
   const every = levelGains(x).some((g) => /magical secrets/i.test(g));  // Magical Secrets takes spells from every class
   const here = new Set([...sp.cantrip, ...sp.spell, sp.swap ? sp.swap.name : ''].map(norm));
-  const known = new Set(currentSpells(b).filter((y) => y.cls === x.cls).map((y) => norm(y.name)));
+  // known through the class, or through the race, a bonus cantrip or a feat (those carry no class)
+  const known = new Set(currentSpells(b).filter((y) => y.cls === x.cls || !y.cls).map((y) => norm(y.name)));
   const pool = SPELLS.filter((s) => (every ? (s.cl || []).length : (s.cl || []).includes(learn.list) || (s.lr || []).some(([who]) => who === sub))
     && (here.has(norm(s.n)) || !known.has(norm(s.n)))).sort((p, q) => p.lv - q.lv || p.n.localeCompare(q.n));
   const reach = pool.filter((s) => s.lv && (max <= 0 || s.lv <= max));
@@ -180,7 +181,8 @@ function slotCells(b, i, slots) {
     for (let k = 0; k < c.n; k++) {
       const e = entries[k] || { value: '', note: '' };
       const o = g.options.find((y) => y[0] === e.value);
-      out.push(cell(g.name + (c.n > 1 ? ' ' + (k + 1) : ''), button('choice-open', `data-g="${c.i}"`, e.value),
+      const spell = SPELL_BY_NAME.get(norm(e.value));  // a bonus cantrip shows its picture like any other spell
+      out.push(cell(g.name + (c.n > 1 ? ' ' + (k + 1) : ''), button('choice-open', `data-g="${c.i}"`, e.value, spell ? pic(spell.i, 'pic small') : ''),
         [e.note, o && gainText(o[1])].filter(Boolean).join(' · '), !e.value, o ? o[1] : ''));
     }
   });
@@ -451,7 +453,10 @@ Object.assign(actions, {
     // what the other levels of the class already took cannot be taken again
     const off = g.repeat ? [] : info.flatMap((y, j) => (j !== level && y.cls === x.cls ? chosenOf(b, x.cls, merged, j) : []));
     openChooser(`${x.cls} ${x.n} · ${g.name}`, '', [{ label: g.name, n: slot.c.n, min: 0, off, chosen: mine.slice(),
-      options: g.options.filter((o) => !o[2] || o[2] <= x.n || mine.includes(o[0])).map((o) => [o[0], o[1]]) }],
+      options: g.options.filter((o) => !o[2] || o[2] <= x.n || mine.includes(o[0])).map((o) => {
+        const s = SPELL_BY_NAME.get(norm(o[0]));
+        return s ? [o[0], o[1] || s.d || '', spellMeta(s), pic(s.i, 'pic small')] : [o[0], o[1]];
+      }) }],
     (done) => writeSlot(curBuild(), level, 'choice', done[0].chosen, slot.c.i));
     return false;
   },
