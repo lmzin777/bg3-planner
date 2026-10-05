@@ -45,16 +45,16 @@
       levels: [
         { cls: 'Ranger', sub: '', picks: ['Favoured Enemy: Ranger Knight (or Keeper of the Veil)', 'Natural Explorer: Urban Tracker (or Wasteland Wanderer: Fire)'] },
         { cls: 'Ranger', sub: '', picks: ['Fighting Style: Archery', 'Spell: Enhance Leap', 'Spell: Longstrider'] },
-        { cls: 'Ranger', sub: 'Gloom Stalker', picks: ['Dread Ambusher', 'Dread Ambusher: Hide'] },
+        { cls: 'Ranger', sub: 'Gloom Stalker', picks: ["Spell: Hunter's Mark"] },
         { cls: 'Ranger', sub: '', picks: ['Feat: Sharpshooter'] },
-        { cls: 'Ranger', sub: '', picks: ['Extra Attack', 'Spell: Misty Step', 'Spell: Pass Without Trace'] },
-        { cls: 'Rogue', sub: '', picks: ['Sneak Attack 1d6', 'Expertise: Athletics + Stealth'] },
-        { cls: 'Rogue', sub: '', picks: ['Cunning Action: Dash', 'Cunning Action: Disengage', 'Cunning Action: Hide'] },
-        { cls: 'Rogue', sub: 'Assassin', picks: ['Sneak Attack 2d6', "Assassin's Alacrity", 'Assassinate: Ambush', 'Assassinate: Initiative'] },
+        { cls: 'Ranger', sub: '', picks: ['Spell: Pass Without Trace'] },
+        { cls: 'Rogue', sub: '', picks: ['Expertise: Athletics + Stealth'] },
+        { cls: 'Rogue', sub: '', picks: [] },
+        { cls: 'Rogue', sub: 'Assassin', picks: [] },
         { cls: 'Rogue', sub: '', picks: ['Feat: Ability Improvement +2 DEX'] },
         { cls: 'Fighter', sub: '', picks: ['Fighting Style: Defence'] },
-        { cls: 'Fighter', sub: '', picks: ['Action Surge'] },
-        { cls: 'Rogue', sub: '', picks: ['Sneak Attack 3d6', 'Uncanny Dodge'] },
+        { cls: 'Fighter', sub: '', picks: [] },
+        { cls: 'Rogue', sub: '', picks: [] },
       ],
       gear: {
         act1: {
@@ -134,6 +134,7 @@
         { name: 'Potion of Invisibility', note: '' },
       ],
       variants:
+        "• Filled in by the planner, not in the guide: the Ranger level 3 spell (Hunter's Mark). Misty Step is not chosen: it comes with the Gloom Stalker at Ranger 5.\n" +
         '• 5 Gloom Stalker / 4 Assassin / 2 Fighter / 1 War Cleric — the classic version\n' +
         '• 5 Gloom Stalker / 7 Assassin — more Sneak Attack dice\n' +
         '• Swap Gloom Stalker for Hunter (Horde Breaker) — for advanced players\n' +

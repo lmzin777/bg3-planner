@@ -482,7 +482,9 @@ function spellsAtLevel(info) {
   }
   const grow = (re) => (Number(classColumn(info.cls, info.n, re)) || 0) - (info.n > 1 ? Number(classColumn(info.cls, info.n - 1, re)) || 0 : 0);
   const swaps = (CLASS_DATA[info.cls].cols || []).some((c) => /spells known/i.test(c));
-  return { cantrips: grow(/cantrips known/i), spells: grow(/spells (known|learned)/i), any: 0, list: info.cls, schools: null,
+  // Magical Secrets (Bard 10, College of Lore 6): two more spells, taken from other classes' lists
+  const secrets = levelGains(info).some((g) => /^magical secrets$/i.test(g)) ? 2 : 0;
+  return { cantrips: grow(/cantrips known/i), spells: grow(/spells (known|learned)/i) + secrets, any: 0, secrets, list: info.cls, schools: null,
     replace: swaps && info.n > 1 && (Number(classColumn(info.cls, info.n - 1, /spells known/i)) || 0) > 0 };
 }
 // How many cantrips and spells each class lets the build know, next to how many it has chosen in that class's levels.
@@ -498,7 +500,8 @@ function knownSpells(b) {
     const sum = (k) => Object.keys(borrowed.at).reduce((a, lv) => a + (Number(lv) <= levels[cls] ? borrowed.at[lv][k] || 0 : 0), 0);
     const out = { cls, label: borrowed ? subLabel(sub) : cls, cantrips: mine.filter((x) => x.cantrip).length, spells: mine.filter((x) => !x.cantrip).length,
       maxCantrips: borrowed ? sum('cantrips') : Number(classColumn(cls, levels[cls], /cantrips known/i)) || 0,
-      maxSpells: borrowed ? sum('school') + sum('any') : Number(classColumn(cls, levels[cls], /spells (known|learned)/i)) || 0 };
+      maxSpells: borrowed ? sum('school') + sum('any') : (Number(classColumn(cls, levels[cls], /spells (known|learned)/i)) || 0)
+        + info.filter((x) => x.cls === cls).reduce((a, x) => a + ((spellsAtLevel(x) || {}).secrets || 0), 0) };
     if (borrowed) {
       out.schools = borrowed.schools;
       out.maxAny = sum('any');

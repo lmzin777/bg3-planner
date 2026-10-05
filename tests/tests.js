@@ -289,7 +289,9 @@
     ok(!buildIssues(b).some((x) => /Metamagic/.test(x.text)), 'nothing pending once all are chosen');
     const bm = preset('battle-master-fighter');
     const m = classChoices(bm, 'Fighter').find((x) => x.name === 'Manoeuvre');
-    eq([chosenOf(bm, 'Fighter', m).length, m.need], [6, 7], '"Manoeuvres: your choice" counts as one');
+    eq([chosenOf(bm, 'Fighter', m).length, m.need], [7, 7], 'the ready-made Battle Master has its seven manoeuvres');
+    bm.levels[9].picks = ['Manoeuvres: your choice', 'Manoeuvre: Rally'];
+    eq(chosenOf(bm, 'Fighter', m).length, 6, 'a line that names no option decides nothing');
     ok(buildIssues(bm).some((x) => x.text === 'Fighter: Manoeuvre — 6 of 7 chosen'), 'and the check says what is missing');
     const druid = build(Array.from({ length: 5 }, () => 'Druid'));
     druid.levels[1].sub = 'Circle of the Land';

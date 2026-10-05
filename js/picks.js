@@ -28,9 +28,8 @@ function classChoices(b, cls) {
   });
   return Object.values(out);
 }
-// What the levels of a class already say about a choice: the option names, with "?" for a line that
-// carries the prefix but names nothing the planner knows ("Manoeuvres: your choice").
-// With `only`, just what that one level says.
+// What the levels of a class already say about a choice: the option names. A line that names no option
+// ("Manoeuvres: your choice") decides nothing. With `only`, just what that one level says.
 function chosenOf(b, cls, group, only) {
   const info = levelInfo(b);
   const prefix = prefixRe(group.name);
@@ -40,9 +39,10 @@ function chosenOf(b, cls, group, only) {
     l.picks.forEach((p) => {
       const text = p.trim();
       if (prefix.test(text)) {
-        const named = group.options.map((o) => o[0]).filter((name) => namesRe(name).test(text.replace(prefix, '')));
-        if (group.repeat || !named.length) out.push(named[0] || '?');
-        else named.forEach((x) => { if (!out.includes(x)) out.push(x); });
+        const rest = text.replace(prefix, '');
+        const named = group.options.map((o) => [o[0], rest.search(namesRe(o[0]))]).filter((y) => y[1] >= 0).sort((p1, p2) => p1[1] - p2[1]).map((y) => y[0]);
+        // a line is one choice, the first option it names ("Ranger Knight (or Keeper of the Veil)"); a list line is several
+        (group.join ? named : named.slice(0, 1)).forEach((x) => { if (group.repeat || !out.includes(x)) out.push(x); });
       } else if (!group.join) {
         // a bare option name written as a choice of its own ("Riposte")
         const o = group.options.find((x) => norm(x[0]) === norm(text.replace(/\(.*$/, '')));
@@ -82,13 +82,14 @@ function levelSlots(b, i) {
       if (out.owned.has(j) || slot.entries.length >= c.n) return;
       const bare = !g.join && g.options.find((o) => norm(o[0]) === norm(text.replace(/\(.*$/, '')));
       if (!prefix.test(text) && !bare) return;
+      const rest = text.replace(prefix, '').trim();
+      const named = g.options.map((o) => [o[0], rest.search(namesRe(o[0]))]).filter((y) => y[1] >= 0).sort((p1, p2) => p1[1] - p2[1]).map((y) => y[0]);
+      if (prefix.test(text) && !named.length) return;  // "Manoeuvres: your choice" decides nothing: it is a note
       out.owned.add(j);
       slot.lines.push(j);
       if (bare && !prefix.test(text)) { slot.entries.push({ value: bare[0], note: '', raw: p }); return; }
-      const rest = text.replace(prefix, '').trim();
-      const named = g.options.map((o) => [o[0], rest.search(namesRe(o[0]))]).filter((y) => y[1] >= 0).sort((p1, p2) => p1[1] - p2[1]).map((y) => y[0]);
-      if (g.join && named.length) named.forEach((value) => slot.entries.push({ value, note: '' }));
-      else slot.entries.push({ value: named[0] || '', note: named[0] ? rest.replace(new RegExp(escRe(named[0]), 'i'), '').replace(/^[\s:,;-]+/, '').trim() : rest, raw: p });
+      if (g.join) named.forEach((value) => slot.entries.push({ value, note: '' }));
+      else slot.entries.push({ value: named[0], note: rest.replace(new RegExp(escRe(named[0]), 'i'), '').replace(/^[\s:,;-]+/, '').trim(), raw: p });
     });
     out.choices.push(slot);
   });
@@ -116,19 +117,25 @@ function levelSlots(b, i) {
   // the cantrips and spells the level teaches, and the one known spell a level up may swap for another
   const learn = spellsAtLevel(x);
   if (learn && (learn.cantrips || learn.spells || learn.replace) && SPELLS.some((s) => (s.cl || []).includes(learn.list))) {
-    const sp = out.spells = { learn, cantrip: [], spell: [], lines: { cantrip: [], spell: [] }, swap: learn.replace ? { j: -1, old: '', name: '' } : null };
+    const sp = out.spells = { learn, cantrip: [], spell: [], outside: 0, lines: { cantrip: [], spell: [] }, swap: learn.replace ? { j: -1, old: '', name: '' } : null };
     l.picks.forEach((p, j) => {
       const m = out.owned.has(j) ? null : /^(spell|cantrip)s?\s*:\s*([^(]+?)\s*(?:\((.*)\))?\s*$/i.exec(p.trim());
       if (!m) return;
       const known = SPELL_BY_NAME.get(norm(m[2]));
-      const name = known ? known.n : m[2].trim();
+      if (!known) return;  // "Spell: your choice" decides nothing: it is a note
+      const name = known.n;
       const rep = /replaces\s+(.+)/i.exec(m[3] || '');
       if (rep) {
         if (sp.swap && sp.swap.j < 0) { Object.assign(sp.swap, { j, old: rep[1].trim(), name }); out.owned.add(j); }
         return;
       }
-      const kind = (known ? !known.lv : /^cantrip/i.test(m[1])) ? 'cantrip' : 'spell';
+      const kind = known.lv ? 'spell' : 'cantrip';
       if (sp[kind].length >= (kind === 'cantrip' ? learn.cantrips : learn.spells)) return;
+      // a spell from another list needs one of the picks that allow it (Magical Secrets); the rest is a note
+      if (!ownSpell(known, learn.list, subLabel(x.sub))) {
+        if (kind === 'cantrip' || sp.outside >= (learn.secrets || 0)) return;
+        sp.outside++;
+      }
       sp[kind].push(name);
       sp.lines[kind].push(j);
       out.owned.add(j);
@@ -166,20 +173,26 @@ function levelSpellLists(b, i, sp) {
   const learn = sp.learn;
   const sub = subLabel(x.sub);
   const max = maxSpellLevel(b, i);
-  const every = levelGains(x).some((g) => /magical secrets/i.test(g));  // Magical Secrets takes spells from every class
   const arcanum = levelGains(x).some((g) => /mystic arcanum/i.test(g));  // the spell a Warlock learns at 11 is a level 6 one
   const here = new Set([...sp.cantrip, ...sp.spell, sp.swap ? sp.swap.name : ''].map(norm));
   // known through the class, or through the race, a bonus cantrip or a feat (those carry no class)
   const known = new Set(currentSpells(b).filter((y) => y.cls === x.cls || !y.cls).map((y) => norm(y.name)));
-  const pool = SPELLS.filter((s) => (every ? (s.cl || []).length : (s.cl || []).includes(learn.list) || (s.lr || []).some(([who]) => who === sub))
-    && (here.has(norm(s.n)) || !known.has(norm(s.n)))).sort((p, q) => p.lv - q.lv || p.n.localeCompare(q.n));
-  const reach = pool.filter((s) => (arcanum ? s.lv === 6 : s.lv && (max <= 0 || s.lv <= max)));
+  const fresh = (s) => here.has(norm(s.n)) || !known.has(norm(s.n));
+  const castable = (s) => (arcanum ? s.lv === 6 : s.lv && (max <= 0 || s.lv <= max));
+  const pool = SPELLS.filter((s) => ownSpell(s, learn.list, sub) && fresh(s)).sort(bySpellLevel);
+  const reach = pool.filter(castable);
   const inSchool = (s) => !learn.schools || learn.schools.includes(s.sc);
-  const off = (name) => { const s = SPELL_BY_NAME.get(norm(name)); return s && !inSchool(s) ? 1 : 0; };
-  return { arcanum, cantrips: pool.filter((s) => !s.lv), reach, school: reach.filter(inSchool), bound: learn.schools ? learn.spells - (learn.any || 0) : learn.spells,
-    // Eldritch Knights and Arcane Tricksters: spells of their schools first, the free picks last
-    order: (names) => (learn.schools ? names.slice().sort((p, q) => off(p) - off(q)) : names) };
+  // the picks that are not held to the class's own list or schools: Magical Secrets take any class's spells,
+  // the free picks of an Eldritch Knight or Arcane Trickster take any school
+  const free = learn.secrets ? SPELLS.filter((s) => ((s.cl || []).length || (s.lr || []).length) && fresh(s) && castable(s)).sort(bySpellLevel) : reach;
+  const loose = (name) => { const s = SPELL_BY_NAME.get(norm(name)); return s && (learn.secrets ? !ownSpell(s, learn.list, sub) : !inSchool(s)) ? 1 : 0; };
+  return { arcanum, cantrips: pool.filter((s) => !s.lv), reach, school: reach.filter(inSchool), free, bound: learn.spells - (learn.any || 0) - (learn.secrets || 0),
+    freeLabel: learn.secrets ? 'Magical Secrets' : learn.schools ? t('any school') : '',
+    // the spells held to the list or the schools first, the free picks last
+    order: (names) => (learn.schools || learn.secrets ? names.slice().sort((p, q) => loose(p) - loose(q)) : names) };
 }
+// Whether a spell is on a class's own list, or one its subclass adds to it.
+const ownSpell = (s, list, sub) => (s.cl || []).includes(list) || (!!sub && (s.lr || []).some(([who]) => who === sub));
 // The choices of a level, as cells of a grid. An empty one is marked in gold.
 function slotCells(b, i, slots) {
   const x = levelInfo(b)[i];
@@ -225,7 +238,9 @@ function slotCells(b, i, slots) {
     for (let k = 0; k < learn.cantrips; k++) out.push(spellCell('Cantrip' + (learn.cantrips > 1 ? ' ' + (k + 1) : ''), 'cantrip', sp.cantrip[k] || ''));
     const chosen = lists.order(sp.spell);
     for (let k = 0; k < learn.spells; k++) {
-      out.push(spellCell((lists.arcanum ? 'Mystic Arcanum' : 'Spell') + (learn.spells > 1 ? ' ' + (k + 1) : '') + (learn.schools ? ' · ' + (k >= lists.bound ? t('any school') : learn.schools.join(' / ')) : ''), 'spell', chosen[k] || ''));
+      const open = k >= lists.bound && lists.freeLabel;
+      out.push(spellCell(open && learn.secrets ? 'Magical Secrets ' + (k - lists.bound + 1)
+        : (lists.arcanum ? 'Mystic Arcanum' : 'Spell') + (learn.spells > 1 ? ' ' + (k + 1) : '') + (learn.schools ? ' · ' + (open ? lists.freeLabel : learn.schools.join(' / ')) : ''), 'spell', chosen[k] || ''));
     }
     if (sp.swap && swapOlds(b, i, sp).length) {
       out.push(cell(t('Replace a known spell (optional)'),
@@ -317,7 +332,7 @@ function placeLine(b, x) {
       const sp = levelSlots(b, k).spells;
       if (!sp || sp[kind].length >= (s.lv ? sp.learn.spells : sp.learn.cantrips)) return false;
       const lists = levelSpellLists(b, k, sp);
-      return (s.lv ? lists.reach : lists.cantrips).some((y) => y.n === s.n);
+      return (s.lv ? [...lists.reach, ...lists.free] : lists.cantrips).some((y) => y.n === s.n);
     });
     if (j != null) { b.levels[j].picks.push((s.lv ? 'Spell: ' : 'Cantrip: ') + s.n); return true; }
     if (!s.lv || !PREPARES.includes(x.cls)) return false;
@@ -709,9 +724,9 @@ Object.assign(actions, {
     const parts = [];
     if (learn.cantrips) parts.push(part('cantrip', 'Cantrips', learn.cantrips, lists.cantrips, sp.cantrip.slice()));
     const chosen = lists.order(sp.spell);
-    if (learn.spells && learn.schools) {
-      if (lists.bound) parts.push(part('spell', 'Spells · ' + learn.schools.join(' / '), lists.bound, lists.school, chosen.slice(0, lists.bound)));
-      if (learn.any) parts.push(part('spell', 'Spells · ' + t('any school'), learn.any, lists.reach, chosen.slice(lists.bound)));
+    if (learn.spells && lists.freeLabel) {
+      if (lists.bound) parts.push(part('spell', 'Spells' + (learn.schools ? ' · ' + learn.schools.join(' / ') : ''), lists.bound, lists.school, chosen.slice(0, lists.bound)));
+      if (learn.spells > lists.bound) parts.push(part('spell', learn.secrets ? 'Magical Secrets' : 'Spells · ' + lists.freeLabel, learn.spells - lists.bound, lists.free, chosen.slice(lists.bound)));
     } else if (learn.spells) parts.push(part('spell', 'Spells', learn.spells, lists.reach, chosen.slice()));
     if (!parts.length) return false;
     openChooser(`${x.cls} ${x.n} · ${parts.length > 1 || !learn.cantrips ? 'Spells' : 'Cantrips'}`,
