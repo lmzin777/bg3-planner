@@ -40,6 +40,16 @@
       eq([b.levels.filter((l) => l.cls).length, pointsUsed(b)], [12, 27], p.name);
     });
   });
+  test('every ready-made build is chosen to the end: no level is left waiting for a choice', () => {
+    PRESETS.forEach((p) => {
+      const b = normalizeBuild(clone(p));
+      tidyBuild(b);
+      eq([firstOpenLevel(b), b.levels.reduce((a, l) => a + (l.notes || []).length, 0)], [-1, 0], p.name);
+    });
+    const bard = preset('bardadin');
+    eq([levelSlots(bard, 4).expertise.values, levelSlots(bard, 11).expertise.values], [['Persuasion', 'Deception'], ['Intimidation', 'Sleight of Hand']], 'the Bardadin: Expertise only in skills it is proficient in');
+    ok(!buildIssues(bard).some((x) => /skill|Expertise|Background/i.test(x.text)), 'its skills are all chosen: ' + buildIssues(bard).map((x) => x.text).join('; '));
+  });
   test('merging a backup adds new builds and skips identical ones', () => {
     const before = state.builds.length;
     const copy = clone(state.builds[0]);
@@ -980,8 +990,40 @@
       ['Scorching Ray', 14.25],   // three rays already: not for Twinned Spell
       ['Magic Missile', 10.5]]);
     const sst = finalStats(sorc, 'act1');
-    eq(spellSpends(sst, spellOptions(sst, plain)), ['Twinned Spell: Sorcery Points for each cast', 'Heightened Spell: 3 Sorcery Points for each cast', '6 Sorcery Points per Long Rest']);
+    eq(spellSpends(sst, spellOptions(sst, plain)), ['Twinned Spell: 1 Sorcery Point for each level of the slot, 1 for a cantrip', 'Heightened Spell: 3 Sorcery Points', '6 Sorcery Points per Long Rest']);
+    eq(spellOptions(sst, plain).map((x) => x.points), [3, 1, 0, 0], 'Heightened Spell on the Fireball, Twinned Spell on a cantrip');
     sorc.active = [];
+
+    // Quickened Spell: the strongest spell with the bonus action, and the action for a second one, if a slot is left for it.
+    const quick = made(Array(7).fill('Sorcerer'), { abilities: { str: 8, dex: 14, con: 14, int: 10, wis: 12, cha: 15 }, plus2: 'cha', plus1: 'con' }, { 0: 'Draconic Bloodline' }, {},
+      { 0: ['Draconic Ancestry: Red (Fire)', 'Cantrip: Fire Bolt', 'Spell: Magic Missile'], 1: ['Metamagic: Twinned Spell', 'Metamagic: Distant Spell'], 2: ['Metamagic: Quickened Spell', 'Spell: Scorching Ray'], 4: ['Spell: Fireball'] });
+    const qt = () => { const s = finalStats(quick, 'act1'); const q = quickTurn(s, null, spellOptions(s, plain)); return q && [q.first, q.second, round(q.total), q.points]; };
+    eq(qt(), null, 'only when switched on');
+    quick.active = ['meta:quicken'];
+    ok(availableToggles(quick, 'act1').some((x) => x.key === 'meta:quicken'));
+    eq(qt(), ['Fireball', 'Fireball', 46.5, 3], 'slots 4 / 3 / 3 / 1: two Fireballs of 23.25');
+    state.ui.castLevel = 4;
+    eq(qt(), ['Fireball', 'Fire Bolt', 34.125, 3], 'one level 4 slot only: 25.875, and the cantrip for the action');
+    state.ui.castLevel = 0;
+    quick.active = [];
+
+    // Spells whose damage depends on the option chosen, and the ones that reach more than one enemy without an area of effect.
+    eq([worth('Chromatic Orb'), one('Chromatic Orb').option, one('Chromatic Orb').text], [8.1, 'Thunder', '3d8 Thunder'], 'the strongest option: 0.55 × 13.5 + 0.05 × 13.5');
+    const deaf = Object.assign({}, plain, { res: { Thunder: 'i' } });
+    eq([round(spellDamage(st, { sp: SPELL_BY_NAME.get('chromatic orb'), title: st.casting[0].label, ability: 'int', cls: 'Wizard' }, deaf).total),
+      spellDamage(st, { sp: SPELL_BY_NAME.get('chromatic orb'), title: st.casting[0].label, ability: 'int', cls: 'Wizard' }, deaf).option], [5.4, 'Acid'], 'immune to Thunder: one of the 2d8');
+    state.ui.castLevel = 2;
+    eq(worth('Chromatic Orb'), 10.8, 'one more d8 of the chosen type');
+    state.ui.castLevel = 0;
+    eq(worth('Spirit Guardians'), 10.125, '3d8 = 13.5, half on a save');
+    eq(spellHits(SPELL_BY_NAME.get('spirit guardians'), 12, 5, '3d8 Radiant').parts.map((x) => x.dice), ['5d8'], '"1d8 Radiant or 1d8 Necrotic" for each level: once');
+    eq([worth('Chain Lightning'), worth('Wall of Fire'), worth('Destructive Wave'), SPELL_BY_NAME.get('destructive wave').ao], [33.75, 16.875, 26.25, '9 m radius']);
+    state.ui.targets = 3;
+    eq([worth('Chain Lightning'), worth('Wall of Fire'), worth('Destructive Wave')], [101.25, 50.625, 78.75], 'three enemies in each');
+    state.ui.targets = 6;
+    eq([worth('Chain Lightning'), one('Chain Lightning').cap], [135, 4], 'the bolt leaps to three more at most');
+    state.ui.targets = 1;
+    ok(/2d8 Acid \/ 2d8 Cold/.test(spellDmg(SPELL_BY_NAME.get('chromatic orb'))) && spellHits(SPELL_BY_NAME.get('bestow curse'), 12, 3, SPELL_BY_NAME.get('bestow curse').vr[0][1]).rider.dice === '1d8');
 
     // Warlock 5 with Agonising Blast: two beams of 1d10 + 3. The patron's spells are not known by themselves.
     const lock = made(Array(5).fill('Warlock'), { abilities: { str: 8, dex: 14, con: 14, int: 10, wis: 12, cha: 15 }, plus2: 'cha', plus1: 'con' }, { 0: 'The Fiend' }, {},
@@ -1031,6 +1073,7 @@
     eq([typeFactor(grym, 'Bludgeoning', false), typeFactor(grym, 'Slashing', true), typeFactor(grym, 'Fire', true), typeFactor(grym, 'Force', true)], [2, 0.5, 0, 0.5]);
     ok(/Superheated/.test(grym.enemy.note) && /Grym is immune/.test(targetToolsFor('Grym (Superheated)')), 'the note of the fight is shown with the enemy');
     eq([enemy('Gerringothe Thorm').enemy.hp.b, /Coin Armour/.test(enemy('Gerringothe Thorm').enemy.note)], [606, true]);
+    eq([enemy('Balthazar').ac, /Mage Armour \(13 \+ Dexterity modifier\)/.test(enemy('Balthazar').enemy.note)], [15, true], 'no Armour Class on his page: 13 from Mage Armour + Dexterity 14');
     eq([typeFactor({ res: { Fire: 'rm' } }, 'Fire', true), typeFactor({ res: { Fire: 'rm' } }, 'Fire', false), typeFactor({ res: { Fire: 'ip' } }, 'Fire', true), typeFactor({ res: { Fire: 'ip' } }, 'Fire', false)], [0.5, 1, 0.5, 0]);
   });
 

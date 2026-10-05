@@ -106,7 +106,7 @@ function spellbookCard(b) {
   const pact = stats.pact ? `<b>${t('Pact Magic slots')}</b> ${t('{n} of level {lv}, back on a Short Rest', { n: stats.pact.n, lv: stats.pact.level })}` : '';
   const row = (x) => {
     const s = x.sp;
-    const facts = s ? [s.lv ? t('Level {n}', { n: s.lv }) : t('Cantrip'), s.rg, s.du, s.dm, s.co ? t('Concentration') : '', s.ah ? t('Bonus action on a hit') : '', s.rc].filter(Boolean).join(' · ') : '';
+    const facts = s ? [s.lv ? t('Level {n}', { n: s.lv }) : t('Cantrip'), s.rg, s.du, spellDmg(s), s.co ? t('Concentration') : '', s.ah ? t('Bonus action on a hit') : '', s.rc].filter(Boolean).join(' · ') : '';
     return `<div class="sb-row"${s ? ` title="${esc(s.d || '')}"` : ''}>${s ? pic(s.i, 'pic small') : '<span class="pic small none"></span>'}
       <b>${esc(x.name)}</b><small>${esc(facts)}</small><i>${esc(x.source)}</i></div>`;
   };

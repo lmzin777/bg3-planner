@@ -69,7 +69,7 @@ function buildProfile(b, act) {
   const known = currentSpells(b).map((x) => SPELL_BY_NAME.get(norm(x.name))).filter(Boolean);
   // damage types the build deals: from its spells and from choices that name one (not from resistances)
   const dealing = allPicks(b).filter((x) => !/resist|wanderer|ward/i.test(x)).join(' | ');
-  const elements = new Set(ELEMENTS.filter((e) => new RegExp('\\b' + e + '\\b', 'i').test(dealing) || known.some((s) => (s.dm || '').includes(e))));
+  const elements = new Set(ELEMENTS.filter((e) => new RegExp('\\b' + e + '\\b', 'i').test(dealing) || known.some((s) => spellDmg(s).includes(e))));
   if (subs.has('Tempest Domain') || subs.has('Storm Sorcery')) { elements.add('Lightning'); elements.add('Thunder'); }
   return {
     style, main, levels, total, stats, elements,

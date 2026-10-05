@@ -36,7 +36,7 @@ function sheetHtml(b) {
       <p class="sh-skills">${fin.skills.map((k) => `<span class="${k.proficient ? 'prof' : ''}">${esc(k.name)} <b>${signed(k.bonus)}</b>${k.expert ? '★' : ''}</span>`).join(' · ')}</p></section>` : '';
   const known = allSpells(b, lastAct, fin);
   const spells = known.length ? `<section><h2>${t('Spells')}</h2><ul>${known.map((s) => `<li><b>${esc(s.n)}</b> — ${s.lv ? t('Level {n}', { n: s.lv }) : t('Cantrip')}${
-    [s.rg, s.du, s.dm, s.co ? t('Concentration') : ''].filter(Boolean).map((x) => ' · ' + esc(x)).join('')}. ${esc(s.d || '')}</li>`).join('')}</ul></section>` : '';
+    [s.rg, s.du, spellDmg(s), s.co ? t('Concentration') : ''].filter(Boolean).map((x) => ' · ' + esc(x)).join('')}. ${esc(s.d || '')}</li>`).join('')}</ul></section>` : '';
   const count = {};
   const linfo = levelInfo(b);
   const levels = b.levels.map((l, i) => {

@@ -127,6 +127,8 @@ SPELLS.forEach((s) => { s.og = (s.cl || []).length ? 'class' : (s.lr || []).leng
 const COSTS = [['action', 'Action'], ['bonus', 'Bonus action'], ['reaction', 'Reaction']];
 const DAMAGE_TYPES = ['Acid', 'Bludgeoning', 'Cold', 'Fire', 'Force', 'Lightning', 'Necrotic', 'Piercing', 'Poison', 'Psychic', 'Radiant', 'Slashing', 'Thunder', 'Healing'];
 const SAVES = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
+// The damage of a spell as text: its own line, or the options' when it depends on the one chosen.
+const spellDmg = (s) => (s && (s.dm || (s.vr || []).map((v) => v[1]).join(' / '))) || '';
 const wikiLink = (title) => 'https://bg3.wiki/wiki/' + encodeURIComponent(String(title).replace(/ /g, '_'));
 const rarityLabel = (r) => t((RARITIES.find(([v]) => v === r) || ['', ''])[1]);
 
@@ -146,12 +148,12 @@ const LIB_TESTS = {
     cls: (s, f) => !f.cls || (s.cl || []).includes(f.cls),
     school: (s, f) => !f.school || s.sc === f.school,
     cost: (s, f) => !f.cost || s.a === f.cost,
-    dmg: (s, f) => !f.dmg || (s.dm || '').includes(f.dmg),
+    dmg: (s, f) => !f.dmg || spellDmg(s).includes(f.dmg),
     save: (s, f) => !f.save || s.sv === f.save,
     conc: (s, f) => !f.conc || !!s.co,
     ritual: (s, f) => !f.ritual || !!s.ri,
     origin: (s, f) => !f.origin || s.og === f.origin,
-    q: (s, f, ctx) => !ctx.q || norm(s.n).includes(ctx.q) || norm(s.d).includes(ctx.q) || norm(s.xd).includes(ctx.q) || norm(s.dm).includes(ctx.q),
+    q: (s, f, ctx) => !ctx.q || norm(s.n).includes(ctx.q) || norm(s.d).includes(ctx.q) || norm(s.xd).includes(ctx.q) || norm(spellDmg(s)).includes(ctx.q),
   },
 };
 // The values a record has for each chip group, used to count what a chip would show.
@@ -250,7 +252,7 @@ function spellCard(s) {
       s.og !== 'class' ? ' · ' + t((ORIGINS_OF_SPELLS.find(([v]) => v === s.og) || ['', ''])[1]) : ''}</div></div>
       <button class="icon txt" data-act="add-to-build" data-kind="spell" data-n="${esc(s.n)}" title="${t('Add this spell to a level of one of your builds')}">${t('+ Build')}</button>
       <a class="icon" href="${wikiLink(s.p || s.n)}" target="_blank" rel="noopener" title="${t('Open the wiki page')}">↗</a></header>
-    <div class="tags">${tag(t((COSTS.find(([v]) => v === s.a) || ['', ''])[1]))}${fact(t('Range'), s.rg)}${fact(t('Area'), s.ao)}${fact(t('Lasts'), s.du)}${fact(t('Damage'), s.dm, 'dmg')}${
+    <div class="tags">${tag(t((COSTS.find(([v]) => v === s.a) || ['', ''])[1]))}${fact(t('Range'), s.rg)}${fact(t('Area'), s.ao)}${fact(t('Lasts'), s.du)}${fact(t('Damage'), spellDmg(s), 'dmg')}${
       fact(t('Save'), s.sv)}${tag(s.at ? t('Attack roll') : '')}${tag(s.co ? t('Concentration') : '', 'gold')}${tag(s.ri ? t('Ritual') : '', 'gold')}${fact(t('Recharge'), s.rc)}${
       tag(s.vb ? t('Verbal') : '')}${tag(s.sb ? t('Scroll') : '')}</div>
     ${s.d ? `<p>${esc(s.d)}</p>` : ''}${s.xd ? `<p>${esc(s.xd)}</p>` : ''}
@@ -336,7 +338,7 @@ function renderSpells() {
     <div class="lib-selects">
       ${libSelect('school', [['', t('All schools')], ...schools.map((x) => [x, x])], f.school, t('School'))}
       ${libSelect('cost', [['', t('Any')], ...COSTS.map(([v, l]) => [v, t(l)])], f.cost, t('Casting cost'))}
-      ${libSelect('dmg', [['', t('Any')], ...DAMAGE_TYPES.filter((x) => SPELLS.some((s) => (s.dm || '').includes(x))).map((x) => [x, x])], f.dmg, t('Damage type'))}
+      ${libSelect('dmg', [['', t('Any')], ...DAMAGE_TYPES.filter((x) => SPELLS.some((s) => spellDmg(s).includes(x))).map((x) => [x, x])], f.dmg, t('Damage type'))}
       ${libSelect('save', [['', t('Any')], ...SAVES.map((x) => [x, x])], f.save, t('Saving throw'))}
       ${libSortBox('spells')}
     </div>

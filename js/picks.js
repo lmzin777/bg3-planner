@@ -164,7 +164,7 @@ function raceCantripField(b) {
   return `<div class="lslot race-cantrip${name ? '' : ' open'}"><span class="lslot-l">${t('Racial cantrip')}</span>${
     slotButton('race-cantrip-open', '', name, s ? pic(s.i, 'pic small') : '')}${s ? `<small>${esc([spellMeta(s), s.d].filter(Boolean).join(' — '))}</small>` : ''}</div>`;
 }
-const spellMeta = (s) => [s.lv ? t('Level {n}', { n: s.lv }) : t('Cantrip'), s.sc, s.rg, s.du, s.dm, s.co ? t('Concentration') : '', s.ah ? t('Bonus action on a hit') : ''].filter(Boolean).join(' · ');
+const spellMeta = (s) => [s.lv ? t('Level {n}', { n: s.lv }) : t('Cantrip'), s.sc, s.rg, s.du, spellDmg(s), s.co ? t('Concentration') : '', s.ah ? t('Bonus action on a hit') : ''].filter(Boolean).join(' · ');
 // The spells a level may pick from, by name within each spell level: { cantrips, reach (spells up to the level it
 // can cast), school (those of the subclass's schools), bound (how many picks are held to the schools), order }.
 // Spells the class already knows elsewhere are left out, so nothing is learned twice.

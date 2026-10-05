@@ -24,8 +24,8 @@ IGNORED = {
         "use1": "page header", "article1": "page header", "use2": "page header", "article2": "page header", "suppress sources": "layout",
     },
     "spells": {
-        "used by creatures": "which monsters cast it", "warning": "a remark for readers", "variants": "the variants are pages of their own",
-        "targets": "what can be targeted, in words", "creature description": "the summoned creature's own actions", "grants": "follow-up actions the spell unlocks",
+        "used by creatures": "which monsters cast it", "warning": "a remark for readers", "variants": "read for the options' damage only",
+        "creature description": "the summoned creature's own actions", "grants": "follow-up actions the spell unlocks",
         "other ways to learn": "free text; items and feats are read from their own fields", "granted by spells": "follow-up of another spell",
         "save dc": "the caster's own DC, or a fixed number when an item or a monster casts it; the planner shows no DC per spell", "condition dc": "same", "condition 1 dc": "same", "condition 2 dc": "same", "condition 3 dc": "same",
         "range ft": "the same range in feet; range m is read", "aoe ft": "same", "area ft": "same", "force m": "how far a target is pushed", "force info": "same",

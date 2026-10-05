@@ -814,8 +814,6 @@ window.BG3_I18N = {
     'with a level {n} slot': 'com slot de nível {n}',
     'weapon hit': 'acerto da arma',
     '{n} targets': '{n} alvos',
-    'Twinned Spell: Sorcery Points for each cast': 'Twinned Spell: Sorcery Points a cada conjuração',
-    'Heightened Spell: 3 Sorcery Points for each cast': 'Heightened Spell: 3 Sorcery Points a cada conjuração',
     '{n} Sorcery Points per Long Rest': '{n} Sorcery Points por Long Rest',
     'then {x}': 'depois {x}',
     'Cast with a slot of': 'Conjurar com slot de',
@@ -828,6 +826,14 @@ window.BG3_I18N = {
 
     'on every hit': 'em cada acerto',
     'each turn': 'a cada turno',
+    'Twinned Spell: 1 Sorcery Point for each level of the slot, 1 for a cantrip': 'Twinned Spell: 1 Sorcery Point por nível do slot, 1 para cantrip',
+    'Heightened Spell: 3 Sorcery Points': 'Heightened Spell: 3 Sorcery Points',
+    'Quickened Spell: 3 Sorcery Points': 'Quickened Spell: 3 Sorcery Points',
+    'the weapon attacks': 'os ataques de arma',
+    'up to {n} targets': 'até {n} alvos',
+    '{n} Sorcery Points': '{n} Sorcery Points',
+    '1 Sorcery Point': '1 Sorcery Point',
+    'with Quickened Spell: {a} with the bonus action, then {b}': 'com Quickened Spell: {a} com a bonus action, depois {b}',
     // dialogs and toasts
     'Cancel': 'Cancelar',
     'Confirm': 'Confirmar',

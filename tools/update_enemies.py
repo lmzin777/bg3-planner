@@ -6,7 +6,7 @@ The list of names below is a choice (well-known fights of each act); every numbe
 infobox on bg3.wiki: its "/Combat" page when it has one, else its own page.
 Two fights are a puzzle before they are a matter of numbers, and are listed in the state where damage counts:
 Grym while Superheated (immune to everything otherwise), and Gerringothe Thorm with all her Coin Armour on.
-Balthazar is left out: his page gives no Armour Class.
+Balthazar's page gives no Armour Class: it is worked out from the Mage Armour he keeps on, and says so.
 """
 import io, json, os, re, sys
 
@@ -63,13 +63,13 @@ def resistance_icons(text):
     return {a.strip().capitalize(): code(b) for a, b in re.findall(r"\{\{\s*Resistance\s*\|([^|{}]+)\|([^|{}]+)", text, re.I) if a.strip().capitalize() in TYPES}
 
 
-def infobox(text):
-    """The first creature infobox of a page that gives an Armour Class."""
+def infobox(text, need_ac=True):
+    """The first creature infobox of a page that gives an Armour Class (or the first one, when that is not asked)."""
     for m in re.finditer(r"\{\{\s*Infobox creature", text, re.I):
         body = text[m.start():]
         end = re.search(r"^\}\}", body, re.M)
         body = body[:end.start()] if end else body
-        if number(field(body, "ac")) is not None:
+        if not need_ac or number(field(body, "ac")) is not None:
             return body
     return None
 
@@ -77,10 +77,10 @@ def infobox(text):
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     titles = [name for _, name in ENEMIES]
-    pages = page_texts(set(titles) | {name + "/Combat" for name in titles} | {"Superheated (Condition)"})
+    pages = page_texts(set(titles) | {name + "/Combat" for name in titles} | {"Superheated (Condition)", "Mage Armour (Condition)"})
     out, missing = [], []
     for act, name in ENEMIES:
-        box = infobox(pages.get(name + "/Combat", "")) or infobox(pages.get(name, ""))
+        box = infobox(pages.get(name + "/Combat", "")) or infobox(pages.get(name, "")) or infobox(pages.get(name, ""), False)
         if not box:
             missing.append(name)
             continue
@@ -91,6 +91,14 @@ def main():
         out.append({"n": name, "act": act, "lv": level, "ac": number(field(box, "ac")), "hp": {k: v for k, v in hp.items() if v},
                     "ab": scores, "sv": saves, "pb": number(field(box, "prof bonus")) or 2 + (level - 1) // 4, "res": resistances(field(box, "resistances"))})
         e = out[-1]
+        if e["ac"] is None:
+            # no Armour Class on the page: Mage Armour kept on sets the base, and Dexterity adds to it
+            base = re.search(r"Base \{\{Armour Class\}\} is (\d+)", pages.get("Mage Armour (Condition)", ""))
+            if not base or "Mage Armour" not in field(box, "conditions"):
+                missing.append(out.pop()["n"])
+                continue
+            e["ac"] = int(base.group(1)) + (scores["dex"] - 10) // 2
+            e["note"] = f"Armour Class worked out from Mage Armour ({base.group(1)} + Dexterity modifier): the page gives no number."
         if name == "Grym":
             # immune to everything until lava softens it: the state in which it can be damaged is the one listed
             heated = resistance_icons(pages.get("Superheated (Condition)", ""))

@@ -2235,8 +2235,8 @@
         "origin": "",
         "race": "",
         "subrace": "",
-        "background": "",
-        "skills": "",
+        "background": "Charlatan",
+        "skills": "Persuasion, Intimidation, Perception",
         "abilities": {
           "str": 8,
           "dex": 15,
@@ -2285,6 +2285,7 @@
           "sub": "Swords Bard",
           "picks": [
             "Fighting Style: Duelling (or Two-Weapon Fighting for dual hand crossbows)",
+            "Expertise: Persuasion + Deception",
             "Spell: Enhance Ability"
           ]
         },
@@ -2339,6 +2340,7 @@
           "sub": "",
           "picks": [
             "Cantrip: Mage Hand",
+            "Expertise: Intimidation + Sleight of Hand",
             "Spell: Dimension Door",
             "Spell: Banishing Smite",
             "Spell: Counterspell"
@@ -2369,7 +2371,7 @@
           "note": ""
         }
       ],
-      "variants": "• 6 Swords Bard / 2 Paladin / 4 Sorcerer — Patch 8+: upcast Shadow Blade with the Resonance Stone\n• 10 Swords Bard / 2 Paladin — the original build, shown here\n• Magical Secrets at Bard 10: the guide lists Banishing Smite, Counterspell, Death Ward, Hunger of Hadar and Spirit Guardians; the first two are set here. Filled in by the planner, not in the guide (\"player's choice\"): the Bard spells of levels 8 and 12 (Fear, Dimension Door). Still open: skills and Expertise, which the guide leaves to the player.",
+      "variants": "• 6 Swords Bard / 2 Paladin / 4 Sorcerer — Patch 8+: upcast Shadow Blade with the Resonance Stone\n• 10 Swords Bard / 2 Paladin — the original build, shown here\n• Magical Secrets at Bard 10: the guide lists Banishing Smite, Counterspell, Death Ward, Hunger of Hadar and Spirit Guardians; the first two are set here. Filled in by the planner, not in the guide (\"player's choice\"): the Bard spells of levels 8 and 12 (Fear, Dimension Door); and, so that the build can be finished, the skills of a party face: Charlatan as background (Deception, Sleight of Hand), Persuasion and Intimidation from Paladin, Perception from Bard, Expertise in Persuasion and Deception at Bard 3 and in Intimidation and Sleight of Hand at Bard 10. Change them freely.",
       "notes": "LEVELLING\nPlay as a pure Bard for levels 1-7: Slashing Flourish with ranged weapons is the main damage, and the Bard 4 feat is Alert (low initiative) or Sharpshooter (low damage).\nAt level 8 respec into the order shown here, 2 Paladin first and then Bard, for martial weapon and heavy armour proficiency. Take Alert as the feat from then on.\n\nThe gear shown is the guide's Good set; the Evil pieces are listed under the alternatives.",
       "source": "",
       "gear": {

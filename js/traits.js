@@ -116,7 +116,7 @@ function availableToggles(b, act) {
   if (charLevel(b)) add('haste', 'Haste', (SPELL_BY_NAME.get('haste') || {}).d || '', {});
   const meta = (CHOICES.find((c) => c.name === 'Metamagic') || { options: [] }).options;
   const taken = new Set(chosenOptions(b).map((x) => x[0]));
-  [['meta:twin', 'Twinned Spell'], ['meta:heighten', 'Heightened Spell']].forEach(([key, name]) => { if (taken.has(name)) add(key, name, (meta.find((o) => o[0] === name) || [])[1] || '', {}); });
+  [['meta:twin', 'Twinned Spell'], ['meta:heighten', 'Heightened Spell'], ['meta:quicken', 'Quickened Spell']].forEach(([key, name]) => { if (taken.has(name)) add(key, name, (meta.find((o) => o[0] === name) || [])[1] || '', {}); });
   if ((levels.Fighter || 0) >= 2) add('surge', 'Action Surge', featureText('Action Surge'), {});
   if (levels.Barbarian) add('rage', 'Rage', featureText('Rage'), { damage: Number(classColumn('Barbarian', levels.Barbarian, /rage damage/i)) || 0 }, 'melee');
   if (levels.Rogue) add('sneak', 'Sneak Attack', featureText('Sneak Attack'), { damageDice: classColumn('Rogue', levels.Rogue, /sneak attack/i) }, 'finesse');

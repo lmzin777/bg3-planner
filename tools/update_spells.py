@@ -4,7 +4,8 @@ Run from anywhere:  py tools/update_spells.py
 Needs only the Python standard library and an internet connection. Takes well under a minute.
 
 Reads every page in the wiki's "Spells" category. Spells that only creatures use and the per-option
-variants of a spell (for example each "Bestow Curse: ..." choice) are left out.
+variants of a spell (for example each "Bestow Curse: ..." choice) are left out; when the damage of a spell
+depends on the option chosen (Chromatic Orb, Spirit Guardians), the options' damage is kept with the spell.
 """
 import io, json, os, re, sys, time
 
@@ -83,15 +84,52 @@ def conditions(w):
     return out
 
 
+def feature(w):
+    """The page from its "Feature page" block on, or nothing when it has none."""
+    m = re.search(r"\{\{\s*Feature page", w, re.I)
+    return w[m.start():] if m else ""
+
+
+def damage_lines(w):
+    """The spell's own damage lines, as text: "1d10 Piercing", "2d6 Cold (DEX Saving Throw to negate)"."""
+    out = []
+    # the "Damage display" blocks inside "higher levels" carry lines of the same name
+    own = re.sub(DISPLAY, "", w)
+    for n in ("", " 1", " 2", " 3", " 4", " 5"):
+        # "D8Cantrip" is the wiki's code for a cantrip die that grows with the character: 1d8 at first
+        dice = re.sub(r"^[dD](\d+)Cantrip$", r"1d\1", clean(field(own, "damage" + n)))
+        kind = clean(field(own, "damage" + n + " type"))
+        text = "Weapon damage" if dice.lower() == "weapon" else " ".join(x for x in (dice, kind) if x)
+        info = clean(field(own, "damage" + n + " info"))
+        if text:
+            # the note starts in lower case, unless it opens with an abbreviation such as DEX
+            out.append(text + (" (" + (info if info[:2].isupper() else info[0].lower() + info[1:]) + ")" if info else ""))
+    return out
+
+
+def variants(title, w, pages):
+    """The options of a spell that deal damage of their own, as [option, damage line, the option's page]:
+    "Chromatic Orb: Thunder" gives ["Thunder", "3d8 Thunder", …]."""
+    out = []
+    for v in (x.strip() for x in field(w, "variants").split(",")):
+        vw = feature(pages.get(v, ""))
+        lines = damage_lines(vw) if vw else []
+        if not lines or all(x.lower().startswith("weapon damage") for x in lines):
+            continue
+        label = re.sub(r"^" + re.escape(title) + r"\s*[:(]\s*", "", clean(field(vw, "name")) or v).rstrip(")").strip()
+        out.append([label, ", ".join(lines), vw])
+    return out
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     print("Reading spell pages…")
     spells, skipped = [], {"creature only": 0, "variant of another spell": 0, "no level": 0}
-    for title, w in spell_pages().items():
-        m = re.search(r"\{\{\s*Feature page", w, re.I)
-        if not m:
+    pages = spell_pages()
+    for title, w in pages.items():
+        w = feature(w)
+        if not w:
             continue
-        w = w[m.start():]
         if yes(field(w, "npc only")):
             skipped["creature only"] += 1
             continue
@@ -109,18 +147,16 @@ def main():
         range_m = field(w, "range m")
         aoe_m, aoe = field(w, "aoe m"), field(w, "aoe").lower()
         area_m, area_shape = field(w, "area m"), field(w, "area shape").lower()
-        damage = []
-        # the spell's own damage lines: the "Damage display" blocks inside "higher levels" carry lines of the same name
-        own = re.sub(DISPLAY, "", w)
-        for n in ("", " 1", " 2", " 3", " 4", " 5"):
-            # "D8Cantrip" is the wiki's code for a cantrip die that grows with the character: 1d8 at first
-            dice = re.sub(r"^[dD](\d+)Cantrip$", r"1d\1", clean(field(own, "damage" + n)))
-            kind = clean(field(own, "damage" + n + " type"))
-            text = "Weapon damage" if dice.lower() == "weapon" else " ".join(x for x in (dice, kind) if x)
-            info = clean(field(own, "damage" + n + " info"))
-            if text:
-                # the note starts in lower case, unless it opens with an abbreviation such as DEX
-                damage.append(text + (" (" + (info if info[:2].isupper() else info[0].lower() + info[1:]) + ")" if info else ""))
+        damage = damage_lines(w)
+        options = [] if damage else variants(title, w, pages)
+        # what a passed save does: the spell's own field, else what its first damaging option says
+        on_save = clean(field(w, "on save"))
+        for _, _, vw in options:
+            said = re.search(r"[^.;]*Saving Throw[^.;]*(?:half|negat)[^.;]*\.", clean(field(vw, "description")))
+            on_save = on_save or clean(field(vw, "on save")) or (said.group(0).strip() if said else "")
+        # a spell cast around the caster on everyone it names ("Enemies only") reaches as far as its range
+        if not aoe and range_m and field(w, "uid").startswith("Shout_") and field(w, "targets") and damage:
+            aoe_m, aoe = range_m, "radius"
         conds = conditions(w)
         # how long the effect lasts: an explicit duration, else that of the summon, the area or the first condition
         duration = turns(field(w, "duration")) or turns(field(w, "creature duration")) or turns(field(w, "area duration")) or next((c[1] for c in conds if c[1]), "")
@@ -139,9 +175,11 @@ def main():
             "co": yes(field(w, "concentration")),
             "ri": yes(field(w, "ritual")),
             "sv": clean(field(w, "save")).upper(),
-            "os": short(clean(field(w, "on save")), 140),
+            "os": short(on_save, 140),
             "at": bool(field(w, "attack roll").strip()),
             "dm": ", ".join(damage),
+            "vr": [[a, b] for a, b, _ in options],
+            "tg": short(clean(field(w, "targets")), 120),
             "rc": clean(field(w, "recharge")).capitalize(),
             "cn": conds,
             "ar": " ".join(x for x in (clean(field(w, "area")), (area_m + " m " + area_shape).strip() if area_m else "", "for " + turns(field(w, "area duration")).lower() if field(w, "area duration") else "") if x),
@@ -169,7 +207,8 @@ def main():
           "// do not edit by hand, re-run the script instead. Fields that would be empty are left out.\n"
           "// n name · p wiki page when it differs · i picture (path under bg3.wiki/w/images/) · lv level (0 = cantrip) · sc school\n"
           "// a action cost · rg range · ao area of effect · du duration · co concentration · ri ritual · sv saving throw · os on a save\n"
-          "// at attack roll · dm damage · rc recharge · cn conditions as [name, duration, save] · ar area created · sm summon\n"
+          "// at attack roll · dm damage · vr [option, damage] when the damage depends on the option chosen · tg who it targets\n"
+          "// rc recharge · cn conditions as [name, duration, save] · ar area created · sm summon\n"
           "// d description · xd more description · hl at higher levels · vb verbal component · sb can be learned from a scroll\n"
           "// cl classes · lr [who learns it, class level] · ft feats and features that grant it · it items that grant it\n"
           f"window.BG3_SPELLS_DATE = {json.dumps(time.strftime('%Y-%m-%d'))};\n"
@@ -183,6 +222,7 @@ def main():
     print(f"Wrote {len(spells)} spells to {OUT} ({len(js) // 1024} KB)")
     print("  by level:", dict(sorted(by_level.items())))
     print("  learnable by a class:", sum(1 for s in spells if s.get("cl")), "| skipped:", skipped)
+    print("  damage by option:", ", ".join(s["n"] for s in spells if s.get("vr")), "| with targets:", ", ".join(s["n"] for s in spells if s.get("tg")))
     print("  with picture:", sum(1 for s in spells if s.get("i")), "| with duration:", sum(1 for s in spells if s.get("du")), "| with range:", sum(1 for s in spells if s.get("rg")))
 
 
