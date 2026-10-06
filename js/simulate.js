@@ -44,7 +44,7 @@ function rollWeapon(stats, row, target, riders, x) {
   const natural = d20 >= stats.crit;
   const hit = d20 !== 1 && (natural || d20 + bonus >= target.ac);
   const crit = hit && (natural || !!x.crit);
-  const line = { name: row.name, kind: 'attack', d20, bonus, against: target.ac, hit, crit, damage: 0, text: '' };
+  const line = { name: row.name, kind: 'attack', weapon: true, d20, bonus, against: target.ac, hit, crit, damage: 0, text: '' };
   if (!hit) return line;
   const magical = rowMagical(stats, row) || !!x.magical;
   const bits = [];
@@ -68,18 +68,24 @@ function rollWeapon(stats, row, target, riders, x) {
 }
 // The saving throw of an enemy against a cast: { d20, passed }. `m.saveFx(key)` says what its conditions do to it:
 // fail (it fails by itself), dis (Disadvantage).
-function throwSave(save, m) {
-  const fx = (m && m.saveFx && m.saveFx(save.key)) || {};
+// `kind` says what the save is against: 'spell', 'hold' (a spell that incapacitates), 'stun' (a strike that does)
+// or nothing; it decides whether Magic Resistance (adv) and a Legendary Resistance (resist: 10 more on a failed
+// save that it turns into a passed one) come in.
+function throwSave(save, m, kind) {
+  const fx = (m && m.saveFx && m.saveFx(save.key, kind)) || {};
   if (fx.fail) return { d20: 0, passed: false, auto: true };
-  const d20 = rollD20(save.dis || fx.dis ? -1 : 0);
-  return { d20, passed: d20 + save.bonus >= save.dc };
+  const d20 = rollD20((save.adv || fx.adv ? 1 : 0) - (save.dis || fx.dis ? 1 : 0));
+  const passed = d20 + save.bonus >= save.dc;
+  const legend = !passed && d20 + save.bonus + 10 >= save.dc && !!fx.resist && fx.resist(d20);
+  return { d20, passed: passed || legend, legend };
 }
 // One part of a spell's damage against a saving throw already rolled.
 function saveLine(name, save, part, thrown) {
   const dice = rollDice(part.dice);
   const raw = dice.sum + part.flat;
-  const dealt = raw * part.f * (thrown.passed ? part.kept : 1);
-  return { name, kind: 'save', ab: save.key.toUpperCase(), d20: thrown.d20, auto: !!thrown.auto, bonus: save.bonus, against: save.dc, passed: thrown.passed, kept: part.kept, damage: dealt,
+  // (`ev`: the enemy has Evasion and this is a Dexterity save that halves: nothing when passed, half when failed)
+  const dealt = raw * part.f * (thrown.passed ? (part.ev ? 0 : part.kept) : part.ev ? 0.5 : 1);
+  return { name, kind: 'save', ab: save.key.toUpperCase(), d20: thrown.d20, auto: !!thrown.auto, legend: !!thrown.legend, bonus: save.bonus, against: save.dc, passed: thrown.passed, kept: part.ev ? 0 : part.kept, damage: dealt,
     text: damageBits([dice.rolls.length ? diceBit(part.dice, dice) : '', part.flat ? String(part.flat) : ''], raw, dealt) + ' ' + part.type };
 }
 // One cast of a spell, from the recipe spellDamage leaves: each part by attack roll, by the enemy's saving throw
@@ -95,14 +101,14 @@ function rollSpell(stats, x, target, riders, m) {
     const line = rollWeapon(stats, r.weapon, target, riders, m);
     line.name = x.name;
     lines.push(line);
-    if (line.hit && save && r.parts.length) { const thrown = throwSave(save, m); r.parts.forEach((part) => lines.push(saveLine(x.name, save, part, thrown))); }
+    if (line.hit && save && r.parts.length) { const thrown = throwSave(save, m, 'spell'); r.parts.forEach((part) => lines.push(saveLine(x.name, save, part, thrown))); }
     return lines;
   }
   for (let rep = 0; rep < r.repeat; rep++) {
     const saves = [];
     r.parts.forEach((part) => {
       for (let k = 0; k < part.times; k++) {
-        if (part.mode === 'save') { saves[k] = saves[k] || throwSave(save, m); lines.push(saveLine(x.name, save, part, saves[k])); continue; }
+        if (part.mode === 'save') { saves[k] = saves[k] || throwSave(save, m, 'spell'); lines.push(saveLine(x.name, save, part, saves[k])); continue; }
         const d20 = part.mode === 'attack' ? rollD20((r.adv || m.adv ? 1 : 0) - (m.dis ? 1 : 0)) : 0;
         const bonus = r.attack + (part.mode === 'attack' ? up + (m.dice || []).reduce((a, d) => a + rollDice(d).sum, 0) : 0);
         const natural = part.mode === 'attack' && d20 >= r.crit;
@@ -306,7 +312,8 @@ const PHYSICAL = ['Bludgeoning', 'Piercing', 'Slashing'];
 function modeActs(e, list) {
   const mode = gameMode();
   const there = (a) => !a.md || (a.md === 't' && mode !== 'balanced') || (a.md === 'h' && mode === 'honour');
-  const all = (list || (e && e.acts) || []).filter(there);
+  // (with the ability scores its page gives for Tactician, the numbers of its actions are other: "at")
+  const all = (list || (e && ((mode !== 'balanced' && e.at) || e.acts)) || []).filter(there);
   const plain = (n) => n.replace(/,\s*tactician\)/i, ')').replace(/\s*\(tactician\)/i, '');
   const harder = all.filter((a) => plain(a.n) !== a.n);
   return all.filter((a) => !harder.includes(a)).map((a) => harder.find((h) => plain(h.n) === a.n) || a).concat(harder.filter((h) => !all.some((a) => a.n === plain(h.n))));
@@ -336,11 +343,13 @@ function foeMove(act, e, slotWanted) {
   // the condition it leaves is kept when it is one the test plays, with the +2 of the mode on a save DC of its own
   const cd = act.cd && condFx(act.cd[0]) ? { name: act.cd[0], turns: act.cd[1] || 2, sv: act.cd[2] || '', dc: act.cd[3] ? act.cd[3] + (idx > 0 ? 2 : 0) : 0 } : null;
   return { label: act.n, kind: act.k, melee: !!act.m, bonus: (act.b || 0) + (act.k === 'a' ? up : 0), dc: (act.dc || 0) + (act.k === 's' ? up : 0), sv: act.sv || '', os: act.os == null ? 0 : act.os, hits,
-    slot, spell: s ? s.lv : -1, uses: act.u || 0, parts: act.w || [], up, guess: act.g || '', waits: !!act.c, cd, om: act.om || 0, legend: !!act.lg, as: act.as || '', tr: act.tr || '' };
+    slot, spell: s ? s.lv : -1, uses: act.u || 0, parts: act.w || [], up, guess: act.g || '', waits: !!act.c, cd, om: act.om || 0, legend: !!act.lg, as: act.as || '', tr: act.tr || '',
+    // it catches everyone in an area; its damage is a range of its page read as dice
+    area: !!act.ar || !!(s && (s.ao || s.ar)), gr: act.gr || '' };
 }
 // What an enemy answers a hit with, once a round, in the difficulty chosen: its reactions and, in Honour mode, its
 // Legendary Actions.
-const foeAnswers = (e) => modeActs(e, (e && e.rx) || []).map((a) => foeMove(a, e));
+const foeAnswers = (e) => modeActs(e, (e && ((gameMode() !== 'balanced' && e.rt) || e.rx)) || []).map((a) => foeMove(a, e));
 // The enemy's side of the fight: the action chosen on the page (its usual one when none is), how often it does it
 // each turn, what it goes on with when the action needs a spell slot or runs out, what its bonus action goes to,
 // and what it answers a hit with. With no reference enemy, or one whose page lists nothing to go by, a melee
@@ -358,8 +367,15 @@ function simFoe(target, fixed) {
   const move = act ? foeMove(act, e, ui.foeSlot) : { label: '', kind: 'a', melee: true, bonus: 5, dc: 0, sv: '', os: 0, hits: null, slot: 0, spell: -1, uses: 0, parts: [], up: 0, guess: '', waits: false, cd: null, om: 0 };
   const own = act && usual && usual !== act && (move.slot || move.uses || move.kind === 'e') && !(usual.sl || usual.u || usual.c) ? foeMove(usual, e) : null;
   const set = num('foeBonus', move.kind === 'a' ? move.bonus : move.dc);
-  const second = acts.filter((a) => a.q).find((a) => a.n === ui.foeAct2);
-  return Object.assign(move, { name: e ? e.n : '', none: pick === 'none', attacks: pick === 'none' ? 0 : Math.max(0, num('foeAttacks', act ? move.hits.length : 0)),
+  const seconds = acts.filter((a) => a.q);
+  const second = seconds.find((a) => a.n === ui.foeAct2);
+  // with nothing chosen it plays the strongest thing it can each turn: its actions by what they deal when all of it
+  // lands, the ones that take a spell slot or have few uses while they last; not those its page ties to a condition
+  const worth = (m) => (m.hits || []).reduce((a, h) => a + h.reduce((x, [d, n]) => x + avgDice(d) + n, 0), 0);
+  const ranked = (list) => list.filter((a) => a.k !== 'e' && !a.c).map((a) => foeMove(a, e)).sort((x, y) => worth(y) - worth(x));
+  const smart = !pick && ranked(mains).length ? ranked(mains) : null;
+  const mend = seconds.concat(mains).filter((a) => a.k === 'e' && a.q).map((a) => foeMove(a, e))[0] || null;
+  return Object.assign(move, { smart, smartBonus: smart && !ui.foeAct2 && seconds.length ? { hits: ranked(seconds), heal: mend, worth: mend ? worth(mend) : 0 } : null, name: e ? e.n : '', none: pick === 'none', attacks: pick === 'none' ? 0 : Math.max(0, num('foeAttacks', act ? move.hits.length : 0)),
     bonus: move.kind === 'a' ? set : 0, dc: move.kind === 's' ? set : 0, damage: Math.max(1, num('foeDamage', 10)), steps: Math.max(0, num('foeSteps', 0)), broken: !!ui.foeBroken,
     slots: e && e.rs ? e.rs : null, fallback: own, extra: second ? foeMove(second, e) : null, rx: state.ui.foeReacts === false ? [] : foeAnswers(e) });
 }
@@ -447,9 +463,11 @@ function sideOf(stats, style, target, steps) {
     // Charisma to the saving throws of the allies near a Paladin (Aura of Protection)
     aura: gains.includes('Aura of Protection') ? Math.max(0, (stats.mods || {}).cha || 0) : 0,
     die: gains.includes('Improved Combat Superiority') ? '1d10' : '1d8',
-    // where it stands (next to the enemy, or away from it), whether it helps a fallen ally up, the manoeuvres it
+    // whether it helps a fallen ally up, the manoeuvres it
     // uses apart from a hit (Rally, Evasive Footwork, Commander's Strike on an ally), and its Arcane Acuity
-    front: style !== 'ranged' && style !== 'caster', helps: false, rally: false, foot: false, cmd: '', acu: acuityOf(stats),
+    helps: false, rally: false, foot: false, cmd: '', acu: acuityOf(stats),
+    // the conditions it cannot have, as its Traits say them; a Paladin's Aura of Courage keeps its line from being Frightened
+    immune: [], courage: gains.includes('Aura of Courage'),
     // the weapon action DC: 8 + proficiency bonus + Strength or Dexterity modifier
     weaponDc: 8 + (stats.pb || 0) + Math.max((stats.mods || {}).str || 0, (stats.mods || {}).dex || 0) };
   let haste;
@@ -457,6 +475,14 @@ function sideOf(stats, style, target, steps) {
   let wards;
   let controls;
   let bless;
+  let front;
+  // where it stands, until the page says otherwise: next to the enemy when what it does at will is a melee or
+  // unarmed attack; away from it with a bow, a cantrip or nothing to attack with
+  Object.defineProperty(side, 'front', { enumerable: true, configurable: true, set: (x) => { front = !!x; },
+    get: () => {
+      if (front === undefined) { const v = simBase(side); front = atWill(v) === 'weapon' && !!v.plan && !/^ranged/.test(v.plan.parts[0].row.slot); }
+      return front;
+    } });
   // spells that only protect: Blade Ward (Resistance to Bludgeoning, Piercing and Slashing for 2 turns) and Mirror
   // Image (three duplicates, +3 to Armour Class each, one gone with every attack evaded)
   Object.defineProperty(side, 'wards', { get: () => wards || (wards = ['Blade Ward', 'Mirror Image'].map((name) => knownSpell(stats, name)).filter(Boolean)) });
@@ -471,7 +497,9 @@ function sideOf(stats, style, target, steps) {
 const simHits = (b) => Object.assign({ smite: '', low: false, hit: '', every: false, arrow: '', arrows: 5, coat: '', line: '', help: true, rally: true, foot: false, cmd: '' }, (state.ui.simHits || {})[b.id] || {});
 function simSide(b, act, target) {
   const total = charLevel(b);
-  const at = b.current && b.current < total ? b.current : 0;
+  // the level it fights at: the one set on the page of the test, else the "current level" of the build, else all of it
+  const want = Number(state.ui.simLevel) || 0;
+  const at = want && want < total ? want : b.current && b.current < total ? b.current : 0;
   const opts = at ? { level: at } : null;
   const side = sideOf(finalStats(b, act, opts), buildProfile(at ? atLevel(b, at) : b, act).style, target, simSteps(b));
   let calm = null;
@@ -491,15 +519,17 @@ function simSide(b, act, target) {
   const has = (name) => opt.has(name) || (name === 'Stunning Strike' && (st.gains || []).includes('Stunning Strike'));
   const arrow = CONSUMABLE_BY_NAME.get(norm(h.arrow));
   const coat = CONSUMABLE_BY_NAME.get(norm(h.coat));
+  if (h.line) side.front = h.line === 'front';
   return Object.assign(side, { b, act, at, name: b.name || t('Unnamed'), foe: simFoe(target), react: (state.ui.simReacts || {})[b.id] || '', hasteNow: state.ui.hasteNow !== false, resist, heal,
     potions: state.ui.simPotions == null ? 2 : Math.max(0, Number(state.ui.simPotions) || 0),
     smite: h.smite && (st.gains || []).includes('Divine Smite') ? { when: h.smite, low: !!h.low } : null,
     hit: h.hit && has(h.hit) ? { name: h.hit, every: !!h.every } : null,
     arrow: arrow && arrowFx(arrow) ? { name: arrow.n, fx: arrowFx(arrow), n: Math.max(0, Number(h.arrows) || 0) } : null,
     coat: coat && coatFx(coat) ? { name: coat.n, fx: coatFx(coat) } : null,
-    front: h.line ? h.line === 'front' : side.front, helps: h.help !== false, rally: h.rally !== false && opt.has('Rally'),
+    helps: h.help !== false, rally: h.rally !== false && opt.has('Rally'),
     foot: !!h.foot && opt.has('Evasive Footwork') && !!condFx('Evasive Footwork'), cmd: opt.has("Commander's Strike") ? h.cmd || '' : '',
-    wary: traits.immune.some(([what, , cond]) => !cond && /surprised/i.test(what)) });
+    wary: traits.immune.some(([what, , cond]) => !cond && /surprised/i.test(what)),
+    immune: traits.immune.filter(([, , cond]) => !cond).map(([what]) => what) });
 }
 // What a side can do with a set of switches on: its weapon turn and its spells against a target. Worked out once
 // for each set. With `many` enemies in the fight, a spell with an area is rolled against each of them in turn.
@@ -527,6 +557,9 @@ function simView(side, calm, on, noKi, target, many) {
 }
 // The side as Final numbers sees it: everything switched on, nothing run out.
 const simBase = (side) => simView(side, false, side.stats.active || [], false);
+// What a build does at will when its plan says nothing: its weapon attacks, or its cantrip when that does more.
+// (with no weapon at all, "the weapon" is the cantrip already)
+const atWill = (v) => (v.plan && v.cantrip && v.cantrip.total > v.plan.total ? v.cantrip.name : 'weapon');
 
 // ---------- a fight ----------
 // With `endless`, nothing runs out and what is switched on simply stays on: one turn of it is the turn the
@@ -537,7 +570,12 @@ const newFight = (side, endless) => ({ turn: 0, left: endless ? null : sideResou
   temp: endless ? 0 : (side.brew || {}).temp || 0, round: newRound(), acuity: endless ? 0 : (side.acu || { floor: 0 }).floor, death: null, dead: false, fell: false, onus: null });
 // An enemy in a fight: what it does (`move`, as simFoe gives it), what is aimed at (`target`), its hit points
 // (Infinity when there are none to go by), the damage it took and the conditions on it.
-const foeState = (move, target, hp) => ({ move, target, name: (move && move.name) || (target && target.name) || '', hp: hp || Infinity, dealt: 0, conds: [], reacted: false, acted: false, dead: 0, inoc: {} });
+// `pv` are its passives in the difficulty chosen; `lr` and `li` the Legendary Resistances it has left.
+const foeState = (move, target, hp) => {
+  const pv = (target && target.pv) || {};
+  return { move, target, name: (move && move.name) || (target && target.name) || '', hp: hp || Infinity, dealt: 0, conds: [], reacted: false, acted: false, dead: 0, inoc: {},
+    pv, lr: pv.lr || 0, li: pv.li || 0, parried: false, radiant: false };
+};
 // A fight: the sides (builds) with a fight state each, the enemies, and how it is set up: who acts first ('roll',
 // 'party' or 'foes'), who is Surprised ('', 'party' or 'foes'), whom an enemy aims at ('random', 'first' or
 // 'weakest'), whom the party strikes first ('main' or 'helpers'), and, for a build alone, whether an ally is taken
@@ -554,7 +592,12 @@ const encOver = (enc) => encWon(enc) || encLost(enc);
 // (and a build before an enemy when that is a tie too).
 function rollInitiative(enc) {
   const all = [...enc.sides.map((s, i) => ({ kind: 'side', i, bonus: s.initiative || 0, dex: ((s.stats || {}).scores || {}).dex || 10, name: s.name })),
-    ...enc.foes.map((f, i) => { const e = f.target && f.target.enemy; return { kind: 'foe', i, bonus: e ? (e.in != null ? e.in : Math.floor((e.ab.dex - 10) / 2)) : 0, dex: e ? e.ab.dex : 10, name: f.name || t('The enemy') }; })];
+    ...enc.foes.map((f, i) => {
+      const e = f.target && f.target.enemy;
+      const dex = ((f.target && f.target.ab) || (e && e.ab) || { dex: 10 }).dex;
+      // (a bonus its page sets outright, else its Dexterity modifier and what the page adds to it: Alert…)
+      return { kind: 'foe', i, bonus: e ? (e.in != null ? e.in : Math.floor((dex - 10) / 2) + (e.xi || 0)) : 0, dex, name: f.name || t('The enemy') };
+    })];
   if (enc.opts.first === 'roll') all.forEach((x) => { x.roll = rollDie(4); x.total = x.roll + x.bonus; });
   const rank = (x) => (enc.opts.first === 'roll' ? x.total * 1000 + x.dex * 2 + (x.kind === 'side' ? 1 : 0) : (x.kind === 'side') === (enc.opts.first !== 'foes') ? 1 : 0);
   enc.init = all.slice().sort((x, y) => rank(y) - rank(x));
@@ -614,7 +657,16 @@ function turnTools(enc, i, out) {
   // what the conditions in play do to an attack of this build on an enemy: `near` when it is made from up close
   const mods = (f, near) => {
     const m = { adv: false, dis: condHas(fight, 'dis'), crit: false, dice: blessed() ? ['1d4'] : [], spell: fight.acuity || 0, once: [],
-      saveFx: (key) => ({ fail: f.conds.some((c) => (c.f.fail || []).includes(key)), dis: f.conds.some((c) => (c.f.sd || []).includes(key)) }) };
+      saveFx: (key, kind) => ({ fail: f.conds.some((c) => (c.f.fail || []).includes(key)), dis: f.conds.some((c) => (c.f.sd || []).includes(key)),
+        // Magic Resistance: Advantage against spells
+        adv: (kind === 'spell' || kind === 'hold') && !!f.pv.mr,
+        // Legendary Resistance, three times: the general one on any save, though not on a natural 1 or 20 (its page's
+        // bug note); the other only against what incapacitates
+        resist: (d20) => {
+          if (f.lr > 0 && d20 !== 1 && d20 !== 20) { f.lr--; return true; }
+          if ((kind === 'hold' || kind === 'stun') && f.li > 0) { f.li--; return true; }
+          return false;
+        } }) };
     f.conds.forEach((c) => {
       if (c.f.ally && c.by === fight) return;  // Distracted: for the allies of whoever caused it, not for that one
       if (c.f.adv && (!c.f.near || near)) { m.adv = true; if (c.f.once) m.once.push(c); }
@@ -644,6 +696,12 @@ function turnTools(enc, i, out) {
     if (f && many) lines.forEach((l) => { l.to = f.name; });
     out.lines.push(...lines);
     if (lines.some((l) => l.kind === 'attack')) R.attacked = true;
+    // Githyanki Parry: that much off one weapon or unarmed hit a round
+    if (f && f.pv.pr && !f.parried && !condHas(f, 'skip')) {
+      const hit = lines.find((l) => l.weapon && l.hit && l.damage > 0);
+      if (hit) { const off = Math.min(f.pv.pr, hit.damage); f.parried = true; hit.damage -= off; hit.text += ' − ' + tenth(off) + ' (Githyanki Parry)'; }
+    }
+    if (f && lines.some((l) => l.damage > 0 && /\bRadiant\b/.test(l.text || ''))) f.radiant = true;
     const dmg = lines.reduce((a, l) => a + (l.damage || 0), 0);
     // Fire damage dealt keeps Arcane Acuity up, with the gear that says so
     if (left) ['Fire', 'Thunder'].forEach((type) => {
@@ -717,10 +775,12 @@ function turnTools(enc, i, out) {
         // an attack evaded takes one duplicate of Mirror Image with it
         const mirror = has('mirror');
         if (mirror && --mirror.images <= 0) { drop([mirror]); note(t('{name} ends.', { name: mirror.name })); }
-        // (some attacks still deal half their damage on a miss)
-        if (!act.om) return;
-        share = act.om;
-        blow.half = true;
+        // (some attacks still deal half their damage on a miss; with Tenacity a missed melee attack deals its Strength modifier)
+        const tough = act.melee && !!f.pv.tn && !act.om;
+        if (!act.om && !tough) return;
+        share = act.om || 1;
+        blow.half = !tough;
+        if (tough) { blow.tenacity = Math.max(1, Math.floor((((f.target.ab || {}).str || 10) - 10) / 2)); blow.how += ' · Tenacity'; }
         landed = false;
       }
     } else if (act.kind === 's') {
@@ -737,7 +797,7 @@ function turnTools(enc, i, out) {
     // what lands on the build: a resistance halves it, and so does Uncanny Dodge, once a round
     const bits = [];
     let raw = 0;
-    (act.hits ? act.hits[Math.min(k, act.hits.length - 1)] : [['', move.damage, '']]).forEach(([dice, flat, type]) => {
+    (blow.tenacity ? [['', blow.tenacity, 'Bludgeoning']] : act.hits ? act.hits[Math.min(k, act.hits.length - 1)] : [['', move.damage, '']]).forEach(([dice, flat, type]) => {
       const r = rollDice(dice, blow.crit);
       raw += r.sum + flat;
       blow.taken += (r.sum + flat) * share * takes(side, type, !!has('rage'), !!has('ward'));
@@ -778,7 +838,11 @@ function turnTools(enc, i, out) {
       return;
     }
     // the condition the blow leaves, when the build fails the save against it (the blow's own save counts)
-    if (act.cd && landed && !fight.conds.some((c) => c.name === act.cd.name)) {
+    // (not one the build cannot have: its own immunities, and a Paladin's Aura of Courage against Frightened)
+    const shrugs = !!act.cd && landed && (side.immune.some((x) => new RegExp('\\b' + escRe(act.cd.name) + '\\b', 'i').test(x))
+      || (/Frightened/.test(act.cd.name) && enc.sides.some((y, k) => y.courage && !enc.fights[k].down && (k === i || y.front === side.front))));
+    if (shrugs) note(t('{who} cannot be {cond}.', { who: side.name || t('The build'), cond: act.cd.name }));
+    if (act.cd && landed && !shrugs && !fight.conds.some((c) => c.name === act.cd.name)) {
       const cd = act.cd;
       const own = cd.sv && !(act.kind === 's' && cd.sv === act.sv);
       const thrown = own ? mySave(cd.sv, cd.dc) : null;
@@ -912,7 +976,8 @@ function buildTurn(enc, i) {
   const raging = T.raging();
   const step = side.steps[Math.min(n, 4) - 1];
   const wantOf = (f, by) => step[f] || side.steps[3][f] || by;
-  const wantA = wantOf('a', 'weapon');
+  // (with nothing planned: the weapon, or the cantrip when that does more)
+  const wantA = wantOf('a', '') || (raging ? 'weapon' : atWill(view()));
   const wantQ = wantOf('q', 'auto');
   const wantX = wantOf('x', 'same');
   // one spell at a time holds Concentration. Haste cast on oneself and dropped for another spell leaves the caster
@@ -1011,12 +1076,12 @@ function buildTurn(enc, i) {
     did.push(name);
     if (x.sp.co && !concentrate(name)) return true;
     const save = { key: x.key, bonus: f.target.saves[x.key] || 0, dc: x.dc, dis: high };
-    const thrown = throwSave(save, T.mods(f, false));
+    const thrown = throwSave(save, T.mods(f, false), x.sp.cn.some((c) => (condFx(c[0]) || {}).skip) ? 'hold' : 'spell');
     const turns = parseInt((x.sp.cn.find((c) => condFx(c[0])) || [])[1], 10) || 2;
     const e = x.sp.co ? { name, kind: 'hold', conc: true, until: n + turns - 1, quiet: false } : null;
     if (e) fight.effects.push(e);
     leave(x.sp, f, save, !thrown.passed, e);
-    land([{ name, kind: 'save', ab: x.key.toUpperCase(), d20: thrown.d20, auto: !!thrown.auto, bonus: save.bonus, against: save.dc, passed: thrown.passed, kept: 0, damage: 0, cond: true,
+    land([{ name, kind: 'save', ab: x.key.toUpperCase(), d20: thrown.d20, auto: !!thrown.auto, legend: !!thrown.legend, bonus: save.bonus, against: save.dc, passed: thrown.passed, kept: 0, damage: 0, cond: true,
       how: high ? 'Heightened Spell' : '', text: thrown.passed ? '' : x.sp.cn.filter((c) => condFx(c[0])).map((c) => c[0]).join(', ') }], f, false);
     if (thrown.passed && e) drop([e]);
     return true;
@@ -1148,8 +1213,8 @@ function buildTurn(enc, i) {
           let failed = true;
           if (cond[2]) {
             const save = { key: cond[2], bonus: f.target.saves[cond[2]] || 0, dc: side.weaponDc };
-            const thrown = throwSave(save, m);
-            all.push({ name: after, kind: 'save', ab: cond[2].toUpperCase(), d20: thrown.d20, auto: !!thrown.auto, bonus: save.bonus, against: save.dc, passed: thrown.passed, kept: 0, damage: 0, cond: true, text: thrown.passed ? '' : cond[0] });
+            const thrown = throwSave(save, m, condFx(cond[0]).skip && cond[0] !== 'Prone' ? 'stun' : '');
+            all.push({ name: after, kind: 'save', ab: cond[2].toUpperCase(), d20: thrown.d20, auto: !!thrown.auto, legend: !!thrown.legend, bonus: save.bonus, against: save.dc, passed: thrown.passed, kept: 0, damage: 0, cond: true, text: thrown.passed ? '' : cond[0] });
             failed = !thrown.passed;
           }
           if (failed) { const c = addCond(f, cond[0], cond[1], fight, null); note(t('{who} is {cond} for {n} turn(s).', { who: f.name || t('The enemy'), cond: cond[0], n: c.left })); }
@@ -1165,7 +1230,7 @@ function buildTurn(enc, i) {
           const thrown = save ? throwSave(save, m) : { passed: false, d20: 0 };
           if (coat.extra) all.push(saveLine(side.coat.name, save || { key: 'con', bonus: 0, dc: 0 }, { dice: coat.extra[0], flat: 0, type: coat.extra[1], f: typeFactor(f.target, coat.extra[1], true), kept: coat.kept }, thrown));
           else if (coat.later) all.push(saveLine(side.coat.name, save, { dice: coat.later[0], flat: 0, type: coat.later[1], f: typeFactor(f.target, coat.later[1], true), kept: 0 }, thrown));
-          else if (save) all.push({ name: side.coat.name, kind: 'save', ab: save.key.toUpperCase(), d20: thrown.d20, auto: !!thrown.auto, bonus: save.bonus, against: save.dc, passed: thrown.passed, kept: 0, damage: 0, cond: true, text: thrown.passed ? '' : (coat.conds || []).join(', ') });
+          else if (save) all.push({ name: side.coat.name, kind: 'save', ab: save.key.toUpperCase(), d20: thrown.d20, auto: !!thrown.auto, legend: !!thrown.legend, bonus: save.bonus, against: save.dc, passed: thrown.passed, kept: 0, damage: 0, cond: true, text: thrown.passed ? '' : (coat.conds || []).join(', ') });
           if (!thrown.passed) (coat.conds || []).filter((c) => !f.conds.some((y) => y.name === c)).forEach((c) => { const y = addCond(f, c, 2, fight, null); note(t('{who} is {cond} for {n} turn(s).', { who: f.name || t('The enemy'), cond: c, n: y.left })); });
           else if (save) f.inoc[side.coat.name] = enc.round + 2;  // a passed save leaves it Inoculated for 2 turns
         }
@@ -1306,6 +1371,9 @@ function foeTurn(enc, j) {
   const note = (text) => { if (!out.notes.includes(text)) out.notes.push(text); };
   condStart(f, note);
   condSource(f, enc.fights);
+  // what it regains at the start of its turn (Vampire Regeneration), unless Radiant damage reached it since its last one
+  if (f.pv.rg && f.dealt > 0 && !f.radiant) { f.dealt = Math.max(0, f.dealt - f.pv.rg); note(t('{who} regains {n} hit points.', { who: out.title, n: f.pv.rg })); }
+  f.radiant = false;
   const held = f.conds.find((c) => c.f.skip);
   const idle = !!held || !!f.surprised;
   if (held) note(t('{who} is {cond}: no action this turn.', { who: out.title, cond: held.name }));
@@ -1324,29 +1392,49 @@ function foeTurn(enc, j) {
   };
   let vi = pick(!!move.melee);
   let T = vi >= 0 ? turnTools(enc, vi, out) : null;
-  if (T && !idle && (move.attacks || move.extra)) {
+  if (T && !idle && (move.attacks || move.extra || move.smart)) {
     T.R.hurtNow = 0;
     T.R.missNow = 0;
     // whether it can pay for an action: a spell slot of its own, one of its uses in the fight
-    const spend = (act) => {
+    // (`peek` only asks, and takes nothing)
+    const spend = (act, peek) => {
+      let lv = 0;
       if (act.slot) {
         if (f.slots === undefined) f.slots = move.slots ? Object.assign({}, move.slots) : null;
-        const pool = f.slots;
-        const lv = pool ? Object.keys(pool).map(Number).sort((a, b) => a - b).find((k) => k >= act.slot && pool[k] > 0) : 0;
-        if (pool && !lv) return false;
-        if (pool) pool[lv]--;
+        lv = f.slots ? Object.keys(f.slots).map(Number).sort((x, y) => x - y).find((k) => k >= act.slot && f.slots[k] > 0) : 0;
+        if (f.slots && !lv) return false;
       }
-      if (act.uses) {
-        const used = f.used || (f.used = {});
-        if ((used[act.label] || 0) >= act.uses) return false;
-        used[act.label] = (used[act.label] || 0) + 1;
-      }
+      const used = f.used || (f.used = {});
+      if (act.uses && (used[act.label] || 0) >= act.uses) return false;
+      if (peek) return true;
+      if (lv) f.slots[lv]--;
+      if (act.uses) used[act.label] = (used[act.label] || 0) + 1;
       return true;
+    };
+    // from Tactician up an enemy tries to finish off whoever it has downed (the wiki's Difficulty page): one blow on
+    // a Downed member is a failed death saving throw, and then it turns to someone else
+    const finish = (V, act) => {
+      const d = V.fight.death || (V.fight.death = { ok: 0, bad: 0 });
+      d.bad++;
+      V.fight.struck = enc.round;
+      out.lines.push({ name: f.name || t('The enemy'), how: (act.label || t('melee attack')) + ' · ' + t('on a Downed member'), kind: 'foe', mode: 'h', on: V.side.name, hit: true, damage: 0, taken: 0, text: '', finish: true });
+      if (d.bad >= 3) { V.fight.dead = true; note(t('{who} dies.', { who: V.side.name })); }
+      else note(t('{who}: a blow while Downed is a failed death saving throw ({bad} failed).', { who: V.side.name, bad: d.bad }));
     };
     const blows = (act, times) => {
       for (let k = 0; k < times && !f.dead; k++) {
-        if (T.fight.down) { answer(); vi = pick(!!act.melee); if (vi < 0) return; T = turnTools(enc, vi, out); T.R.hurtNow = 0; T.R.missNow = 0; }
+        if (T.fight.down) {
+          if (enc.live && enc.sides.length > 1 && gameMode() !== 'balanced' && !T.fight.dead && act.kind !== 'e' && T.fight.struck !== enc.round) { finish(T, act); continue; }
+          answer();
+          vi = pick(!!act.melee);
+          if (vi < 0) return;
+          T = turnTools(enc, vi, out);
+          T.R.hurtNow = 0;
+          T.R.missNow = 0;
+        }
         T.strike(act, k, f);
+        // an action with an area catches everyone who stands in the same line as the one it is aimed at
+        if (act.area) standing().filter((j) => j !== vi && enc.sides[j].front === enc.sides[vi].front).forEach((j) => turnTools(enc, j, out).strike(act, k, f));
       }
     };
     // the reaction of the build it struck, when Shield or Uncanny Dodge did not take it
@@ -1382,14 +1470,22 @@ function foeTurn(enc, j) {
     // its action: the one chosen while its spell slot and its uses last, else the one it always has
     let act = move;
     let times = move.attacks;
-    if (times && !spend(move)) {
+    if (move.smart) {
+      // nothing chosen: the strongest of its actions that it can pay for this turn
+      act = move.smart.find((a) => spend(a, true)) || null;
+      if (act) spend(act);
+      times = act ? act.hits.length : 0;
+    } else if (times && !spend(move)) {
       act = move.fallback;
       times = act ? act.hits.length : 0;
       if (!f.out) { f.out = true; note(act ? t('{who} has no more of {a}: it goes on with {b}.', { who: f.name, a: move.label, b: act.label }) : t('{who} has no more of {a}.', { who: f.name, a: move.label })); }
     }
-    blows(act, times);
-    // its bonus action
-    if (!f.dead && vi >= 0 && move.extra && spend(move.extra)) blows(move.extra, move.extra.hits.length);
+    if (act) blows(act, times);
+    // its bonus action: the one chosen; else, with nothing chosen, it heals itself once it has lost that much, or
+    // uses the strongest one it can pay for
+    const sb = move.smartBonus;
+    const extra = sb ? (sb.heal && f.dealt >= sb.worth && spend(sb.heal, true) ? sb.heal : sb.hits.find((a) => spend(a, true)) || null) : move.extra;
+    if (!f.dead && vi >= 0 && extra && spend(extra)) blows(extra, extra.hits.length);
     if (vi >= 0) answer();
   }
   // damage that waits for the enemy to move: once when it moves at all (Booming Blade), or for every 1.5 m it
@@ -1427,14 +1523,15 @@ function endRound(enc, last) {
     fight.round.hurt = 0;
     fight.surprised = false;
   });
-  enc.foes.forEach((f) => { f.surprised = false; f.reacted = false; });
+  enc.foes.forEach((f) => { f.surprised = false; f.reacted = false; f.parried = false; });
 }
 // One round of a fight, in Initiative order: { n, entries: [turn], total }
 function encRound(enc) {
   if (!enc.order) {
     enc.order = rollInitiative(enc);
     // who is Surprised cannot act or react in the first round; a build that cannot be Surprised is not
-    if (enc.opts.surprise === 'foes') enc.foes.forEach((f) => { f.surprised = true; });
+    // (an enemy with Alert is never Surprised)
+    if (enc.opts.surprise === 'foes') enc.foes.forEach((f) => { f.surprised = !f.pv.al; });
     if (enc.opts.surprise === 'party') enc.fights.forEach((fight, i) => { fight.surprised = !enc.sides[i].wary; });
   }
   enc.round++;

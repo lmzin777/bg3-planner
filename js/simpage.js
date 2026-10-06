@@ -10,7 +10,7 @@ const SIM_FIGHTS = 300;
 const SIM_TABS = [['build', 'Who fights'], ['enemy', 'The enemy'], ['plan', 'Plan of turns'], ['result', 'Result']];
 // What a scenario keeps of the page (the plans and choices of each build are kept with it too).
 const SCENE_KEYS = ['act', 'simParty', 'target', 'targetAc', 'targetSave', 'mode', 'castLevel', 'targets', 'foeAct', 'foeAct2', 'foeSlot', 'foeAttacks', 'foeBonus', 'foeDamage', 'foeSteps',
-  'foeBroken', 'hasteNow', 'help0', 'help1', 'help2', 'helpN0', 'helpN1', 'helpN2', 'helpA0', 'helpA1', 'helpA2', 'simFirst', 'simSurprise', 'simAim', 'simFocus', 'simAlly', 'foeReacts', 'simPotions', 'simB'];
+  'foeBroken', 'hasteNow', 'help0', 'help1', 'help2', 'helpN0', 'helpN1', 'helpN2', 'helpA0', 'helpA1', 'helpA2', 'simFirst', 'simSurprise', 'simAim', 'simFocus', 'simAlly', 'simLevel', 'foeReacts', 'simPotions', 'simB'];
 const simTab = () => (SIM_TABS.some(([k]) => k === state.ui.simTab) ? state.ui.simTab : 'build');
 const setHit = (b, patch) => { (state.ui.simHits || (state.ui.simHits = {}))[b.id] = Object.assign(simHits(b), patch); };
 // The enemies that stand with the main one: up to three kinds, some of each, each kind with the action chosen
@@ -49,9 +49,9 @@ function simContext() {
   const other = ob && charLevel(ob) && !(ob.id === b.id && (sb.act || state.ui.act) === state.ui.act) ? simSide(ob, sb.act || state.ui.act, target) : null;
   const hp = target.enemy ? enemyHp(target.enemy) : 0;
   const key = JSON.stringify([sides.map(sideKey), other ? sideKey(other) : '', target.name, target.ac, target.saves, gameMode(), state.ui.castLevel, state.ui.targets,
-    helpers.map((h) => [h.e.n, h.n, h.a]), state.ui.simFirst, state.ui.simSurprise, state.ui.simAim, state.ui.simFocus, state.ui.simAlly, state.ui.foeReacts]);
+    helpers.map((h) => [h.e.n, h.n, h.a]), state.ui.simFirst, state.ui.simSurprise, state.ui.simAim, state.ui.simFocus, state.ui.simAlly, state.ui.simLevel, state.ui.foeReacts]);
   if (sim.key !== key) sim = { key, enc: simEncounter(sides, target, hp, helpers), rounds: [], many: null };
-  const mainA = side.steps[3].a || 'weapon';
+  const mainA = side.steps[3].a || atWill(v);
   const chosen = v.spells.get(mainA) || (!v.plan && mainA === 'weapon' ? v.cantrip : null);
   return { b, side, sides, team, helpers, other, v, target, hp, chosen, expected: chosen ? chosen.total : v.plan ? v.plan.total : 0, can: !!(v.plan || v.list.length) };
 }
@@ -75,6 +75,7 @@ function simLine(x) {
     const end = x.mode === 's' ? (!x.passed ? t('failed') : x.cond ? t('passed') : x.kept === 1 ? t('passed, all the same') : x.kept ? t('passed: half') : t('passed: nothing'))
       : x.mode === 'a' ? (x.crit ? t('critical hit') : x.hit ? t('hit') : x.half ? t('miss: half the damage') : x.d20 === 1 ? t('natural 1: miss') : t('miss')) : '';
     const lands = x.taken > 0;
+    if (x.finish) return `<li class="foe">${who}<span>${t('a failed death saving throw')}</span><span></span><strong></strong></li>`;
     return `<li class="foe${x.hit || lands ? '' : ' off'}">${who}<span>${esc(text)}${end ? ` · <em>${esc(end)}</em>` : ''}</span>
       <span>${lands ? esc(x.text) + ' ' + t('to the build') : ''}</span><strong>${lands ? '−' + tenth(x.taken) : ''}</strong></li>`;
   }
@@ -83,7 +84,7 @@ function simLine(x) {
     out = x.crit ? t('critical hit') : x.hit ? t('hit') : x.d20 === 1 ? t('natural 1: miss') : t('miss');
   } else if (x.kind === 'save') {
     roll = save();
-    out = !x.passed ? t('failed') : x.cond ? t('passed') : x.kept === 1 ? t('passed, all the same') : x.kept ? t('passed: half') : t('passed: nothing');
+    out = (!x.passed ? t('failed') : x.cond ? t('passed') : x.kept === 1 ? t('passed, all the same') : x.kept ? t('passed: half') : t('passed: nothing')) + (x.legend ? ' · Legendary Resistance (+10)' : '');
   } else roll = t('no roll');
   const good = x.kind === 'save' ? !x.passed : x.hit;
   return `<li class="${good ? '' : 'off'}${x.crit ? ' crit' : ''}"><b>${esc(x.name)}${x.how || x.to ? `<i>${esc([x.how, x.to ? '→ ' + x.to : ''].filter(Boolean).join(' '))}</i>` : ''}</b><span>${esc(roll)}${out ? ` · <em>${esc(out)}</em>` : ''}</span>
@@ -164,7 +165,7 @@ function simPlanHtml(ctx) {
   // the third field shows when the build can have a second action: Action Surge, Haste cast or switched on, an Elixir of Bloodlust
   const extra = (ctx.side.stats.fighter || 0) >= 2 || !!ctx.side.haste || on.includes('haste') || !!ctx.side.brew.blood || ctx.sides.some((s) => s !== ctx.side && s.haste);
   const cell = (i, f, label) => {
-    const value = ctx.side.steps[i][f] || (i === 3 ? STEP_DEFAULT[f] : '');
+    const value = ctx.side.steps[i][f] || (i === 3 ? (f === 'a' ? atWill(ctx.v) : STEP_DEFAULT[f]) : '');
     const row = value ? stepLabel(ctx, i, f, value) : null;
     return `<div class="field"><span>${label}</span>${slotButton('sim-step-open', `data-i="${i}" data-f="${f}"`, row ? row[1] : '', row ? row[4] : '', i < 3 ? t('as from turn 4 on') : t('— choose —'))}</div>`;
   };
@@ -225,8 +226,11 @@ function simTabBuild(ctx, b) {
     <div class="stat-tools">
       <div class="field"><span>${t('Build')}</span>${slotButton('sim-build-open', '', b ? b.name || t('Unnamed') : '', '', t('— choose —'))}</div>
       <div class="field"><span>${t('Party')}</span>${slotButton('sim-party-open', '', team.party ? team.party.name || t('Unnamed') : '', '', t('— just this build —'))}</div>
-      ${ctx ? `<div><span class="lbl">${t('With the gear of')}</span>${actTabs(state.ui.act, 'act')}</div>` : ''}
+      ${ctx ? `<div><span class="lbl">${t('With the gear of')}</span>${actTabs(state.ui.act, 'act')}</div>
+      <div class="field ac-field"><span>${t('Character level')}</span>${stepper(ctx.side.at || charLevel(ctx.b), `data-ui="simLevel" data-v="${ctx.side.at || charLevel(ctx.b)}"`, 1, 12)}</div>` : ''}
     </div>
+    ${ctx ? `<p class="muted">${t('The build fights with the levels it has up to that one{enemy}.', { enemy: ctx.target.enemy ? '; ' + t('{who} is level {n}', { who: esc(ctx.target.enemy.n), n: ctx.target.enemy.lv }) : '' })}${
+      ctx.side.at ? ' ' + t('Now: {split}.', { split: esc(splitText(atLevel(ctx.b, ctx.side.at))) }) : ''}</p>` : ''}
     ${team.party && !team.on ? `<p class="muted">${team.list.length > 1 ? t('{name} is not a member of this party: it fights alone. Choose a member of the party as the build to have them all fight.', { name: esc(b ? b.name || t('Unnamed') : '') })
     : t('A party needs at least two builds with a level to fight together.')}</p>` : ''}
     ${ctx ? memberChips(ctx) : ''}
@@ -277,29 +281,33 @@ function simTabEnemy(ctx) {
   const helpers = [0, 1, 2].map((i) => { const e = ENEMY_BY_NAME.get(state.ui['help' + i]); const n = Math.max(1, Math.min(6, Number(state.ui['helpN' + i]) || 1));
     return `<div class="field enemy-field"><span>${t('Helper {n}', { n: i + 1 })}</span>${slotButton('helper-open', `data-i="${i}"`, e ? e.n : '', '', t('— nobody —'))}</div>
       ${e ? `<div class="field ac-field"><span>${t('How many')}</span>${stepper(n, `data-ui="helpN${i}" data-v="1"`, 1, 6)}</div>
-      <div class="field enemy-field"><span>${t('It uses')}</span>${slotButton('foe-act-open', `data-h="${i}"`, state.ui['helpA' + i] === 'none' ? '' : helperFoe({ e, a: state.ui['helpA' + i] || '' }).label, '', t('Nothing: it only takes damage'))}</div>` : ''}`; }).join('');
+      <div class="field enemy-field"><span>${t('It uses')}</span>${slotButton('foe-act-open', `data-h="${i}"`, state.ui['helpA' + i] === 'none' ? '' : helperFoe({ e, a: state.ui['helpA' + i] || '' }).smart ? t('The strongest it can use') : helperFoe({ e, a: state.ui['helpA' + i] || '' }).label, '', t('Nothing: it only takes damage'))}</div>` : ''}`; }).join('');
   const hasWall = [...v.list, ...(v.list.setups || [])].some((x) => x.recipe && x.recipe.later.some((p) => p.when === 'broken'));
   return `<section class="card">
     <h2>${t('The enemy')}</h2>
     <div class="stat-tools">${targetTools()}</div>
     ${target.enemy ? `<h3 class="group">${t('Also in the fight')}</h3>
     <div class="stat-tools foe-tools">${helpers}</div>
-    ${ctx.helpers.length ? `<p class="muted">${ctx.helpers.map((h) => `${h.n} × ${esc(h.e.n)} (AC ${h.e.ac} · HP ${enemyHp(h.e)} · ${esc(helperFoe(h).label || t('no attack'))})`).join(' · ')}. ${
-      t('A helper does the action chosen for it each turn, or what it usually does. A spell with an area is rolled against every enemy; the other attacks go to one enemy at a time.')}</p>
+    ${ctx.helpers.length ? `<p class="muted">${ctx.helpers.map((h) => `${h.n} × ${esc(h.e.n)} (AC ${enemyTarget(h.e).ac} · HP ${enemyHp(h.e)} · ${esc(helperFoe(h).smart ? t('The strongest it can use') : helperFoe(h).label || t('no attack'))})`).join(' · ')}. ${
+      t('A helper does the action chosen for it each turn, or the strongest it can use. A spell with an area is rolled against every enemy; the other attacks go to one enemy at a time.')}</p>
     <div class="stat-tools"><div><span class="lbl">${t('The party strikes first')}</span>${pickButtons('simFocus', state.ui.simFocus || 'main', [['main', esc(target.enemy.n)], ['helpers', t('Its helpers')]])}</div></div>` : ''}` : ''}
     <h3 class="group">${t('What the enemy does on its turn')}</h3>
     <div class="stat-tools foe-tools">
-      ${foeActs.length ? `<div class="field enemy-field"><span>${t('With its action, it uses')}</span>${slotButton('foe-act-open', 'data-f="a"', foe.none ? '' : foe.label, '', t('Nothing: it only takes damage'))}</div>` : ''}
-      ${foeSeconds.length ? `<div class="field enemy-field"><span>${t('With its bonus action')}</span>${slotButton('foe-act-open', 'data-f="q"', foe.extra ? foe.extra.label : '', '', t('— nothing —'))}</div>` : ''}
-      ${foe.spell > 0 && foe.slot && !foe.none ? `<div class="field ac-field"><span>${t('Cast with a slot of level')}</span>${stepper(foe.slot, `data-ui="foeSlot" data-v="${foe.slot}"`, foe.spell, topSlot(target.enemy))}</div>` : ''}
-      ${foe.none ? '' : `<div class="field ac-field"><span>${foe.hits ? t('Times a turn') : t('Melee attacks on the build')}</span>${stepper(foe.attacks, `data-ui="foeAttacks" data-v="${foe.attacks}"`, 0, 8)}</div>
+      ${foeActs.length ? `<div class="field enemy-field"><span>${t('With its action, it uses')}</span>${slotButton('foe-act-open', 'data-f="a"', foe.none ? '' : foe.smart ? t('The strongest it can use') : foe.label, '', t('Nothing: it only takes damage'))}</div>` : ''}
+      ${foeSeconds.length ? `<div class="field enemy-field"><span>${t('With its bonus action')}</span>${slotButton('foe-act-open', 'data-f="q"', foe.extra ? foe.extra.label : foe.smartBonus ? t('The strongest it can use') : '', '', t('— nothing —'))}</div>` : ''}
+      ${foe.spell > 0 && foe.slot && !foe.none && !foe.smart ? `<div class="field ac-field"><span>${t('Cast with a slot of level')}</span>${stepper(foe.slot, `data-ui="foeSlot" data-v="${foe.slot}"`, foe.spell, topSlot(target.enemy))}</div>` : ''}
+      ${foe.none || foe.smart ? '' : `<div class="field ac-field"><span>${foe.hits ? t('Times a turn') : t('Melee attacks on the build')}</span>${stepper(foe.attacks, `data-ui="foeAttacks" data-v="${foe.attacks}"`, 0, 8)}</div>
       ${foe.kind === 'a' ? `<div class="field ac-field"><span>${t('Its attack bonus')}</span>${stepper(foe.bonus, `data-ui="foeBonus" data-v="${foe.bonus}"`, -5, 25)}</div>` : ''}
       ${foe.kind === 's' ? `<div class="field ac-field"><span>${t('Its save DC')}</span>${stepper(foe.dc, `data-ui="foeBonus" data-v="${foe.dc}"`, 5, 30)}</div>` : ''}
       ${foe.hits ? '' : `<div class="field ac-field"><span>${t('Damage of each hit')}</span>${stepper(foe.damage, 'data-ui="foeDamage" data-v="10"', 1, 99)}</div>`}`}
       <div class="field ac-field"><span>${t('Movement it spends, in steps of 1.5 m')}</span>${stepper(foe.steps, 'data-ui="foeSteps" data-v="0"', 0, 20)}</div>
       ${hasWall ? `<div class="field"><span>${t('The wall the build raised')}</span><button class="btn tiny${foe.broken ? ' gold' : ''}" data-act="foe-broken">${foe.broken ? t('Is broken at once') : t('Stays whole')}</button></div>` : ''}
     </div>
-    ${foe.hits && !foe.none ? `<p class="enemy-line">${esc(foe.label)}: ${foe.hits.map(comps).map(esc).join(' · ')}.
+    ${foe.smart ? `<p class="enemy-line">${t('Each turn, the first of these it can pay for')}: ${foe.smart.map((m) => `<b>${esc(m.label)}</b> ${m.hits.map(comps).filter(Boolean).map(esc).join(' · ')} (${howOf(m)}${
+      m.slot ? ', ' + t('level {n} slot', { n: m.slot }) : ''}${m.uses ? ', ' + t('{n} use(s) a fight', { n: m.uses }) : ''}${m.area ? ', ' + t('an area') : ''}${esc(condOf(m))})`).join(' → ')}.${
+      foe.slots ? ' ' + t('Its spell slots') + ': ' + Object.keys(foe.slots).map((k) => k + '×' + foe.slots[k]).join(' ') + '.' : ''}${
+      foe.smartBonus && (foe.smartBonus.hits.length || foe.smartBonus.heal) ? ' ' + t('With its bonus action') + ': ' + [...foe.smartBonus.hits, ...(foe.smartBonus.heal ? [foe.smartBonus.heal] : [])].map((m) => esc(m.label)).join(', ') + '.' : ''}</p>`
+    : foe.hits && !foe.none ? `<p class="enemy-line">${esc(foe.label)}: ${foe.hits.map(comps).map(esc).join(' · ')}.
       ${howOf(foe)}${foe.parts.length ? ' = ' + esc(worked(foe.parts)) + (foe.up ? ' + ' + modeName + ' 2' : '') + '. ' + t('The wiki gives the damage but not this number: it is worked out the way the game does it.')
       : foe.kind === 's' ? '. ' + t('The DC is the one its page gives.') + (foe.up ? ' ' + t('+2 in {mode} mode.', { mode: modeName }) : '') : '.'}${foe.om ? ' ' + t('A miss still deals half the damage.') : ''}${foe.cd ? ' ' + t('It leaves') + esc(condOf(foe)) + '.' : ''}
       ${foe.spell >= 0 ? t('A spell the planner knows: its damage is the one of a level {n} caster{slot}.', { n: target.enemy.lv, slot: foe.slot ? ', ' + t('with a level {n} slot', { n: foe.slot }) : '' }) : ''}
@@ -308,9 +316,10 @@ function simTabEnemy(ctx) {
         foe.fallback ? t('then it goes on with {b}', { b: esc(foe.fallback.label) }) : '', foe.waits ? t('its page says it is not there every turn') : '', esc(foe.guess)].filter(Boolean).map((x) => x + '.').join(' ')}${
       target.enemy && target.enemy.mv ? ' ' + t('It moves {n} m a turn.', { n: target.enemy.mv }) : ''}</p>`
   : target.enemy && !foeActs.length ? `<p class="enemy-line">${t('The page of {who} lists nothing to go by: set its attacks by hand.', { who: esc(target.enemy.n) })}</p>` : ''}
-    ${foe.attacks && foe.kind === 'a' ? `<p class="muted">${t('{n}% to hit the build\'s Armour Class of {ac}. A natural 20 is a critical hit.', { n: toHit, ac: side.ac })}</p>` : ''}
-    ${foe.attacks && foe.kind === 's' ? `<p class="muted">${t('The build fails the save {n}% of the time ({ab} {b}).', { n: toFail, ab: foe.sv.toUpperCase(), b: signed(side.saves[foe.sv] || 0) })}</p>` : ''}
-    ${foe.attacks ? `<p class="muted">${t('About {n} damage a turn to the build.', { n: foeAverage(side, foe, foe.attacks).toFixed(1) })} ${t('While raging: {list}.', { list: esc([...side.resist.raging].join(', ')) })}</p>` : ''}
+    ${!foe.smart && foe.attacks && foe.kind === 'a' ? `<p class="muted">${t('{n}% to hit the build\'s Armour Class of {ac}. A natural 20 is a critical hit.', { n: toHit, ac: side.ac })}</p>` : ''}
+    ${!foe.smart && foe.attacks && foe.kind === 's' ? `<p class="muted">${t('The build fails the save {n}% of the time ({ab} {b}).', { n: toFail, ab: foe.sv.toUpperCase(), b: signed(side.saves[foe.sv] || 0) })}</p>` : ''}
+    ${foe.attacks || foe.smart ? `<p class="muted">${t('About {n} damage a turn to the build.', { n: (foe.smart ? foeAverage(side, foe.smart[0], foe.smart[0].hits.length) : foeAverage(side, foe, foe.attacks)).toFixed(1) })}${
+      foe.smart ? ' (' + esc(foe.smart[0].label) + ')' : ''} ${t('While raging: {list}.', { list: esc([...side.resist.raging].join(', ')) })}</p>` : ''}
     ${target.enemy ? `<h3 class="group">${t('What it answers a hit with')}</h3>
     <div class="stat-tools"><div class="field"><span>${t('Reactions and Legendary Actions')}</span><button class="btn tiny${state.ui.foeReacts === false ? '' : ' gold'}" data-act="foe-reacts">${state.ui.foeReacts === false ? t('Not used') : t('Used, once a round')}</button></div></div>
     ${answers.length ? `<p class="enemy-line">${answers.map((m) => `${esc(m.label)}${m.legend ? ' (Legendary Action)' : ''}: ${m.hits.map(comps).filter(Boolean).map(esc).join(' · ') || t('no damage')}. ${howOf(m)}${m.om ? ', ' + t('half the damage on a miss') : ''}${esc(condOf(m))}${m.as ? '. ' + t('With the numbers of {a}', { a: esc(m.as) }) : ''}${
@@ -534,15 +543,18 @@ Object.assign(actions, {
     }).sort((x, y) => (x[4] === y[4] ? 0 : x[4] === t('In melee') ? -1 : 1));
     const none = second ? t('— nothing —') : t('Nothing: it only takes damage');
     rows.push([none, '', '', '', t('From a distance')]);
+    // nothing chosen: it plays the strongest it can, turn by turn
+    const best = t('The strongest it can use');
+    rows.unshift([best, t('Each turn, the strongest of these that it can pay for: the ones that take a spell slot or have few uses while they last, then the rest. Not the ones its page ties to a condition.'), '', '', t('As the fight goes')]);
     const title = second ? t('With its bonus action') : t('With its action, it uses');
     const mine = helper >= 0 ? simFoe(enemyTarget(e), state.ui['helpA' + helper] ? { foeAct: state.ui['helpA' + helper] } : true) : ctx.side.foe;
-    const now = second ? (mine.extra ? mine.extra.label : none) : mine.none ? none : mine.label;
+    const now = second ? (mine.extra ? mine.extra.label : mine.smartBonus ? best : none) : mine.none ? none : mine.smart ? best : mine.label;
     openChooser(title, t('The actions of its page on bg3.wiki, in the difficulty chosen. The first of the list is what it does when nothing is chosen.'),
       [{ label: title, n: 1, min: 0, options: rows, chosen: [now] }],
       (done) => {
-        const name = done[0].chosen[0] || '';
+        const name = done[0].chosen[0] === best ? '' : done[0].chosen[0] || '';
         if (helper >= 0) { state.ui['helpA' + helper] = name === none ? 'none' : name; return; }
-        if (second) { state.ui.foeAct2 = name === none ? '' : name; return; }
+        if (second) { state.ui.foeAct2 = name === none ? 'none' : name; return; }
         state.ui.foeAct = name === none ? 'none' : name;
         // the numbers set by hand were for the action before
         ['foeAttacks', 'foeBonus', 'foeSlot'].forEach((k) => { delete state.ui[k]; });
@@ -643,7 +655,7 @@ Object.assign(actions, {
     const i = Number(el.dataset.i);
     const f = el.dataset.f;
     const rows = stepOptions(ctx, i, f);
-    const cur = ctx.side.steps[i][f] || (i === 3 ? STEP_DEFAULT[f] : '');
+    const cur = ctx.side.steps[i][f] || (i === 3 ? (f === 'a' ? atWill(ctx.v) : STEP_DEFAULT[f]) : '');
     const title = [t('Turn {n}', { n: 1 }), t('Turn {n}', { n: 2 }), t('Turn {n}', { n: 3 }), t('From turn 4 on')][i] + ' · ' + (f === 'a' ? t('Action') : f === 'x' ? t('Action on top (Action Surge, Haste)') : t('Bonus action'));
     openChooser(title, f === 'a' ? t('What the action of the turn goes to.') : f === 'x' ? t('What a second action goes to, on the turns the build has one: Action Surge once a Short Rest, Haste while it lasts, a kill with an Elixir of Bloodlust.')
       : t('What the bonus action of the turn goes to. A spell that sets something up is cast before the attacks.'),

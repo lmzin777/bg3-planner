@@ -32,8 +32,9 @@ function reviewItems() {
       t('A save DC written on the action\'s page is used as it is.')] },
     { key: 'rule:honour', title: t('What Honour mode changes for an enemy'), ask: [
       t('The wiki gives +2 to attack rolls and save DCs for Tactician; its Honour section does not say it again. The planner keeps that +2 in Honour mode.'),
-      t('{n} enemies have no Honour hit points on their page and get their Tactician ones in Honour mode. The few pages that give both (the goblins) give more in Honour than in Tactician.', { n: ENEMIES.filter((e) => !e.hp.h && e.hp.t).length }),
-      t('The wiki says that in Tactician some enemies get more than that (Armour Class, resistances, saving throws, extra attacks) without giving it on the enemy pages. Only what a page lists is applied.')], info: [] },
+      t('{n} enemies have no Honour hit points on their page and get their Tactician ones in Honour mode. The few pages that give both (the goblins) give more in Honour than in Tactician.', { n: ENEMIES.filter((e) => !e.hp.h && e.hp.t).length })],
+    info: [
+      t('What a page gives of its own for Tactician and for Honour mode is applied: Armour Class, ability scores (and with them the numbers of its attacks), resistances, passives, Extra Attack, Legendary Resistances. Enemies with such numbers: {list}.', { list: ENEMIES.filter((e) => e.tm || e.hm).map((e) => e.n).join(', ') })] },
     { key: 'rule:haste', title: t('Haste on the turn it is cast'), ask: [
       t('The wiki says Haste gives "an additional action each turn" and does not single out the turn it is cast. The Damage test lets you choose; it starts with the action counted from that turn.')], info: [] },
     { key: 'rule:consumables', title: t('Elixirs, arrows and coatings'), ask: [
@@ -45,7 +46,11 @@ function reviewItems() {
       t('Of an elixir, the test uses: an ability score set, a die on attack rolls and saving throws, a die on weapon damage, the critical hit number, Initiative, resistances, temporary hit points, one more spell slot, an Armour Class of 16, the action of Bloodlust, Arcane Acuity that never goes below 3 (Battlemage\'s Power). Not used: the spells an elixir lets cast once.'),
       t('Arcane Acuity is +1 to spell attack rolls and to the spell save DC for each turn of it left; a turn goes at the start of each turn and two with every hit taken. Gear gives 2 turns of it each time: the items whose text leaves the number out have it on the page of their passive.')] },
     { key: 'rule:turn', title: t('What an enemy does in a turn'), ask: [], info: [
-      t('One action and, when one is chosen, one bonus action, on one build. It does not move by itself: the movement it spends is set on the page.'),
+      t('One action and one bonus action. With nothing chosen for it, the strongest of its actions that it can pay for that turn (spell slots and limited uses first, while they last), and never one its page ties to a condition. It does not move by itself: the movement it spends is set on the page.'),
+      t('An action with an area catches every member of the party that stands in the same line as the one it is aimed at.'),
+      t('From Tactician up it tries to finish off whoever it downs, as the wiki\'s Difficulty page says: one blow on a Downed member, which is a failed death saving throw, and then it turns to someone else.'),
+      t('Its passives are played as their pages give them: Magic Resistance (Advantage on saves against spells), Evasion, Alert (never Surprised), Vampire Regeneration (unless Radiant damage reached it), Tenacity, Githyanki Parry (once a round).'),
+      t('Legendary Resistance adds 10 to a failed save when that turns it into a passed one, three times; the general one not on a natural 1 or 20 (its page\'s bug note), "Incapacitation" only against what takes actions away.'),
       t('It answers a hit once a round. A Legendary Action is used once a round and comes back at the start of the next, and not by a creature that is Stunned, incapacitated or Restrained (the wiki\'s Legendary action page). What sets each one off is given under its enemy, in the words of its page.'),
       t('That page names three exceptions the test does not play: W\'wargaz may use his twice a round, Gerringothe Thorm once for each piece of armour destroyed, Raphael once for each soul pillar left.'),
       t('A cantrip or spell the planner has in its own list deals the damage of the enemy\'s level and of the slot chosen. Its other spells deal the damage written on their page.')] },
@@ -76,6 +81,7 @@ function reviewItems() {
     const info = [];
     const acts = e.acts || [];
     if (!acts.length) info.push(t('Its page lists no action that deals damage and costs an action or a bonus action: in the Damage test its attacks are set by hand.'));
+    acts.filter((a) => a.gr).forEach((a) => ask.push(t('{a}: its page gives the damage as a range in the text ({range}); the test rolls it as {dice}.', { a: a.n, range: a.gr, dice: hitsText(a.hits) })));
     if (e.note && /worked out/i.test(e.note)) ask.push(e.note);
     acts.filter((a) => a.g).forEach((a) => ask.push(t('{a} is not on its page. It is there because {why}. Attack bonus {b}, damage {d}.', { a: a.n, why: a.g, b: signed(a.b), d: hitsText(a.hits) })));
     acts.filter((a) => a.gw).forEach((a) => ask.push(t('{a}: its page does not name the weapon of this attack. {weapon} is used: {why}. {n}, damage {d}.', { a: a.n, weapon: a.gw[0], why: a.gw[1], n: numberOf(a), d: hitsText(a.hits) })));

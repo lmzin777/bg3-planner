@@ -1024,7 +1024,7 @@
         "race": "Tiefling",
         "subrace": "Zariel Tiefling",
         "background": "Outlander",
-        "skills": "Athletics",
+        "skills": "Athletics, Acrobatics, Stealth, Sleight of Hand",
         "abilities": {
           "str": 8,
           "dex": 14,
@@ -1124,7 +1124,7 @@
           "note": ""
         }
       ],
-      "variants": "• Solo — 6 Open Hand Monk / 4 Thief / 2 Fighter. 8 STR / 17 DEX / 15 CON / 8 INT / 16 WIS / 8 CHA. The Fighter levels give armour proficiency and Action Surge\n• Radiant Orb (used in the Impossible Challenge) — 1 Fighter / 6 Open Hand Monk / 4 Thief / 1 Fighter solo, or 1 Fighter / 8 Open Hand Monk / 3 Thief in a party. Holy Lance Helm, Luminous Gloves and Luminous Armour: radiant unarmed hits from Monk 6 stack Radiating Orbs, up to -10 to enemy attack rolls",
+      "variants": "• Solo — 6 Open Hand Monk / 4 Thief / 2 Fighter. 8 STR / 17 DEX / 15 CON / 8 INT / 16 WIS / 8 CHA. The Fighter levels give armour proficiency and Action Surge\n• Radiant Orb (used in the Impossible Challenge) — 1 Fighter / 6 Open Hand Monk / 4 Thief / 1 Fighter solo, or 1 Fighter / 8 Open Hand Monk / 3 Thief in a party. Holy Lance Helm, Luminous Gloves and Luminous Armour: radiant unarmed hits from Monk 6 stack Radiating Orbs, up to -10 to enemy attack rolls\n\u2022 Filled in by the planner, not in the guide (\"your choice\"): the skills Acrobatics, Stealth (Monk) and Sleight of Hand (Rogue).",
       "notes": "ORIGIN\nKarlach (2d4 Fire damage from Act 1) or Astarion (1d10 Necrotic damage in Act 3).\nPer the guide, Soul Coins are bugged: they last until Long Rest, do not need Karlach to be Raging or at low health, and add 2d4 Fire to unarmed attacks.\n\nSKILLS\nAthletics is required; the rest is your choice.",
       "source": "https://www.youtube.com/watch?v=vC3m1PXG3RQ",
       "gear": {

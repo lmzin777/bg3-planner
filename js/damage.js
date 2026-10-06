@@ -26,10 +26,22 @@ function targetOf() {
   }
   return enemyTarget(e);
 }
-// A reference enemy as something to aim at: its Armour Class, saving throws and resistances.
+// What an enemy's page gives of its own for the difficulty chosen: { ac, ab, res } from Tactician up (tm), with
+// what it adds for Honour mode (hm) on top.
+function enemyOwn(e) {
+  const mode = gameMode();
+  const t = (mode !== 'balanced' && e.tm) || {};
+  const h = (mode === 'honour' && e.hm) || {};
+  return { ac: h.ac || t.ac || e.ac, ab: Object.assign({}, e.ab, t.ab, h.ab), res: h.res || t.res || e.res || {} };
+}
+// The passives of an enemy that change a fight, in the difficulty chosen (see enemies.js): Magic Resistance,
+// Evasion, Alert, what it regains each turn, Tenacity, a parry, Legendary Resistances.
+const foePassives = (e) => { const mode = gameMode(); return (e && ((mode === 'honour' && e.pvh) || (mode !== 'balanced' && e.pvt) || e.pv)) || {}; };
+// A reference enemy as something to aim at: its Armour Class, saving throws and resistances, in the difficulty chosen.
 function enemyTarget(e) {
-  const mod = (k) => Math.floor((e.ab[k] - 10) / 2);
-  return { name: e.n, enemy: e, ac: e.ac, saves: Object.fromEntries(ABILITY_KEYS.map((k) => [k, mod(k) + (e.sv.includes(k) ? e.pb : 0)])), res: e.res || {} };
+  const own = enemyOwn(e);
+  const mod = (k) => Math.floor((own.ab[k] - 10) / 2);
+  return { name: e.n, enemy: e, ac: own.ac, ab: own.ab, saves: Object.fromEntries(ABILITY_KEYS.map((k) => [k, mod(k) + (e.sv.includes(k) ? e.pb : 0)])), res: own.res, pv: foePassives(e) };
 }
 // Fiends and Undead take one more die from Divine Smite; the arrows of slaying only work on their own kind.
 const enemyIs = (target, kind) => !!(target && target.enemy && new RegExp('\\b' + kind, 'i').test(target.enemy.ty || ''));
@@ -270,22 +282,28 @@ function spellDamage(stats, entry, target, main) {
   const saveKey = s.sv ? String(s.sv).toLowerCase().slice(0, 3) : noteSave ? noteSave[1].toLowerCase().slice(0, 3) : '';
   let fail = saveKey ? Math.max(0, Math.min(1, (dc - 1 - target.saves[saveKey]) / 20)) : 0;
   const heightened = !!saveKey && on.includes('meta:heighten') && opts.has('Heightened Spell');
-  if (heightened) fail = 1 - (1 - fail) ** 2;  // Disadvantage: the worse of two rolls
+  // Magic Resistance: the enemy rolls its saving throws against spells with Advantage (which Heightened Spell cancels)
+  const resists = !!saveKey && !!(target.pv || {}).mr;
+  if (heightened && !resists) fail = 1 - (1 - fail) ** 2;  // Disadvantage: the worse of two rolls
+  else if (resists && !heightened) fail *= fail;           // Advantage: the better of two
+  // Evasion: nothing on a passed Dexterity save that would halve, half on a failed one
+  const evades = saveKey === 'dex' && !!(target.pv || {}).ev;
   const potent = !s.lv && gains.includes('Potent Cantrip');
   const kept = (x) => {
     const said = SAVE_NOTE.test(x.note) ? x.note : s.os || '';
     return Math.max(/full damage/i.test(said) ? 1 : /hal[fv]/i.test(said) ? 0.5 : 0, potent ? 0.5 : 0);
   };
-  const saved = (x) => fail + (1 - fail) * kept(x);
-  const saveText = () => t('{ab} save, DC {dc}: {n}% fail', { ab: saveKey.toUpperCase(), dc, n: Math.round(fail * 100) });
+  const dodged = (x) => evades && kept(x) === 0.5;
+  const saved = (x) => (dodged(x) ? fail * 0.5 : fail + (1 - fail) * kept(x));
+  const saveText = () => t('{ab} save, DC {dc}: {n}% fail', { ab: saveKey.toUpperCase(), dc, n: Math.round(fail * 100) }) + (resists ? ' · Magic Resistance' : '') + (evades ? ' · Evasion' : '');
   // what a cast rolls, for the damage test: the same numbers the average is made of
   const rolled = { attack, ac: target.ac, crit: stats.crit, adv: !!stats.advantage,
-    save: saveKey ? { key: saveKey, bonus: target.saves[saveKey], dc, dis: heightened } : null, repeat: 1, parts: [],
+    save: saveKey ? { key: saveKey, bonus: target.saves[saveKey], dc, dis: heightened, adv: resists } : null, repeat: 1, parts: [],
     // what it goes on doing: the damage of the following turns, whether it holds Concentration, how many turns it lasts
     later: [], conc: !!s.co, turns: Number((/(\d+) turn/.exec(s.du || '') || [])[1]) || 0,
     // the save against what it leaves behind, when the wiki gives that one a DC of its own
-    laterSave: fixedLater ? { key: (fixedLater[2] || saveKey || 'con').toLowerCase(), bonus: target.saves[(fixedLater[2] || saveKey || 'con').toLowerCase()], dc: fixedLater[1], dis: false } : null };
-  const laterPart = (x, type, times) => ({ mode: saveKey && !whenOf(x.note) ? 'save' : 'auto', dice: x.dice, flat: x.flat, type, f: typeFactor(target, type, true), kept: kept(x), times,
+    laterSave: fixedLater ? { key: (fixedLater[2] || saveKey || 'con').toLowerCase(), bonus: target.saves[(fixedLater[2] || saveKey || 'con').toLowerCase()], dc: fixedLater[1], dis: false, adv: !!(target.pv || {}).mr } : null };
+  const laterPart = (x, type, times) => ({ mode: saveKey && !whenOf(x.note) ? 'save' : 'auto', dice: x.dice, flat: x.flat, type, f: typeFactor(target, type, true), kept: kept(x), ev: dodged(x), times,
     once: /delayed/i.test(x.note), when: whenOf(x.note),
     // an area that is Difficult Terrain halves the distance walked through it
     halved: /difficult terrain/i.test((s.d || '') + ' ' + (s.xd || '')) });
@@ -303,7 +321,7 @@ function spellDamage(stats, entry, target, main) {
     return { name: s.n, sp: s, slot, total, how: t('{n}% to hit', { n: Math.round(d.p.hit * 100) }) + (burst.length && saveKey ? ' · ' + saveText() : '') + upText,
       text: [t('weapon hit'), ...hits.parts.map(dicePart)].join(' + '), later: laterText, area: false, bonuses: [], weapon: true,
       heightened: heightened && burst.length > 0, points: heightened && burst.length ? 3 : 0, cls: entry.cls || '',
-      recipe: Object.assign(rolled, { weapon: row, parts: burst.map((x) => ({ mode: 'save', dice: x.dice, flat: x.flat, type: typed(x), f: typeFactor(target, typed(x), true), kept: kept(x), times: 1 })) }) };
+      recipe: Object.assign(rolled, { weapon: row, parts: burst.map((x) => ({ mode: 'save', dice: x.dice, flat: x.flat, type: typed(x), f: typeFactor(target, typed(x), true), kept: kept(x), ev: dodged(x), times: 1 })) }) };
   }
   const now = hits.parts.length ? hits.parts : hits.later.filter((x) => /per turn/i.test(x.note));
   if (!now.length) {
@@ -355,7 +373,7 @@ function spellDamage(stats, entry, target, main) {
     if (mode === 'attack') total += hits.beams * (p.hit * (dice + flat) + p.crit * dice) * (mixed ? 1 : targets);
     else if (mode === 'save') total += (dice + flat) * saved(x) * targets;
     else total += hits.beams * (dice + flat) * targets;
-    rolled.parts.push({ mode, dice: x.dice, flat: x.flat + each + (k === onceAt ? once : 0), type: x.type, f, kept: kept(x),
+    rolled.parts.push({ mode, dice: x.dice, flat: x.flat + each + (k === onceAt ? once : 0), type: x.type, f, kept: kept(x), ev: dodged(x),
       times: mode === 'save' ? targets : hits.beams * (mode === 'attack' && mixed ? 1 : targets) });
   });
   // "3 × 1d4 + 1 Force" for darts and rays that are all alike
@@ -493,18 +511,21 @@ function turnBox(stats, style) {
 // "Fire immune, Slashing resistant (non-magical)".
 const resText = (e) => Object.keys(e.res || {}).map((k) => k + ' ' + ({ r: t('resistant'), rn: t('resistant (non-magical)'), rm: t('resistant (magical)'), i: t('immune'), in: t('immune (non-magical)'),
   ip: t('immune (non-magical), resistant (magical)'), v: t('vulnerable') })[e.res[k]]);
+// The passives of an enemy that the fight plays, as a line of text.
+const passiveText = (pv) => [pv.mr ? 'Magic Resistance' : '', pv.lr ? 'Legendary Resistance × ' + pv.lr : '', pv.li ? 'Legendary Resistance: Incapacitation × ' + pv.li : '', pv.ev ? 'Evasion' : '',
+  pv.al ? 'Alert' : '', pv.rg ? 'Vampire Regeneration ' + pv.rg : '', pv.tn ? 'Tenacity' : '', pv.pr ? 'Githyanki Parry ' + pv.pr : ''].filter(Boolean).join(', ');
 // The enemy the numbers are measured against, chosen in Final numbers.
 function targetTools() {
   const target = targetOf();
   const e = target.enemy;
-  const res = e ? resText(e) : [];
+  const res = e ? resText({ res: target.res }) : [];
   return `<div class="field enemy-field"><span>${t('Enemy')}</span>${slotButton('enemy-open', '', e ? e.n : '', '', t('Any enemy'))}</div>
     ${e ? '' : `<div class="field ac-field"><span>${t('Enemy Armour Class')}</span>${stepper(target.ac, 'data-ui="targetAc" data-v="16"', 5, 30)}</div>
       <div class="field ac-field"><span>${t('Its saving throws')}</span>${stepper(target.saves.str, 'data-ui="targetSave" data-v="3"', -3, 15)}</div>`}
     <div><span class="lbl" title="${t('In Honour mode, Extra Attack from Deepened Pact does not add to a class\'s Extra Attack, and the action Haste gives cannot use Extra Attack.')}">${t('Difficulty')}</span><div class="acts mini modes">${MODES.map(([k, label]) =>
       `<button class="${gameMode() === k ? 'on' : ''}" data-act="mode" data-k="${k}">${label}</button>`).join('')}</div></div>
     ${e ? `<p class="enemy-line">${t('Act {n}', { n: e.act })} · ${t('level {n}', { n: e.lv })} · AC ${e.ac} · HP <b>${enemyHp(e)}</b> (${[e.hp.b + ' Balanced', e.hp.t ? e.hp.t + ' Tactician' : '', e.hp.h ? e.hp.h + ' Honour' : ''].filter(Boolean).join(' / ')}) · ${
-      ABILS.map(([k, short]) => short + ' ' + signed(target.saves[k])).join(' ')}${res.length ? ' · ' + esc(res.join(', ')) : ''}${e.note ? `<br><em>${esc(e.note)}</em>` : ''}</p>` : ''}`;
+      ABILS.map(([k, short]) => short + ' ' + signed(target.saves[k])).join(' ')}${res.length ? ' · ' + esc(res.join(', ')) : ''}${passiveText(target.pv) ? ' · ' + esc(passiveText(target.pv)) : ''}${e.note ? `<br><em>${esc(e.note)}</em>` : ''}</p>` : ''}`;
 }
 
 Object.assign(actions, {

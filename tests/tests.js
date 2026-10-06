@@ -1047,8 +1047,13 @@
     eq(plan(f, 'melee'), [18.3, [['Attack action', 2], ['Haste', 2]]]);
     state.ui.mode = 'honour';
     f.active = [];
+    // (its page gives other resistances from Tactician up: no weakness to Lightning any more, and half of Fire)
+    state.ui.mode = 'balanced';
+    const easyTitan = enemy('Steel Watcher Titan');
+    eq([typeFactor(easyTitan, 'Lightning', false), typeFactor(easyTitan, 'Slashing', false), typeFactor(easyTitan, 'Slashing', true), typeFactor(easyTitan, 'Poison', true), typeFactor(easyTitan, 'Fire', false)], [2, 0.5, 1, 0, 1]);
+    state.ui.mode = 'honour';
     const titan = enemy('Steel Watcher Titan');
-    eq([typeFactor(titan, 'Lightning', false), typeFactor(titan, 'Slashing', false), typeFactor(titan, 'Slashing', true), typeFactor(titan, 'Poison', true), typeFactor(titan, 'Fire', false)], [2, 0.5, 1, 0, 1]);
+    eq([typeFactor(titan, 'Lightning', false), typeFactor(titan, 'Slashing', false), typeFactor(titan, 'Slashing', true), typeFactor(titan, 'Poison', true), typeFactor(titan, 'Fire', false)], [1, 0.5, 1, 0, 0.5]);
     eq(plan(f, 'melee', titan)[0], 4.95, 'a common Longsword against resistance to non-magical Slashing: 2 × (0.6 × 7.5 + 0.1 × 4.5) ÷ 2, AC 15');
     const monk = made(Array(6).fill('Monk'), { race: 'Elf', subrace: 'Wood Elf', abilities: { str: 8, dex: 15, con: 14, int: 8, wis: 15, cha: 10 }, plus2: 'dex', plus1: 'wis' }, { 2: 'Way of the Open Hand' });
     eq(plan(monk, 'unarmed', titan)[0], 16.3, 'Ki-Empowered Strikes count as magical: 4 × (0.6 × 6.5 + 0.05 × 3.5)');
@@ -1242,9 +1247,9 @@
     // The temporary list of things to check by hand.
     const review = reviewItems();
     const asked = review.filter((x) => x.ask.length);
-    ok(review.length > 40 && asked.length > 15 && asked.length < 40 && review.find((x) => x.key === 'enemy:The Netherbrain').info.some((p) => /set by hand/.test(p))
+    ok(review.length > 40 && asked.length > 15 && asked.length < 40 && review.find((x) => x.key === 'enemy:The Netherbrain').ask.some((p) => /20~200/.test(p))
       && review.find((x) => x.key === 'enemy:Sarevok Anchev').ask.some((p) => /Sword of Chaos/.test(p)) && !review.find((x) => x.key === 'rule:initiative').ask.length,
-      'what the planner guessed asks for a look (Sarevok\'s sword); what the wiki settles does not (Initiative, the Netherbrain\'s page)');
+      'what the planner guessed asks for a look (Sarevok\'s sword); and a damage read from a range (the Netherbrain\'s orb); what the wiki settles does not (Initiative)');
     eq([review.find((x) => x.key === 'rule:numbers').ask.length > 10, ENEMIES.find((e) => e.n === 'Cambion').acts.some((a) => /Trident/.test(a.n)), ENEMIES.find((e) => e.n === 'Animated Armour').acts.map((a) => a.gw && a.gw[0]),
       ENEMIES.find((e) => e.n === 'Yurgir').rx.every((a) => /Hunted creature/.test(a.tr))], [true, true, ['Greatsword', 'Heavy Crossbow'], true],
       'the guessed numbers in one entry; a weapon named another way on the page is found; what sets an answer off, in the words of its page');
@@ -1534,6 +1539,76 @@
     mage.elixir = '';
     // A helper may have its action chosen, like the main enemy.
     eq([simFoe(enemyTarget(yurgir), true).label, simFoe(enemyTarget(yurgir), { foeAct: 'Infernal Dagger' }).label, simFoe(enemyTarget(yurgir), { foeAct: 'none' }).attacks], ['Concussive Burst', 'Infernal Dagger', 0]);
+
+    // What an enemy's page gives for the difficulty: its numbers of Tactician, what adds to its Initiative, its passives.
+    const by = (n) => ENEMIES.find((e) => e.n === n);
+    const inMode = (m, fn) => { state.ui.mode = m; const out = fn(); state.ui.mode = 'honour'; return out; };
+    eq([inMode('balanced', () => enemyTarget(by('Apostle of Myrkul')).ac === by('Apostle of Myrkul').ac), [enemyTarget(by('Apostle of Myrkul')).ac, enemyTarget(by('Apostle of Myrkul')).ab.str], by('Auntie Ethel').xi,
+      inMode('balanced', () => foePassives(by('Cazador Szarr'))), foePassives(by('Cazador Szarr')), !!foePassives(by('Raphael')).mr, by('The Netherbrain').acts[0].gr, by('Prelate Lir\'i\'c').acts.some((a) => !a.q)],
+      [true, [20, 25], 5, { al: 1, rg: 10 }, { al: 1, rg: 10, lr: 3 }, true, '20~200', true], 'Armour Class 20 and Strength 25 from Tactician up; Legendary Resistance from Tactician up; the two that did nothing have an action');
+    const withPv = (target, pv, more) => Object.assign({}, target, { pv }, more);
+    // Magic Resistance: Advantage on the save against a spell, in the average too.
+    const ball = (target) => simBase(sideOf(finalStats(mage, 'act1'), 'caster', target, steps([]))).spells.get('Fireball');
+    eq([ball(plain).total, ball(withPv(plain, { mr: 1 })).total, ball(withPv(plain, { mr: 1 })).recipe.save.adv, ball(withPv(plain, { ev: 1 })).total], [21, 17.5, true, 7],
+      '8d6 (28): half the time all of it and half of it otherwise; with Advantage a quarter of the time; with Evasion nothing on a pass and half on a fail');
+    // Legendary Resistance: 10 more on a failed save, while it lasts. The general one on any save; the other only against what incapacitates.
+    const burn = (pv) => fightOf(sideOf(finalStats(mage, 'act1'), 'caster', withPv(weak, pv), steps([{}, {}, {}, { a: 'Fireball' }])), 2)[1].map((x) => x.total);
+    eq([burn({ lr: 1 }), burn({ li: 1 }), burn({ ev: 1 })], [[16, 32], [32, 32], [16, 16]], 'a failed save turned into a passed one, once');
+    const numb = sideOf(finalStats(monk, 'act1'), 'unarmed', withPv(weak, { li: 1 }), steps([]));
+    Object.assign(numb, { foe: foeOf({ bonus: 20 }), hit: { name: 'Stunning Strike', every: false } });
+    [fight, turns] = fightOf(numb, 2);
+    eq([turns[0].lines.find((l) => l.cond).legend, turns.map((x) => x.lines.filter((l) => l.kind === 'foe').length)], [true, [1, 0]], 'the first Stunning Strike is resisted, the second lands');
+    // With nothing chosen an enemy plays the strongest it can pay for; with an action chosen, that one.
+    const lorTarget = inMode('balanced', () => enemyTarget(by('Lorroakan')));
+    const lor = inMode('balanced', () => simFoe(lorTarget, true));
+    ok(lor.smart.length > 3 && lor.smart[0].label !== 'Fire Bolt' && lor.smart[0].slot > 0 && lor.smart.some((m) => m.label === 'Fire Bolt') && !inMode('balanced', () => simFoe(lorTarget, { foeAct: 'Fire Bolt' })).smart,
+      'Lorroakan: a spell with a slot before his cantrip; first ' + lor.smart[0].label);
+    state.ui.mode = 'balanced';
+    enc = newEncounter([sword()], [foeState(lor, lorTarget, 1000)], { first: 'foes' });
+    const slotsBefore = Object.assign({}, lor.slots);
+    round = encRound(enc);
+    eq([round.entries[0].lines[0].how.indexOf(lor.smart[0].label) === 0, enc.foes[0].slots[lor.smart[0].slot] === slotsBefore[lor.smart[0].slot] - 1], [true, true], 'and it takes the slot');
+    state.ui.mode = 'honour';
+    // The level the build fights at, set on the page of the test.
+    state.ui.simLevel = 4;
+    const young = simSide(fighter, 'act1', plain);
+    delete state.ui.simLevel;
+    eq([young.at, young.stats.level, simSide(fighter, 'act1', plain).stats.level], [4, 4, 5]);
+    // An action with an area catches everyone in the line of the one it is aimed at.
+    const blast = () => foeState(Object.assign(foeOf({ kind: 's', sv: 'dex', dc: 30, os: 0.5, hits: [[['2d6', 0, 'Fire']]], area: true })), plain, 0);
+    enc = newEncounter([Object.assign(sword(), { name: 'A' }), mate(), Object.assign(sideOf(finalStats(archer, 'act1'), 'ranged', plain, steps([])), { name: 'Bow' })], [blast()], { first: 'foes', aim: 'first' });
+    encRound(enc);
+    eq(enc.fights.map((x, k) => enc.sides[k].hp - x.hp), [8, 8, 0], '2d6 (8) to the two who stand next to it; the archer is elsewhere');
+    // What adds to its Initiative: Auntie Ethel's Dexterity modifier and the 5 of her page.
+    const ethel = enemyTarget(by('Auntie Ethel'));
+    enc = newEncounter([sword()], [foeState(foeOf({ attacks: 0 }), ethel, 100)], { first: 'roll' });
+    encRound(enc);
+    eq(enc.init.find((x) => x.kind === 'foe').bonus, Math.floor((ethel.ab.dex - 10) / 2) + 5);
+    // Passives: Vampire Regeneration, Githyanki Parry, Tenacity, Alert.
+    const passive = (pv, foe, opts) => newEncounter([sword()], [Object.assign(foeState(foeOf(Object.assign({ attacks: 0 }, foe)), withPv(plain, pv, { ab: { str: 20, dex: 10 } }), 1000), { name: 'V' })], Object.assign({ first: 'party' }, opts));
+    enc = passive({ rg: 10 });
+    eq([encRound(enc) && enc.foes[0].dealt, encRound(enc) && enc.foes[0].dealt], [6, 12], '16 dealt and 10 back, each round');
+    enc = passive({ pr: 10 });
+    eq(encRound(enc).entries[0].lines.map((l) => l.damage), [0, 8], 'the parry takes 10 off one hit a round');
+    enc = passive({ tn: 1 }, { attacks: 1, bonus: -5 });
+    round = encRound(enc);
+    eq([round.entries[1].lines[0].taken, / Tenacity/.test(round.entries[1].lines[0].how)], [5, true], 'a missed melee attack still deals its Strength modifier');
+    eq([encRound(passive({ al: 1 }, { attacks: 1, bonus: 20 }, { surprise: 'foes' })).entries.length, encRound(passive({}, { attacks: 1, bonus: 20 }, { surprise: 'foes' })).entries.filter((e) => e.lines.length).length], [2, 1], 'with Alert it is not Surprised');
+    // What the build cannot be: its own immunities, and the Aura of Courage of a Paladin in its line.
+    const scare = () => foeState(foeOf({ bonus: 20, damage: 1, cd: { name: 'Frightened', turns: 2, sv: '', dc: 0 } }), plain, 0);
+    enc = newEncounter([sword()], [scare()], { first: 'foes' });
+    encRound(enc);
+    const brave = Object.assign(sword(), { immune: ['Frightened'] });
+    const encB = newEncounter([brave], [scare()], { first: 'foes' });
+    encRound(encB);
+    const encC = newEncounter([Object.assign(sword(), { name: 'A' }), Object.assign(mate(), { courage: true })], [scare()], { first: 'foes', aim: 'first' });
+    encRound(encC);
+    eq([enc.fights[0].conds.map((c) => c.name), encB.fights[0].conds.length, encC.fights[0].conds.length], [['Frightened'], 0, 0]);
+    // From Tactician up an enemy finishes off whoever it downs: one blow, a failed death saving throw, then someone else.
+    const killer = (mode) => inMode(mode, () => { const e = newEncounter([Object.assign(sword(), { name: 'A' }), mate()], [foeState(foeOf({ attacks: 3, bonus: 20, damage: 500 }), plain, 0)], { first: 'foes', aim: 'first' }); encRound(e); return [e.fights[0].death.bad, !!e.fights[1].down]; });
+    eq([killer('honour'), killer('balanced')], [[1, true], [0, true]]);
+    // The ready-made builds leave nothing open but what the guide leaves to whoever plays them.
+    eq(buildIssues(preset('tavern-brawler-monk')).filter((x) => x.level === 'warn').map((x) => x.text), [], 'the monk\'s skills are filled in');
 
     // Many fights of a setup, with the numbers of each kept for the chart.
     simRandom = realRandom;

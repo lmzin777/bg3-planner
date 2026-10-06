@@ -237,6 +237,45 @@ def condition_flags(text):
     return f, said
 
 
+def passive_flags(names, standing, pages):
+    """What the passives of a creature, and the conditions it always has, change in a fight, read from their pages:
+    mr Advantage on saving throws against spells (Magic Resistance) · ev Evasion · al cannot be Surprised (Alert)
+    · rg hit points regained at the start of its turn · tn the damage a missed melee attack still deals is its
+    Strength modifier (Tenacity) · pr what it takes off a weapon or unarmed hit, once a round (Githyanki Parry)
+    · lr saving throws it may add 10 to (Legendary Resistance) · li the same, against incapacitating conditions only."""
+    out = {}
+    for name in names:
+        w = feature(pages.get(name, ""))
+        said = clean(field(w, "description")) + " " + clean(field(w, "extra description"))
+        if re.search(r"advantage on saving throws against spells", said, re.I):
+            out["mr"] = 1
+        if name == "Evasion":
+            out["ev"] = 1
+        if re.search(r"can't be surprised|cannot be surprised", said.replace("\u2019", "'"), re.I):
+            out["al"] = 1
+        m = re.search(r"regains (\d+) (?:healing|hit points) at the start of its turn", said, re.I)
+        if m:
+            out["rg"] = int(m.group(1))
+        if re.search(r"when you miss a melee attack, you deal strength modifier", said, re.I):
+            out["tn"] = 1
+        m = re.search(r"parry unarmed and weapon attacks to reduce their damage by (\d+)", said, re.I)
+        if m:
+            out["pr"] = int(m.group(1))
+    for name in standing:
+        # "+10 bonus to your next Saving Throw… You can use this 3 times."
+        if name.startswith("Legendary Resistance"):
+            w = pages.get(name + " (Condition)", "") or pages.get(name, "")
+            said = clean(field(w[w.lower().find("{{condition page"):] if "{{condition page" in w.lower() else w, "effects"))
+            times = 3 if re.search(r"3 times|thrice", said, re.I) else 1
+            out["li" if "Incapacitation" in name else "lr"] = times
+    return out
+
+
+def names_of(text):
+    """ "Alert, Fey Life @ Tarnished Charm, Opportunity Attack" as names."""
+    return [x.split("@")[0].strip() for x in re.split(r",\s*", clean(text)) if x.split("@")[0].strip()]
+
+
 def is_weapon(page):
     return bool(DICE.match(clean(field(page, "damage")))) and bool(clean(field(page, "damage type")))
 
@@ -246,6 +285,7 @@ class Maker:
 
     def __init__(self, box, scores, pb):
         self.box, self.scores, self.pb = box, scores, pb
+        self.unarmed = None  # the damage of its Unarmed Strike, for the actions that say "unarmed"
         self.casting = ""
         # the spellcasting ability its page gives; else the highest of the three, which is then a guess
         self.casting_known = bool(self.ability(field(box, "casting ability")))
@@ -345,6 +385,14 @@ class Maker:
             # healing is no damage, and a line that depends on a saving throw is not part of every hit
             if not text or kind == "Healing" or (roll and re.search(r"saving throw", info, re.I)):
                 continue
+            if text.lower() == "unarmed":
+                # the damage of its own unarmed strike, when its page lists one
+                if not self.unarmed:
+                    unknown = True
+                    continue
+                comps.append(self.unarmed[:3] + [True])
+                ability = ability or self.unarmed[3]
+                continue
             if text.lower() == "weapon":
                 m = DICE.match(clean(field(weapon, "damage"))) if weapon else None
                 if not m:
@@ -361,6 +409,12 @@ class Maker:
             named = self.ability(m.group(3)) or self.ability(get("damage" + n + " modifier"))
             ability = ability or named
             comps.append([m.group(1), int(m.group(2) or 0) + (self.mod(named) if named else 0), "" if kind == "Weapon" else kind, bool(named)])
+        # a damage its page only gives as a range in the text ("20~200 Force"): read as that many dice, which is said
+        ranged_text = re.search(r"\{\{\s*DamageText\s*\|\s*(\d+)\s*~\s*(\d+)\s*\|\s*([A-Za-z]+)", field(w, "summary") + field(w, "description"))
+        guessed_range = False
+        if not comps and not unknown and ranged_text and int(ranged_text.group(2)) % int(ranged_text.group(1)) == 0:
+            comps.append([ranged_text.group(1) + "d" + str(int(ranged_text.group(2)) // int(ranged_text.group(1))), 0, ranged_text.group(3), False])
+            guessed_range = True
         # the weapon it strikes with is not named on the page: nothing to go by
         # (an action that only leaves a condition the test can use is kept, with no damage)
         if unknown or (not comps and not (cond and (roll or save in ABILITIES))):
@@ -368,6 +422,11 @@ class Maker:
         out = {"n": name + (" (" + given["item"] + ")" if given.get("item") else ""), "m": 1 if melee else 0}
         if with_weapon:
             out["_w"] = True
+        if guessed_range:
+            out["gr"] = ranged_text.group(1) + "~" + ranged_text.group(2)
+        # it catches everyone in an area
+        if clean(get("aoe")) or number(get("aoe m")) or re.match(r"all\b", clean(get("targets")), re.I):
+            out["ar"] = 1
         # "wf": the ability behind the number is not named by the page, it is the planner's rule
         if roll:
             if spell:
@@ -464,6 +523,15 @@ def actions_of(name, pages, actions, items, box, scores, pb, flags):
     make = Maker(box, scores, pb)
     out, seen, unused = [], set(), []
     boxes = listed_actions(text)
+    # its unarmed strike, for the actions whose damage is "unarmed"
+    for t, g, _ in boxes:
+        if t.startswith("Unarmed Strike"):
+            w0 = feature(actions.get(t, ""))
+            m0 = DICE.match(clean(g.get("damage") or field(w0, "damage")))
+            if m0:
+                key0 = make.ability(m0.group(3)) or ("dex" if scores["dex"] > scores["str"] else "str")
+                make.unarmed = [m0.group(1), int(m0.group(2) or 0) + make.mod(key0), clean(field(w0, "damage type")) or "Bludgeoning", key0]
+            break
     # the weapon it holds: the one its Main Hand Attack names. Else one the page points at some other way, which is
     # then said with the attack: the weapon a passive comes from, the only weapon of its loot, or the only melee
     # weapon its Combat section names. For a Ranged Attack, the only ranged weapon the Combat section names.
@@ -614,6 +682,10 @@ def main():
     named = {clean(field(feature(text), "condition" + n)) for text in actions.values() for n in ("", " 1", " 2")} - {""}
     cond_pages = page_texts({c + " (Condition)" for c in named} | named)
     flags = {c: condition_flags(cond_pages.get(c + " (Condition)") or cond_pages.get(c) or "")[0] for c in named}
+    # the passives of every difficulty, and the conditions a creature always has
+    listed_passives = {x for box in boxes.values() for k in ("passives", "t passives", "h passives") for x in names_of(field(box, k))}
+    standing = {x for box in boxes.values() for k in ("conditions", "t conditions", "h conditions") for x in names_of(field(box, k)) if x.startswith("Legendary Resistance")}
+    passive_pages = page_texts(listed_passives | standing | {x + " (Condition)" for x in standing})
     out, missing = [], []
     for act, name in ENEMIES:
         box = infobox(pages.get(name + "/Combat", "")) or infobox(pages.get(name, "")) or infobox(pages.get(name, ""), False)
@@ -636,9 +708,43 @@ def main():
             if kind:
                 e["ty"] = kind
                 break
+        # Initiative: a bonus the page sets outright ("in"), or one on top of the Dexterity modifier ("xi")
         if number(field(box, "initiative")) is not None:
             e["in"] = number(field(box, "initiative"))
+        elif number(field(box, "extra init")) is not None:
+            e["xi"] = number(field(box, "extra init"))
+        # what the page gives of its own for Tactician and for Honour mode: Armour Class, ability scores, resistances
+        for mode, key in (("t", "tm"), ("h", "hm")):
+            own = {}
+            if number(field(box, mode + " ac")) is not None:
+                own["ac"] = number(field(box, mode + " ac"))
+            ab = {k: number(field(box, mode + " " + k)) for k in ABILITIES if number(field(box, mode + " " + k)) is not None}
+            if ab:
+                own["ab"] = ab
+            if clean(field(box, mode + " resistances")):
+                own["res"] = resistances(field(box, mode + " resistances"))
+            if own:
+                e[key] = own
+        # passives and standing conditions, in each difficulty (a harder one is listed when it differs)
+        lists = [(names_of(field(box, k + "passives")), names_of(field(box, k + "conditions"))) for k in ("", "t ", "h ")]
+        lists[1] = (lists[1][0] or lists[0][0], lists[1][1] or lists[0][1])
+        lists[2] = (lists[2][0] or lists[1][0], lists[2][1] or lists[1][1])
+        pvs = [passive_flags(a, b, passive_pages) for a, b in lists]
+        if pvs[0]:
+            e["pv"] = pvs[0]
+        if pvs[1] != pvs[0]:
+            e["pvt"] = pvs[1]
+        if pvs[2] != pvs[1]:
+            e["pvh"] = pvs[2]
         acts, unused, reacts = actions_of(name, pages, actions, items, box, scores, e["pb"], flags)
+        # with the ability scores of Tactician, the numbers of its actions are other
+        if e.get("tm", {}).get("ab"):
+            harder = dict(scores, **e["tm"]["ab"])
+            acts_t, _, reacts_t = actions_of(name, pages, actions, items, box, harder, e["pb"], flags)
+            if acts_t != acts:
+                e["at"] = acts_t
+            if reacts_t != reacts and reacts_t:
+                e["rt"] = reacts_t
         if acts:
             e["acts"] = acts
         if reacts:
@@ -675,12 +781,15 @@ def main():
         print(f"  act {act} · {name}: level {e['lv']}, AC {e['ac']}, HP {e['hp']}, slots {e.get('rs')}, moves {e.get('mv')}")
         for a in e.get("acts", []):
             how = f"+{a['b']}" if a["k"] == "a" else f"{a['sv'].upper()} DC {a['dc']} (x{a['os']})" if a["k"] == "s" else "heals" if a["k"] == "e" else "no roll"
-            print("      ", a["n"], "|", how, "|", a["hits"], "|", {k: a[k] for k in ("sl", "u", "c", "m", "q", "md", "s", "x", "cd", "om", "wf", "gw") if a.get(k)}, "| worked out" if a.get("g") else "")
+            print("      ", a["n"], "|", how, "|", a["hits"], "|", {k: a[k] for k in ("sl", "u", "c", "m", "q", "md", "s", "x", "cd", "om", "wf", "gw", "ar", "gr") if a.get(k)}, "| worked out" if a.get("g") else "")
         for a in e.get("rx", []):
             how = f"+{a['b']}" if a["k"] == "a" else f"{a['sv'].upper()} DC {a['dc']} (x{a['os']})" if a["k"] == "s" else "no roll"
             print("       answers with", a["n"], "|", how, "|", a["hits"], "|", {k: a[k] for k in ("c", "md", "cd", "om", "as", "wf", "tr") if a.get(k)})
         if e.get("nu"):
             print("       not used:", e["nu"], "| extra attacks", e["ea"])
+        extra = {k: e[k] for k in ("pv", "pvt", "pvh", "tm", "hm", "xi", "in") if e.get(k) is not None}
+        if extra:
+            print("       also:", extra, "| Tactician actions differ" if e.get("at") else "")
     if missing:
         print("  without a creature infobox with an Armour Class (left out):", ", ".join(missing))
     body = ",\n".join("  " + json.dumps(e, ensure_ascii=False, separators=(",", ":")) for e in out)
@@ -701,7 +810,13 @@ def main():
           "// in Initiative bonus, when the page gives one · rx what answers a hit, once a round (lg 1: a Legendary Action;\n"
           "//   as: the action whose numbers it borrows; tr: what sets it off, in the words of its page)\n"
           "//   wf 1 when the ability behind b or dc is the planner's rule and not named by the page\n"
-          "//   gw [weapon, why] when the page does not name the weapon the attack is made with\n"
+          "//   gw [weapon, why] when the page does not name the weapon the attack is made with · ar 1 it catches an area\n"
+          "//   gr '20~200' when its damage is a range in the text, read as dice\n"
+          "// xi Initiative on top of the Dexterity modifier · tm, hm what the page gives of its own for Tactician and Honour\n"
+          "//   mode: ac, ab (ability scores), res · at, rt the actions and answers with the ability scores of Tactician\n"
+          "// pv passives that change a fight (pvt, pvh in Tactician and Honour, when they differ): mr Advantage on saves\n"
+          "//   against spells · ev Evasion · al cannot be Surprised · rg hit points back each turn · tn a missed melee\n"
+          "//   attack still deals its Strength modifier · pr damage a parry takes off · lr, li Legendary Resistances\n"
           "window.BG3_ENEMIES = [\n" + body + "\n];\n")
     io.open(OUT, "w", encoding="utf-8", newline="\n").write(js)
     record("enemies")
