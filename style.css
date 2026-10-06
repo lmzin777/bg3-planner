@@ -913,3 +913,18 @@ button.chip:hover { border-color: var(--gold); color: var(--text); }
 .sim-turn li.off { opacity: .55; }
 .sim-turn li.crit em { color: var(--r-legendary); }
 @media (max-width: 720px) { .sim-turn li { grid-template-columns: minmax(0, 1fr) 46px; } .sim-turn li span { grid-column: 1 / -1; grid-row: auto; } .sim-turn li b { grid-column: 1; } }
+
+/* ---------- damage test: the plan of turns, many fights ---------- */
+.sim h2 { margin-bottom: 8px; }
+.sim-plan { display: grid; gap: 8px; margin: 4px 0 12px; }
+.sim-step { display: grid; grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr); gap: 8px 12px; align-items: end; padding: 8px 12px; border: 1px solid var(--line-soft); border-radius: 9px; background: var(--field); }
+.sim-step > b { font: 600 15px var(--serif); color: var(--gold-hi); align-self: center; }
+.sim-step .field { min-width: 0; }
+@media (max-width: 720px) { .sim-step { grid-template-columns: 1fr; } }
+.sim-turn li b i { display: inline-block; }
+.sim-many { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 14px; }
+.sim-many th, .sim-many td { text-align: left; padding: 8px 10px; border-top: 1px solid var(--line-soft); vertical-align: baseline; }
+.sim-many thead th { border-top: 0; color: var(--gold-hi); font: 600 14px var(--serif); }
+.sim-many tbody th { color: var(--muted); font-weight: 500; }
+.sim-many td b { font: 600 19px var(--serif); color: var(--gold-hi); }
+.sim-many td small { color: var(--muted); margin-left: 6px; }

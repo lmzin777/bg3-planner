@@ -1092,7 +1092,42 @@
     turn = simTurn(st, 'caster', plain, 'Fireball', left);
     eq([turn.name, turn.total, turn.notes.length, left.slots], ['Fire Bolt', 12, 1, [4, 3, 0]], 'no level 3 slot left: the cantrip, 11 + 6 hits, 2d10 (6 + 6)');
     eq([simTurn(st, 'caster', plain, 'Magic Missile', left).total, left.slots], [12, [3, 3, 0]], 'three darts of 1d4 (3) + 1, no roll, and a level 1 slot');
+    // A fight: the plan of turns, what stays at work and for how long.
+    const fightOf = (side, turns) => { const fight = newFight(side); return [fight, Array.from({ length: turns }, () => fightTurn(side, fight))]; };
+    const steps = (list) => [0, 1, 2, 3].map((i) => Object.assign({ a: '', q: '' }, list[i]));
+    // Warlock 5: Hex with the bonus action, then Eldritch Blast. Each beam: 1d10 (6) + 3, and 1d6 (4) of Hex.
+    let [fight, rolledTurns] = fightOf(sideOf(finalStats(lock, 'act1'), 'caster', plain, steps([{}, {}, {}, { a: 'Eldritch Blast', q: 'Hex' }])), 2);
+    eq([rolledTurns.map((x) => [x.name, x.total]), fight.left.pact, fight.effects.map((e) => [e.name, e.conc])], [[['Hex + Eldritch Blast', 26], ['Eldritch Blast', 26]], 1, [['Hex', true]]],
+      'Hex is cast once, takes a pact slot and rides on both beams while it lasts');
+    // Haste switched on: ten turns of one more attack (Honour mode), a turn lost to Lethargic, and on without it.
+    f.active = ['haste'];
+    [fight, rolledTurns] = fightOf(sideOf(finalStats(f, 'act1'), 'melee', plain, steps([])), 12);
+    eq(rolledTurns.map((x) => x.lines.length), [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 0, 2]);
+    f.active = [];
+    // Haste cast by the build: the action of the turn, a level 3 slot, and the action it gives goes to the cantrip.
+    const hw = made(Array(5).fill('Wizard'), { abilities: { str: 8, dex: 14, con: 14, int: 15, wis: 12, cha: 10 }, plus2: 'int', plus1: 'wis' }, { 1: 'Evocation School' }, {},
+      { 0: ['Cantrip: Fire Bolt', 'Spell: Witch Bolt'], 4: ['Spell: Fireball', 'Spell: Haste'] });
+    [fight, rolledTurns] = fightOf(sideOf(finalStats(hw, 'act1'), 'caster', plain, steps([{ a: 'Haste' }, { a: 'Fireball' }, { a: 'Witch Bolt' }, { a: 'weapon' }])), 4);
+    eq(rolledTurns.map((x) => [x.name, x.total]), [['Haste + Fire Bolt', 12], ['Fireball + Fire Bolt', 28], ['Witch Bolt', 0], ['Fire Bolt', 12]],
+      'Fireball does not hold Concentration; Witch Bolt does, which drops Haste: the spell and the rest of the turn are lost');
+    eq([fight.left.slots, fight.effects.length], [[3, 3, 0], 0]);
+    // Moonbeam hurts again on every later turn while it lasts: 2d10 (12), half on a passed save.
+    const dr = made(Array(3).fill('Druid'), { abilities: { str: 8, dex: 14, con: 14, int: 10, wis: 15, cha: 12 }, plus2: 'wis', plus1: 'con' });
+    dr.prepared = { Druid: ['Moonbeam'] };
+    [fight, rolledTurns] = fightOf(sideOf(finalStats(dr, 'act1'), 'caster', plain, steps([{}, {}, {}, { a: 'Moonbeam' }])), 3);
+    eq([rolledTurns.map((x) => x.total), fight.left.slots, fight.effects.map((e) => [e.name, e.until])], [[6, 6, 6], [4, 1], [['Moonbeam', 10]]], 'cast once: one level 2 slot for the three turns');
+    // Rage: the bonus action of the first turn and a charge; with no charge left, the build fights without it.
+    const bb = made(Array(5).fill('Barbarian'), { abilities: { str: 15, dex: 14, con: 15, int: 8, wis: 10, cha: 8 }, plus2: 'str', plus1: 'con' }, {}, { meleeMain: 'Greataxe' });
+    bb.active = ['rage'];
+    const raging = simSide(bb, 'act1', plain);
+    [fight, rolledTurns] = fightOf(raging, 1);
+    eq([rolledTurns[0].total, fight.left.rage, fight.effects.map((e) => [e.name, e.until])], [24, 2, [['Rage', 10]]], 'two attacks of 1d12 (7) + 3 + 2 of Rage; three charges at Barbarian 5');
+    const spent = newFight(raging);
+    spent.left.rage = 0;
+    eq(fightTurn(raging, spent).total, 20, 'no charge: 1d12 (7) + 3, twice');
     simRandom = realRandom;
+    const fights = simFights(sideOf(fs, 'melee', plain, steps([])), 0, 300);
+    ok(Math.abs(fights.perTurn - 9.15) < 0.7 && Math.abs(fights.main.avg - 91.5) < 7, 'three hundred fights of ten turns average what was worked out: ' + fights.perTurn.toFixed(2) + ' a turn');
     const rolled = Array.from({ length: 4000 }, () => simTurn(fs, 'melee', plain, '', null).total).reduce((a, x) => a + x, 0) / 4000;
     ok(Math.abs(rolled - 9.15) < 0.6, 'four thousand turns rolled average what was worked out: ' + rolled.toFixed(2) + ' against 9.15');
     Object.assign(state.ui, kept);
@@ -1585,8 +1620,16 @@
     ok(Math.abs(Number(q('.sim .turn b').textContent) - 10.45) < 0.06, 'the expected average of the turn, the Longsword held in both hands: 2 × (0.55 × 8.5 + 0.1 × 5.5); shown ' + q('.sim .turn b').textContent);
     await click(q('[data-act="sim-roll"][data-n="10"]'), 'roll 10 turns');
     eq([all('.sim-turn').length, all('.sim-turn li').length], [10, 20], 'ten turns of two attacks each');
-    await click(q('[data-act="sim-many"]'), 'average of 1,000 turns');
-    ok(all('.sim .turn').length === 2 && /1000/.test(all('.sim .turn')[1].textContent));
+    eq(all('.sim-step .pslot').map((x) => x.querySelector('b').textContent), ['as from turn 4 on', 'as from turn 4 on', 'as from turn 4 on', 'as from turn 4 on', 'as from turn 4 on', 'as from turn 4 on', 'Weapon attacks', 'The best it has'],
+      'the plan: three turns that follow the last, which goes to the weapon');
+    await click(q('.sim-step .pslot[data-i="0"][data-f="a"]'), 'the action of turn 1');
+    await pick('Nothing');
+    eq(state.ui.simPlans[b.id][0].a, 'none');
+    await click(q('[data-act="sim-roll"][data-n="1"]'), 'roll a turn');
+    eq([all('.sim-turn').length, all('.sim-turn li').length], [1, 0], 'nothing in the first turn, as planned');
+    await click(q('[data-act="sim-fights"]'), 'many fights');
+    ok(all('.sim-many tbody tr').length === 3 && all('.sim-many thead th').length === 2, 'the table of the fights rolled, one side');
+    state.ui.simPlans = {};
     await click(q('.pslot[data-act="enemy-open"]'), 'enemy');
     await pick('Goblin Warrior');
     eq(all('.sim-turn').length, 0, 'another enemy starts the test over');

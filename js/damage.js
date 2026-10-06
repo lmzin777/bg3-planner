@@ -91,6 +91,8 @@ function turnPlan(stats, style, against, without) {
 // Damage a spell deals after the turn it is cast, and damage it adds to weapon hits instead of dealing itself.
 const LATER = /per turn|when the target moves|delayed|per [\d.]+ ?m moved|when hit by|when the wall breaks|against melee attackers/i;
 const RIDER = /per (?:weapon )?attack/i;
+// Later damage that depends on what the enemy does: named, never rolled.
+const SOMETIMES = /when the target moves|when hit by|per [\d.]+ ?m moved|when the wall breaks|against melee attackers/i;
 const SAVE_NOTE = /Saving Throw/i;
 const ANCESTRY = /^(?:Black|Blue|Brass|Bronze|Copper|Gold|Green|Red|Silver|White) \((\w+)\)$/;
 // Twinned Spell is not for spells with an area, with these two exceptions (the wiki's Metamagic: Twinned Spell page).
@@ -203,7 +205,7 @@ function spellDamage(stats, entry, target, main) {
   const slot = castLevel(stats, entry);
   const hits = spellHits(s, stats.level, slot, entry.line);
   if (!hits) return null;
-  if (hits.rider) return { name: s.n, sp: s, rider: hits.rider, slot, total: 0 };
+  if (hits.rider) return { name: s.n, sp: s, rider: hits.rider, slot, total: 0, cls: entry.cls || '' };
   const cast = stats.casting.find((c) => c.label === entry.title);
   const mod = entry.ability ? stats.mods[entry.ability] : 0;
   const dc = cast ? cast.dc : 8 + stats.pb + mod;
@@ -228,7 +230,10 @@ function spellDamage(stats, entry, target, main) {
   const saveText = () => t('{ab} save, DC {dc}: {n}% fail', { ab: saveKey.toUpperCase(), dc, n: Math.round(fail * 100) });
   // what a cast rolls, for the damage test: the same numbers the average is made of
   const rolled = { attack, ac: target.ac, crit: stats.crit, adv: !!stats.advantage,
-    save: saveKey ? { key: saveKey, bonus: target.saves[saveKey], dc, dis: heightened } : null, repeat: 1, parts: [] };
+    save: saveKey ? { key: saveKey, bonus: target.saves[saveKey], dc, dis: heightened } : null, repeat: 1, parts: [],
+    // what it goes on doing: the damage of the following turns, whether it holds Concentration, how many turns it lasts
+    later: [], conc: !!s.co, turns: Number((/(\d+) turn/.exec(s.du || '') || [])[1]) || 0 };
+  const laterPart = (x, type, times) => ({ mode: saveKey ? 'save' : 'auto', dice: x.dice, flat: x.flat, type, f: typeFactor(target, type, true), kept: kept(x), times, once: /delayed/i.test(x.note) });
   const laterText = hits.parts.length || hits.weapon ? hits.later.map((x) => dicePart(x) + ' (' + x.note + ')').join(', ') : '';
   if (hits.weapon) {
     // a smite: one weapon attack with the spell's dice on top; a burst that asks a save comes when the attack hits
@@ -239,6 +244,7 @@ function spellDamage(stats, entry, target, main) {
     const row = Object.assign({}, main, { extraDice: [...(main.extraDice || []), ...ride.map((x) => [x.dice, typed(x), s.n])] });
     const d = rowDamage(stats, row, target);
     const total = d.each + burst.reduce((a, x) => a + d.p.hit * (avgDice(x.dice) + x.flat) * typeFactor(target, typed(x), true) * saved(x), 0);
+    rolled.later = hits.later.filter((x) => !SOMETIMES.test(x.note)).map((x) => laterPart(x, typed(x), 1));
     return { name: s.n, sp: s, slot, total, how: t('{n}% to hit', { n: Math.round(d.p.hit * 100) }) + (burst.length && saveKey ? ' · ' + saveText() : '') + upText,
       text: [t('weapon hit'), ...hits.parts.map(dicePart)].join(' + '), later: laterText, area: false, bonuses: [], weapon: true,
       heightened: heightened && burst.length > 0, points: heightened && burst.length ? 3 : 0, cls: entry.cls || '',
@@ -295,6 +301,7 @@ function spellDamage(stats, entry, target, main) {
   const twin = (!area || TWIN_AREA.includes(s.n)) && !same && hits.beams === 1 && on.includes('meta:twin') && opts.has('Twinned Spell');
   if (twin) total *= 2;
   rolled.repeat = twin ? 2 : 1;
+  rolled.later = (perTurn ? now : hits.later.filter((x) => !SOMETIMES.test(x.note))).map((x) => laterPart(x, x.type, area ? targets : 1));
   // Sorcery Points of the cast: Twinned Spell costs 1 for each level of the slot (1 for a cantrip), Heightened Spell 3
   const points = (twin ? Math.max(1, slot) : 0) + (heightened ? 3 : 0);
   const halfText = now.some((x, k) => modeOf(x, k) === 'save' && kept(x) === 0.5) ? ' · ' + t('half on a save') : '';
