@@ -19,7 +19,9 @@ function navHtml() {
     [t('Spells'), 'data-tab="spells" data-lv=""', tab === 'spells', [entry(t('All spells'), 'data-tab="spells" data-lv=""', tab === 'spells' && !lv.length),
       ...[0, 1, 2, 3, 4, 5, 6].map((n) => entry(n ? t('Level {n}', { n }) : t('Cantrips'), `data-tab="spells" data-lv="${n}"`, tab === 'spells' && lv.length === 1 && lv[0] === String(n)))]],
   ];
-  return groups.map(([label, attrs, on, entries], i) => `<div class="nav-group${navShut === i ? ' shut' : ''}">
+  // (Home comes first: a group is told by its place in the menu, one further on)
+  return `<button class="nav-top${tab === 'home' ? ' on' : ''}" data-act="tab" data-tab="home">${t('Home')}</button>`
+    + groups.map(([label, attrs, on, entries], i) => `<div class="nav-group${navShut === i + 1 ? ' shut' : ''}">
       <button class="nav-top${on ? ' on' : ''}" data-act="tab" ${attrs} aria-haspopup="true">${esc(label)}<i>▾</i></button>
       <div class="nav-menu">${entries.join('')}</div></div>`).join('')
     + `<button class="nav-top${tab === 'damage' ? ' on' : ''}" data-act="tab" data-tab="damage">${t('Damage test')}</button>`
@@ -47,7 +49,7 @@ function render() {
   $$('[data-i18n-title]').forEach((el) => { el.title = t(el.dataset.i18nTitle); });
   $('#tabs').innerHTML = navHtml();
   $$('#langs button').forEach((b) => b.classList.toggle('on', b.dataset.lang === state.ui.lang));
-  const views = { hub: renderHub, party: renderParty, presets: renderPresets, items: renderItems, spells: renderSpells, damage: renderDamage, review: renderReview };
+  const views = { home: renderHome, hub: renderHub, party: renderParty, presets: renderPresets, items: renderItems, spells: renderSpells, damage: renderDamage, review: renderReview };
   $('#app').innerHTML = (views[state.ui.tab] || renderBuilds)();
   // the section menu sticks below the header, which is sticky itself on wide screens
   const top = $('.top');

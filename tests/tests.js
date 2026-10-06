@@ -2152,16 +2152,24 @@
 
   flow('a first visit starts with no build, and every page still opens', async () => {
     const first = fresh();
-    eq([first.builds.length, first.ui.tab, first.parties.length, fresh(true).builds.length], [0, 'hub', 1, 1], 'nothing in My builds until the visitor makes or copies one');
+    eq([first.builds.length, first.ui.tab, first.parties.length, fresh(true).builds.length], [0, 'home', 1, 1], 'nothing in My builds until the visitor makes or copies one; the first page is Home');
     state.builds = [];
     state.ui.buildId = '';
     state.ui.wizard = '';
-    for (const tab of ['hub', 'builds', 'party', 'presets', 'damage', 'review', 'items', 'spells']) {
+    for (const tab of ['home', 'hub', 'builds', 'party', 'presets', 'damage', 'review', 'items', 'spells']) {
       state.ui.tab = tab;
       render();
       await wait(40);
       ok(q('.content, .layout'), 'the page ' + tab + ' with no build');
     }
+    // Home: the name at the top of the page and the first entry of the menu lead to it; each of its cards, into a part
+    await click(q('button.brand'), 'BG3 Planner, at the top');
+    eq([state.ui.tab, q('#tabs .nav-top.on').dataset.tab, all('.home-card').length, !!q('.home-hero [data-act="wiz-new"]')], ['home', 'home', 4, true]);
+    await click(q('.home-card .home-title[data-tab="damage"]'), 'the Damage test, from Home');
+    eq(state.ui.tab, 'damage');
+    await click(q('#tabs .nav-top[data-tab="home"]'), 'Home, in the menu');
+    await click(q('.home-card [data-tab="items"]'), 'the items, from Home');
+    eq([state.ui.tab, q('#tabs .nav-group.shut')], ['items', null], 'no menu is left shut by it');
     state.ui.tab = 'builds';
   });
 

@@ -9,7 +9,7 @@
 <body>
   <!-- Static text carries its English string in data-i18n; app.js swaps it for the chosen language. -->
   <header class="top">
-    <div class="brand">BG3 <span>Planner</span> <small id="version"></small></div>
+    <button class="brand" data-act="tab" data-tab="home" data-i18n-title="Home">BG3 <span>Planner</span> <small id="version"></small></button>
     <!-- the menu is written by navHtml() in js/shell.js -->
     <nav class="tabs" id="tabs"></nav>
     <div class="top-tools">
@@ -103,6 +103,7 @@
   <script src="js/core.js"></script>
   <script src="js/build.js"></script>
   <script src="js/party.js"></script>
+  <script src="js/home.js"></script>
   <script src="js/shell.js"></script>
   <script src="js/wiki.js"></script>
   <script src="js/sheet.js"></script>
