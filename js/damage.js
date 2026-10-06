@@ -91,8 +91,11 @@ function turnPlan(stats, style, against, without) {
 // Damage a spell deals after the turn it is cast, and damage it adds to weapon hits instead of dealing itself.
 const LATER = /per turn|when the target moves|delayed|per [\d.]+ ?m moved|when hit by|when the wall breaks|against melee attackers/i;
 const RIDER = /per (?:weapon )?attack/i;
-// Later damage that depends on what the enemy does: named, never rolled.
+// Later damage that depends on what the enemy does. Two kinds are rolled in the damage test, when the enemy is
+// set to do it: moving ("moves") and landing a melee hit on the caster ("struck"); the others are only named.
 const SOMETIMES = /when the target moves|when hit by|per [\d.]+ ?m moved|when the wall breaks|against melee attackers/i;
+const whenOf = (note) => (/when the target moves/i.test(note) ? 'moves' : /when hit by|against melee attackers/i.test(note) ? 'struck' : '');
+const laterKept = (x) => !SOMETIMES.test(x.note) || !!whenOf(x.note);
 const SAVE_NOTE = /Saving Throw/i;
 const ANCESTRY = /^(?:Black|Blue|Brass|Bronze|Copper|Gold|Green|Red|Silver|White) \((\w+)\)$/;
 // Twinned Spell is not for spells with an area, with these two exceptions (the wiki's Metamagic: Twinned Spell page).
@@ -123,8 +126,9 @@ function spellHits(s, level, slot, line) {
   for (const m of String(s.hl || '').matchAll(/(\d+) beams at character level (\d+)/gi)) if (level >= Number(m[2])) beams = Math.max(beams, Number(m[1]));
   const all = text.split(/,\s*(?![^()]*\))/).map((x) => {
     if (/^weapon damage/i.test(x.trim())) return { weapon: true };
-    const m = /^(\d+d\d+)?\s*(?:\+\s*(\d+))?\s*([A-Za-z]+)?\s*(?:\((.*)\))?$/.exec(x.trim());
-    return m && (m[1] || m[2]) ? { dice: m[1] || '', flat: Number(m[2]) || 0, type: m[3] || '', note: m[4] || '' } : null;
+    // dice, a flat number ("5 Cold") or both ("10d6+40 Force"); healing is not damage
+    const m = /^(?:(\d+d\d+)|(\d+)(?=\s+[A-Z]))?\s*(?:\+\s*(\d+))?\s*([A-Za-z]+)?\s*(?:\((.*)\))?$/.exec(x.trim());
+    return m && (m[1] || m[2] || m[3]) && m[4] !== 'Healing' ? { dice: m[1] || '', flat: Number(m[2] || m[3]) || 0, type: m[4] || '', note: m[5] || '' } : null;
   }).filter(Boolean);
   const dealt = all.filter((x) => !x.weapon);
   const rider = dealt.find((x) => RIDER.test(x.note));
@@ -233,7 +237,8 @@ function spellDamage(stats, entry, target, main) {
     save: saveKey ? { key: saveKey, bonus: target.saves[saveKey], dc, dis: heightened } : null, repeat: 1, parts: [],
     // what it goes on doing: the damage of the following turns, whether it holds Concentration, how many turns it lasts
     later: [], conc: !!s.co, turns: Number((/(\d+) turn/.exec(s.du || '') || [])[1]) || 0 };
-  const laterPart = (x, type, times) => ({ mode: saveKey ? 'save' : 'auto', dice: x.dice, flat: x.flat, type, f: typeFactor(target, type, true), kept: kept(x), times, once: /delayed/i.test(x.note) });
+  const laterPart = (x, type, times) => ({ mode: saveKey && !whenOf(x.note) ? 'save' : 'auto', dice: x.dice, flat: x.flat, type, f: typeFactor(target, type, true), kept: kept(x), times,
+    once: /delayed/i.test(x.note), when: whenOf(x.note) });
   const laterText = hits.parts.length || hits.weapon ? hits.later.map((x) => dicePart(x) + ' (' + x.note + ')').join(', ') : '';
   if (hits.weapon) {
     // a smite: one weapon attack with the spell's dice on top; a burst that asks a save comes when the attack hits
@@ -244,14 +249,21 @@ function spellDamage(stats, entry, target, main) {
     const row = Object.assign({}, main, { extraDice: [...(main.extraDice || []), ...ride.map((x) => [x.dice, typed(x), s.n])] });
     const d = rowDamage(stats, row, target);
     const total = d.each + burst.reduce((a, x) => a + d.p.hit * (avgDice(x.dice) + x.flat) * typeFactor(target, typed(x), true) * saved(x), 0);
-    rolled.later = hits.later.filter((x) => !SOMETIMES.test(x.note)).map((x) => laterPart(x, typed(x), 1));
+    rolled.later = hits.later.filter(laterKept).map((x) => laterPart(x, typed(x), 1));
     return { name: s.n, sp: s, slot, total, how: t('{n}% to hit', { n: Math.round(d.p.hit * 100) }) + (burst.length && saveKey ? ' · ' + saveText() : '') + upText,
       text: [t('weapon hit'), ...hits.parts.map(dicePart)].join(' + '), later: laterText, area: false, bonuses: [], weapon: true,
       heightened: heightened && burst.length > 0, points: heightened && burst.length ? 3 : 0, cls: entry.cls || '',
       recipe: Object.assign(rolled, { weapon: row, parts: burst.map((x) => ({ mode: 'save', dice: x.dice, flat: x.flat, type: typed(x), f: typeFactor(target, typed(x), true), kept: kept(x), times: 1 })) }) };
   }
   const now = hits.parts.length ? hits.parts : hits.later.filter((x) => /per turn/i.test(x.note));
-  if (!now.length) return null;
+  if (!now.length) {
+    // nothing on the cast: a spell that only answers the enemy (Armour of Agathys, Fire Shield) is kept for the damage test
+    const answers = hits.later.filter((x) => whenOf(x.note));
+    if (!answers.length) return null;
+    rolled.later = answers.map((x) => laterPart(x, x.type, 1));
+    return { name: s.n, sp: s, slot, total: 0, setup: true, how: '', text: answers.map((x) => dicePart(x) + ' (' + x.note + ')').join(', '), later: '', area: false, cap: 0, bonuses: [], points: 0,
+      option: entry.option || '', cls: entry.cls || '', recipe: rolled };
+  }
   const perTurn = !hits.parts.length;
   // what the build adds to the damage of its spells
   const bonuses = [];
@@ -301,7 +313,7 @@ function spellDamage(stats, entry, target, main) {
   const twin = (!area || TWIN_AREA.includes(s.n)) && !same && hits.beams === 1 && on.includes('meta:twin') && opts.has('Twinned Spell');
   if (twin) total *= 2;
   rolled.repeat = twin ? 2 : 1;
-  rolled.later = (perTurn ? now : hits.later.filter((x) => !SOMETIMES.test(x.note))).map((x) => laterPart(x, x.type, area ? targets : 1));
+  rolled.later = (perTurn ? now : hits.later.filter(laterKept)).map((x) => laterPart(x, x.type, area && !whenOf(x.note) ? targets : 1));
   // Sorcery Points of the cast: Twinned Spell costs 1 for each level of the slot (1 for a cantrip), Heightened Spell 3
   const points = (twin ? Math.max(1, slot) : 0) + (heightened ? 3 : 0);
   const halfText = now.some((x, k) => modeOf(x, k) === 'save' && kept(x) === 0.5) ? ' · ' + t('half on a save') : '';
@@ -318,6 +330,7 @@ function spellOptions(stats, target, main) {
   const all = damagingSpells(stats).map((x) => spellDamage(stats, x, target, main)).filter(Boolean);
   const list = all.filter((x) => !x.rider && x.total > 0).sort((x, y) => y.total - x.total);
   list.riders = all.filter((x) => x.rider);
+  list.setups = all.filter((x) => x.setup);
   return list;
 }
 // How often a spell can be cast with a slot of that level: at will, or the slots of that level and above.

@@ -160,6 +160,9 @@ def main():
         conds = conditions(w)
         # how long the effect lasts: an explicit duration, else that of the summon, the area or the first condition
         duration = turns(field(w, "duration")) or turns(field(w, "creature duration")) or turns(field(w, "area duration")) or next((c[1] for c in conds if c[1]), "")
+        # the options of a spell may carry what it has none of its own: how long the first damaging one lasts
+        for _, _, vw in options:
+            duration = duration or turns(field(vw, "duration")) or next((c[1] for c in conditions(vw) if c[1]), "")
         spells.append({
             "n": clean(field(w, "name")) or title,
             "p": title,

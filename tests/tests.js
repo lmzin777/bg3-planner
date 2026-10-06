@@ -1094,7 +1094,7 @@
     eq([simTurn(st, 'caster', plain, 'Magic Missile', left).total, left.slots], [12, [3, 3, 0]], 'three darts of 1d4 (3) + 1, no roll, and a level 1 slot');
     // A fight: the plan of turns, what stays at work and for how long.
     const fightOf = (side, turns) => { const fight = newFight(side); return [fight, Array.from({ length: turns }, () => fightTurn(side, fight))]; };
-    const steps = (list) => [0, 1, 2, 3].map((i) => Object.assign({ a: '', q: '' }, list[i]));
+    const steps = (list) => [0, 1, 2, 3].map((i) => Object.assign({ a: '', q: '', x: '' }, list[i]));
     // Warlock 5: Hex with the bonus action, then Eldritch Blast. Each beam: 1d10 (6) + 3, and 1d6 (4) of Hex.
     let [fight, rolledTurns] = fightOf(sideOf(finalStats(lock, 'act1'), 'caster', plain, steps([{}, {}, {}, { a: 'Eldritch Blast', q: 'Hex' }])), 2);
     eq([rolledTurns.map((x) => [x.name, x.total]), fight.left.pact, fight.effects.map((e) => [e.name, e.conc])], [[['Hex + Eldritch Blast', 26], ['Eldritch Blast', 26]], 1, [['Hex', true]]],
@@ -1106,14 +1106,17 @@
     f.active = [];
     // Haste cast by the build: the action of the turn, a level 3 slot, and the action it gives goes to the cantrip.
     const hw = made(Array(5).fill('Wizard'), { abilities: { str: 8, dex: 14, con: 14, int: 15, wis: 12, cha: 10 }, plus2: 'int', plus1: 'wis' }, { 1: 'Evocation School' }, {},
-      { 0: ['Cantrip: Fire Bolt', 'Spell: Witch Bolt'], 4: ['Spell: Fireball', 'Spell: Haste'] });
-    [fight, rolledTurns] = fightOf(sideOf(finalStats(hw, 'act1'), 'caster', plain, steps([{ a: 'Haste' }, { a: 'Fireball' }, { a: 'Witch Bolt' }, { a: 'weapon' }])), 4);
-    eq(rolledTurns.map((x) => [x.name, x.total]), [['Haste + Fire Bolt', 12], ['Fireball + Fire Bolt', 28], ['Witch Bolt', 0], ['Fire Bolt', 12]],
-      'Fireball does not hold Concentration; Witch Bolt does, which drops Haste: the spell and the rest of the turn are lost');
-    eq([fight.left.slots, fight.effects.length], [[3, 3, 0], 0]);
+      { 0: ['Cantrip: Fire Bolt', 'Spell: Witch Bolt', 'Spell: Magic Missile'], 4: ['Spell: Fireball', 'Spell: Haste'] });
+    [fight, rolledTurns] = fightOf(sideOf(finalStats(hw, 'act1'), 'caster', plain, steps([{ a: 'Haste' }, { a: 'Fireball', x: 'Magic Missile' }, { a: 'Witch Bolt' }, { a: 'weapon' }])), 4);
+    eq(rolledTurns.map((x) => [x.name, x.total]), [['Haste + Fire Bolt', 12], ['Fireball + Magic Missile', 28], ['Witch Bolt', 0], ['Fire Bolt', 12]],
+      'the action Haste gives goes to a second spell; Witch Bolt holds Concentration, which drops Haste: the spell and the rest of the turn are lost');
+    eq([fight.left.slots, fight.effects.length], [[2, 3, 0], 0]);
+    // with no other choice, the action on top repeats the action: a second Fireball while a slot is left
+    [fight, rolledTurns] = fightOf(sideOf(finalStats(hw, 'act1'), 'caster', plain, steps([{ a: 'Haste' }, { a: 'Fireball' }, { a: 'Fireball' }, { a: 'weapon' }])), 3);
+    eq([rolledTurns.map((x) => [x.name, x.total]), fight.left.slots], [[['Haste + Fire Bolt', 12], ['Fireball + Fire Bolt', 28], ['Fire Bolt + Fire Bolt', 24]], [4, 3, 0]], 'one level 3 slot left after Haste: the second Fireball has none');
     // Moonbeam hurts again on every later turn while it lasts: 2d10 (12), half on a passed save.
-    const dr = made(Array(3).fill('Druid'), { abilities: { str: 8, dex: 14, con: 14, int: 10, wis: 15, cha: 12 }, plus2: 'wis', plus1: 'con' });
-    dr.prepared = { Druid: ['Moonbeam'] };
+    const dr0 = () => { const d = made(Array(3).fill('Druid'), { abilities: { str: 8, dex: 14, con: 14, int: 10, wis: 15, cha: 12 }, plus2: 'wis', plus1: 'con' }); d.prepared = { Druid: ['Moonbeam'] }; return d; };
+    const dr = dr0();
     [fight, rolledTurns] = fightOf(sideOf(finalStats(dr, 'act1'), 'caster', plain, steps([{}, {}, {}, { a: 'Moonbeam' }])), 3);
     eq([rolledTurns.map((x) => x.total), fight.left.slots, fight.effects.map((e) => [e.name, e.until])], [[6, 6, 6], [4, 1], [['Moonbeam', 10]]], 'cast once: one level 2 slot for the three turns');
     // Rage: the bonus action of the first turn and a charge; with no charge left, the build fights without it.
@@ -1125,6 +1128,40 @@
     const spent = newFight(raging);
     spent.left.rage = 0;
     eq(fightTurn(raging, spent).total, 20, 'no charge: 1d12 (7) + 3, twice');
+    // The enemy's turn. A hit of 30 asks a Constitution save against DC 15: 11 + 2 fails, and Moonbeam ends.
+    const struck = sideOf(finalStats(dr0(), 'act1'), 'caster', plain, steps([{}, {}, {}, { a: 'Moonbeam' }]));
+    struck.foe = { attacks: 1, hits: 1, damage: 30, moves: false };
+    [fight, rolledTurns] = fightOf(struck, 2);
+    eq([rolledTurns.map((x) => x.total), fight.left.slots, fight.effects.length, struck.con], [[6, 6], [4, 0], 0, 2], 'cast again on the second turn, and lost again');
+    struck.foe.damage = 20;
+    [fight, rolledTurns] = fightOf(struck, 2);
+    eq([fight.left.slots, fight.effects.length], [[4, 1], 1], 'a hit of 20 asks DC 10: 13 keeps it');
+    // Reactions. Hellish Rebuke answers a hit with a pact slot of level 3: 4d10 (24), half on the passed save.
+    const rebuke = made(Array(5).fill('Warlock'), { abilities: { str: 8, dex: 14, con: 14, int: 10, wis: 12, cha: 15 }, plus2: 'cha', plus1: 'con' }, { 0: 'The Fiend' }, {},
+      { 0: ['Cantrip: Eldritch Blast', 'Spell: Hellish Rebuke', 'Spell: Armour of Agathys'], 1: ['Eldritch Invocation: Agonising Blast'] });
+    const answering = sideOf(finalStats(rebuke, 'act1'), 'caster', plain, steps([{ a: 'Armour of Agathys' }, {}, {}, { a: 'Eldritch Blast' }]));
+    Object.assign(answering, { react: 'Hellish Rebuke', foe: { attacks: 2, hits: 1, damage: 10, moves: false } });
+    [fight, rolledTurns] = fightOf(answering, 2);
+    eq([rolledTurns.map((x) => [x.name, x.total]), fight.left.pact, fight.effects.length], [[['Armour of Agathys', 27], ['Eldritch Blast', 33]], 0, 0],
+      'turn 1: 15 Cold from the armour (a level 3 pact slot, 15 temporary hit points) and 12 from the rebuke; turn 2: the blast, and 15 more from the armour, which the second hit of 10 ends; no pact slot is left for another rebuke');
+    // Riposte answers a miss: the Longsword and a superiority die, 1d8 (5) + 1d8 (5) + 3.
+    const bm = made(Array(5).fill('Fighter'), { abilities: { str: 15, dex: 14, con: 15, int: 8, wis: 10, cha: 8 }, plus2: 'str', plus1: 'con' }, { 2: 'Battle Master' },
+      { chest: 'Chain Mail', meleeMain: 'Longsword', meleeOff: 'Studded Shield' }, { 0: ['Fighting Style: Defence'], 2: ['Manoeuvre: Riposte', 'Manoeuvre: Trip Attack', 'Manoeuvre: Precision Attack'] });
+    const parry = sideOf(finalStats(bm, 'act1'), 'melee', plain, steps([]));
+    Object.assign(parry, { react: 'Riposte', foe: { attacks: 1, hits: 0, damage: 10, moves: false } });
+    [fight, rolledTurns] = fightOf(parry, 1);
+    eq([rolledTurns[0].total, rolledTurns[0].lines.map((l) => l.name).pop(), fight.left.dice], [29, 'Riposte', 3], 'two attacks of 8 and the riposte of 13; four dice at Battle Master 3');
+    // Rage ends in a turn with no attack made and no damage taken, and is entered again with another charge.
+    const idle = simSide(bb, 'act1', plain);
+    idle.steps = steps([{}, { a: 'none', q: 'none' }, {}, {}]);
+    [fight, rolledTurns] = fightOf(idle, 3);
+    eq([rolledTurns.map((x) => x.total), fight.left.rage], [[24, 0, 24], 1], 'the third turn takes the bonus action and a second charge');
+    // A spell that only answers the enemy, and a flat damage line: Armour of Agathys.
+    state.ui.castLevel = 3;
+    const agathys = spellDamage(st, { sp: SPELL_BY_NAME.get('armour of agathys'), title: st.casting[0].label, ability: 'int', cls: 'Wizard' }, plain);
+    eq([agathys.setup, agathys.total, agathys.recipe.later.map((p) => [p.flat, p.when])], [true, 0, [[15, 'struck']]], '5 Cold for each level of the slot');
+    state.ui.castLevel = 0;
+    ok(!spellHits(SPELL_BY_NAME.get('heal'), 12, 6) && spellHits(SPELL_BY_NAME.get('booming blade'), 1, 0).later.length === 1, 'healing is not damage; Booming Blade waits for the enemy to move');
     simRandom = realRandom;
     const fights = simFights(sideOf(fs, 'melee', plain, steps([])), 0, 300);
     ok(Math.abs(fights.perTurn - 9.15) < 0.7 && Math.abs(fights.main.avg - 91.5) < 7, 'three hundred fights of ten turns average what was worked out: ' + fights.perTurn.toFixed(2) + ' a turn');
@@ -1620,8 +1657,9 @@
     ok(Math.abs(Number(q('.sim .turn b').textContent) - 10.45) < 0.06, 'the expected average of the turn, the Longsword held in both hands: 2 × (0.55 × 8.5 + 0.1 × 5.5); shown ' + q('.sim .turn b').textContent);
     await click(q('[data-act="sim-roll"][data-n="10"]'), 'roll 10 turns');
     eq([all('.sim-turn').length, all('.sim-turn li').length], [10, 20], 'ten turns of two attacks each');
-    eq(all('.sim-step .pslot').map((x) => x.querySelector('b').textContent), ['as from turn 4 on', 'as from turn 4 on', 'as from turn 4 on', 'as from turn 4 on', 'as from turn 4 on', 'as from turn 4 on', 'Weapon attacks', 'The best it has'],
-      'the plan: three turns that follow the last, which goes to the weapon');
+    eq(all('.sim-step .pslot').map((x) => x.querySelector('b').textContent), [...Array(9).fill('as from turn 4 on'), 'Weapon attacks', 'The same as the action', 'The best it has'],
+      'the plan: three turns that follow the last, which goes to the weapon; a Fighter of level 2 and up has Action Surge, so the action on top is there');
+    ok(q('.foe-tools [data-ui="foeAttacks"]') && !q('[data-act="sim-react-open"]'), 'what the enemy does can be set; this build has no reaction to choose');
     await click(q('.sim-step .pslot[data-i="0"][data-f="a"]'), 'the action of turn 1');
     await pick('Nothing');
     eq(state.ui.simPlans[b.id][0].a, 'none');

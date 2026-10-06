@@ -104,11 +104,12 @@ function rollSpell(stats, x, target, riders) {
   }
   return lines;
 }
-// The damage a spell cast on an earlier turn does on this one.
-function rollLater(e) {
+// The damage a spell cast earlier does now: on its own turn after turn (`when` empty), or when the enemy does
+// what it waits for ('struck', 'moves').
+function rollLater(e, when) {
   const lines = [];
   const saves = [];
-  e.later.forEach((part) => {
+  e.later.filter((part) => (part.when || '') === when).forEach((part) => {
     for (let k = 0; k < part.times; k++) {
       if (part.mode === 'save' && e.save) { saves[k] = saves[k] || throwSave(e.save); lines.push(saveLine(e.name, e.save, part, saves[k])); continue; }
       const dice = rollDice(part.dice);
@@ -125,7 +126,9 @@ function rollLater(e) {
 function simResources(stats) {
   const res = Object.fromEntries((stats.resources || []).map(([n, v]) => [n, Number(v) || 0]));
   return { slots: (stats.slots || []).slice(), pact: stats.pact ? stats.pact.n : 0, pactLevel: stats.pact ? stats.pact.level : 0,
-    points: res['Sorcery Points'] || 0, ki: res['Ki Points'] || 0, rage: res['Rage Charges'] || 0, surge: (stats.fighter || 0) >= 2 ? 1 : 0 };
+    points: res['Sorcery Points'] || 0, ki: res['Ki Points'] || 0, rage: res['Rage Charges'] || 0, surge: (stats.fighter || 0) >= 2 ? 1 : 0,
+    // the Martial Adept feat gives one Superiority Die of its own
+    dice: (res['Superiority Dice'] || 0) + ((stats.featNames || new Set()).has('Martial Adept') ? 1 : 0) };
 }
 // A slot for the cast: the lowest one that is enough, a Warlock spell from the pact slots first.
 function takeSlot(left, x, spend) {
@@ -137,7 +140,10 @@ function takeSlot(left, x, spend) {
 // The plan of turns of a build: four steps (turns 1, 2, 3 and every turn after), each with what the action and
 // the bonus action go to. An empty field of the first three follows the last; the last defaults to the weapon
 // and to the best bonus action the build has.
-const simSteps = (b) => { const saved = (state.ui.simPlans || {})[b.id] || []; return [0, 1, 2, 3].map((i) => ({ a: (saved[i] || {}).a || '', q: (saved[i] || {}).q || '' })); };
+const simSteps = (b) => { const saved = (state.ui.simPlans || {})[b.id] || []; return [0, 1, 2, 3].map((i) => ({ a: (saved[i] || {}).a || '', q: (saved[i] || {}).q || '', x: (saved[i] || {}).x || '' })); };
+// What the enemy does to the build each turn, as set on the page: melee attacks, how many of them hit, the damage
+// of a hit, and whether it moves.
+const simFoe = () => { const attacks = Math.max(0, Number(state.ui.foeAttacks) || 0); return { attacks, hits: Math.min(attacks, Math.max(0, Number(state.ui.foeHits) || 0)), damage: Math.max(1, Number(state.ui.foeDamage) || 10), moves: !!state.ui.foeMoves }; };
 // Haste among the spells of a build, with the group that casts it.
 function knownHaste(stats) {
   let out = null;
@@ -147,7 +153,10 @@ function knownHaste(stats) {
 // A side: the numbers of a build with the gear of an act, the enemy and the plan. `calm()` gives the numbers
 // without Rage, for the turns the build is not raging.
 function sideOf(stats, style, target, steps) {
-  const side = { stats, style, target, steps, memo: new Map(), calm: () => stats };
+  const con = (stats.saves || []).find((k) => k.key === 'con');
+  const side = { stats, style, target, steps, memo: new Map(), calm: () => stats, foe: { attacks: 0, hits: 0, damage: 0, moves: false }, react: '',
+    // the Constitution save that keeps Concentration, with Advantage from a feat that says so (War Caster)
+    con: con ? con.bonus : 0, conAdv: FEATS.some(([name, text]) => (stats.featNames || new Set()).has(name) && /Advantage on Saving Throws to maintain Concentration/i.test(text)) };
   let haste;
   Object.defineProperty(side, 'haste', { get: () => (haste === undefined ? (haste = knownHaste(stats)) : haste) });
   return side;
@@ -159,7 +168,7 @@ function simSide(b, act, target) {
   const side = sideOf(finalStats(b, act, opts), buildProfile(at ? atLevel(b, at) : b, act).style, target, simSteps(b));
   let calm = null;
   side.calm = () => calm || (calm = finalStats(Object.assign({}, b, { active: (b.active || []).filter((k) => k !== 'rage') }), act, opts));
-  return Object.assign(side, { b, act, at });
+  return Object.assign(side, { b, act, at, foe: simFoe(), react: (state.ui.simReacts || {})[b.id] || '' });
 }
 // What a side can do with a set of switches on: its weapon turn and its spells. Worked out once for each set.
 function simView(side, calm, on, noKi) {
@@ -169,7 +178,16 @@ function simView(side, calm, on, noKi) {
     const st = Object.assign({}, calm ? side.calm() : side.stats, { active: on });
     const plan = turnPlan(st, side.style, side.target, new Set(noKi ? ['Ki Points'] : []));
     const list = spellOptions(st, side.target, plan ? plan.parts[0].row : null);
-    v = { st, plan, list, spells: new Map(list.map((x) => [x.name, x])), riders: new Map((list.riders || []).map((x) => [x.name, x])), cantrip: list.find((x) => !x.sp.lv) || null };
+    // reactions: the spells cast in answer to a hit (Hellish Rebuke), and Riposte with the melee weapon
+    const reacts = new Map();
+    if (st.build) spellbook(st.build, st.act, st).forEach((g) => g.spells.forEach((x) => {
+      if (!x.sp || x.sp.a !== 'reaction' || reacts.has(x.sp.n)) return;
+      const r = spellDamage(st, { sp: x.sp, title: g.title, ability: g.ability, cls: g.cls || '' }, side.target, plan ? plan.parts[0].row : null);
+      if (r && !r.rider && r.total > 0) reacts.set(r.name, r);
+    }));
+    const melee = (st.attacks ? st.attacks.rows : []).find((r) => r.slot === 'meleeMain' && !r.thrown) || (st.attacks ? st.attacks.rows : []).find((r) => r.slot === 'unarmed');
+    v = { st, plan, list, spells: new Map([...list, ...(list.setups || [])].map((x) => [x.name, x])), riders: new Map((list.riders || []).map((x) => [x.name, x])), cantrip: list.find((x) => !x.sp.lv) || null,
+      reacts, riposte: (st.options || new Set()).has('Riposte') && melee ? melee : null };
     side.memo.set(key, v);
   }
   return v;
@@ -180,8 +198,9 @@ const simBase = (side) => simView(side, false, side.stats.active || [], false);
 // ---------- a fight ----------
 // With `endless`, nothing runs out and what is switched on simply stays on: one turn of it is the turn the
 // averages describe.
-const newFight = (side, endless) => ({ turn: 0, left: endless ? null : simResources(side.stats), dealt: 0, effects: [], lethargic: 0 });
-// One turn of a fight. { n, name, lines, total, notes }
+const newFight = (side, endless) => ({ turn: 0, left: endless ? null : simResources(side.stats), dealt: 0, effects: [], lethargic: 0, used: [] });
+// One turn of a fight: the build's own turn, then the enemy's (what it does to the build is set on the page).
+// { n, name, lines, total, notes }
 function fightTurn(side, fight) {
   const n = ++fight.turn;
   const left = fight.left;
@@ -193,6 +212,7 @@ function fightTurn(side, fight) {
   const did = [];
   const has = (kind) => fight.effects.find((e) => e.kind === kind);
   const named = (name) => fight.effects.find((e) => e.name === name);
+  const drop = (list) => { fight.effects = fight.effects.filter((e) => !list.includes(e)); };
   const done = () => { const total = lines.reduce((a, x) => a + x.damage, 0); fight.dealt += total; return { n, name: did.join(' + ') || t('Nothing'), lines, total, notes }; };
   // what ran its course; the turn after Haste ends is lost
   fight.effects = fight.effects.filter((e) => {
@@ -202,17 +222,14 @@ function fightTurn(side, fight) {
     return false;
   });
   // the damage of what was cast on earlier turns
-  fight.effects.filter((e) => e.kind === 'later' && e.from < n && e.later.length).forEach((e) => { lines.push(...rollLater(e)); if (e.once) { e.until = n; e.quiet = true; } });
-  if (fight.lethargic === n) {
-    notes.push(t('Lethargic after Haste: no action this turn.'));
-    did.push('Lethargic');
-    return done();
-  }
+  fight.effects.filter((e) => e.kind === 'later' && e.from < n).forEach((e) => { const out = rollLater(e, ''); if (!out.length) return; lines.push(...out); if (e.once) { e.until = n; e.quiet = true; } });
+  const lost = fight.lethargic === n;
+  if (lost) { notes.push(t('Lethargic after Haste: no action this turn.')); did.push('Lethargic'); }
   // Haste switched on above comes from someone else: it is there from the first turn, for its ten turns
   if (left && n === 1 && base.includes('haste')) fight.effects.push({ name: 'Haste', kind: 'haste', until: 10 });
   // Rage is entered with the bonus action, lasts ten turns and takes a charge
-  let bonusUsed = false;
-  if (left && base.includes('rage') && !has('rage')) {
+  let bonusUsed = lost;
+  if (!lost && left && base.includes('rage') && !has('rage')) {
     if (left.rage > 0) { left.rage--; fight.effects.push({ name: 'Rage', kind: 'rage', until: n + 9 }); bonusUsed = true; notes.push(t('Rage: entered with the bonus action.')); }
     else if (!fight.noRage) { fight.noRage = true; notes.push(t('No Rage Charges left.')); }
   }
@@ -222,19 +239,20 @@ function fightTurn(side, fight) {
   if (has('haste') && !on.includes('haste')) on.push('haste');
   const view = () => simView(side, calm, on, !!left && left.ki < 1);
   const step = side.steps[Math.min(n, 4) - 1];
-  const wantA = step.a || side.steps[3].a || 'weapon';
-  const wantQ = step.q || side.steps[3].q || 'auto';
+  const wantOf = (f, by) => step[f] || side.steps[3][f] || by;
+  const wantA = wantOf('a', 'weapon');
+  const wantQ = wantOf('q', 'auto');
+  const wantX = wantOf('x', 'same');
   const riders = () => fight.effects.filter((e) => e.kind === 'rider').map((e) => e.rider);
   let stop = false;     // the rest of the turn is lost
   let crits = 0;
-  let swung = false;    // the weapon turn was taken whole, Haste's action included
   const noSlot = (name) => t('No spell slot left for {spell}: the turn goes to what the build does at will.', { spell: name });
   // one spell at a time holds Concentration. Haste cast on oneself and dropped for another spell leaves the caster
-  // Lethargic at once, and the new spell ends
+  // Lethargic at once (until the end of the turn), and the new spell ends
   const concentrate = (name) => {
     const own = fight.effects.find((e) => e.kind === 'haste' && e.conc);
     if (own) {
-      fight.effects = fight.effects.filter((e) => e !== own);
+      drop([own]);
       stop = true;
       notes.push(t('Casting {spell} drops the Concentration on Haste: Lethargic at once, the new spell ends and the rest of the turn is lost.', { spell: name }));
       return false;
@@ -243,11 +261,22 @@ function fightTurn(side, fight) {
     return true;
   };
   const noSpells = (name) => { if (raging) notes.push(t('No spells while raging: {spell} is not cast.', { spell: name })); return raging; };
-  // a spell that deals damage; `quick` casts it with the bonus action, for 3 Sorcery Points more
+  // pays for a cast: a slot, or its one use a rest for a spell that recharges that way; false when it cannot
+  // (`silent` leaves the reason unsaid: a reaction that cannot be paid for just does not happen)
+  const pay = (x, points, silent) => {
+    if (!left) return true;
+    const free = /rest/i.test(x.sp.rc || '');
+    if (free && fight.used.includes(x.name)) { if (!silent) notes.push(t('{spell} was used already: it comes back with a rest.', { spell: x.name })); return false; }
+    if (!free && x.slot && !takeSlot(left, x, false)) { if (!silent) notes.push(noSlot(x.name)); return false; }
+    if (free) fight.used.push(x.name); else if (x.slot) takeSlot(left, x, true);
+    left.points -= points || 0;
+    return true;
+  };
+  // a spell that deals damage or answers the enemy; `quick` casts it with the bonus action, for 3 Sorcery Points more
   const cast = (name, quick) => {
     let x = view().spells.get(name);
     if (!x || noSpells(name)) return false;
-    if (named(name) && x.perTurn) return false;  // still at work: not cast again
+    if (named(name) && (x.perTurn || x.setup)) return false;  // still at work: not cast again
     if (left && (x.points || 0) + (quick ? 3 : 0) > left.points) {
       if (quick && left.points < 3) { notes.push(t('No Sorcery Points left for Quickened Spell.')); return false; }
       if (x.points) {
@@ -257,21 +286,28 @@ function fightTurn(side, fight) {
         if (!x) return false;
       }
     }
-    if (left && x.slot && !takeSlot(left, x, false)) { notes.push(noSlot(name)); return false; }
-    if (left) { if (x.slot) takeSlot(left, x, true); left.points -= (x.points || 0) + (quick ? 3 : 0); }
+    if (!pay(x, (x.points || 0) + (quick ? 3 : 0))) return false;
     did.push(name + (quick ? ' (Quickened Spell)' : ''));
     const r = x.recipe;
     if (r.conc && !concentrate(name)) return true;
     const out = rollSpell(view().st, x, target, riders());
     if (quick) out.forEach((l) => { l.how = 'Quickened Spell'; });
     lines.push(...out);
-    // what it leaves at work: damage on the following turns (when the attack that carries it hit), Concentration
+    // what it leaves at work: damage on the following turns (when the attack that carries it hit), damage that
+    // waits for the enemy, Concentration
     const landed = !out.some((l) => l.kind === 'attack') || out.some((l) => l.kind === 'attack' && l.hit);
     const later = landed ? r.later : [];
-    const once = later.length > 0 && later.every((p) => p.once);
+    const ticking = later.filter((p) => !p.when);
+    const once = ticking.length > 0 && ticking.every((p) => p.once);
+    const moving = later.length > 0 && later.every((p) => p.when === 'moves');
     if (later.length || r.conc) {
-      fight.effects = fight.effects.filter((e) => e.name !== name);
-      fight.effects.push({ name, kind: 'later', from: n, until: once ? n + 1 : r.turns ? n + r.turns - 1 : Infinity, conc: r.conc, later, save: r.save, once, quiet: once });
+      drop(fight.effects.filter((e) => e.name === name));
+      const e = { name, kind: 'later', from: n, conc: r.conc, later, save: r.save, once, quiet: moving || (once && later.length === ticking.length),
+        until: moving ? n : once ? n + 1 : r.turns ? n + r.turns - 1 : Infinity };
+      // Armour of Agathys answers while the temporary hit points it gives hold
+      if (x.setup && /temporary hit points/i.test(x.sp.d || '')) e.pool = later.reduce((a, p) => a + p.flat, 0);
+      fight.effects.push(e);
+      if (x.setup) notes.push(t('{spell} cast: {x}.', { spell: name, x: x.text }));
     }
     return true;
   };
@@ -279,8 +315,7 @@ function fightTurn(side, fight) {
   const castRider = (name) => {
     const x = view().riders.get(name);
     if (!x || named(name) || base.includes('text:' + name) || noSpells(name)) return false;  // at work already, or counted by its switch
-    if (left && x.slot && !takeSlot(left, x, false)) { notes.push(noSlot(name)); return false; }
-    if (left && x.slot) takeSlot(left, x, true);
+    if (!pay(x, 0)) return false;
     did.push(name);
     if (x.sp.co && !concentrate(name)) return true;
     const turns = Number((/(\d+) turn/.exec(x.sp.du || '') || [])[1]) || 0;
@@ -290,9 +325,7 @@ function fightTurn(side, fight) {
   };
   const castHaste = () => {
     const x = side.haste;
-    if (!x || has('haste') || noSpells('Haste')) return false;
-    if (left && !takeSlot(left, x, false)) { notes.push(noSlot('Haste')); return false; }
-    if (left) takeSlot(left, x, true);
+    if (!x || has('haste') || noSpells('Haste') || !pay(x, 0)) return false;
     did.push('Haste');
     if (!concentrate('Haste')) return true;
     fight.effects.push({ name: 'Haste', kind: 'haste', until: n + 9, conc: true });
@@ -303,6 +336,7 @@ function fightTurn(side, fight) {
   // weapon attacks
   const swing = (part) => {
     const k = part.chance != null ? 1 : part.n;
+    if (!did.includes(t('Weapon attacks'))) did.push(t('Weapon attacks'));
     for (let i = 0; i < k; i++) {
       const line = rollWeapon(view().st, part.row, target, riders());
       line.how = part.how;
@@ -312,40 +346,111 @@ function fightTurn(side, fight) {
     if (left && part.spends === 'Action Surge') left.surge--;
     if (left && part.spends === 'Ki Points') left.ki--;
   };
-  const attack = (only) => {
-    const p = view().plan;
-    const parts = (p ? p.parts : []).filter((x) => !x.bonus && (!only || x.how === only));
-    if (parts.length && !did.includes(t('Weapon attacks'))) did.push(t('Weapon attacks'));
-    parts.forEach(swing);
-    if (!only) swung = !!p;
-    return parts.length > 0;
+  // an action spent on the weapon: the Attack action, or the attacks Action Surge or Haste allow; with no weapon,
+  // the cantrip
+  const weaponAct = (kind) => {
+    const v = view();
+    if (!v.plan) {
+      if (v.cantrip && !raging) cast(v.cantrip.name);
+      if (left && kind === 'surge') left.surge--;
+      return;
+    }
+    const part = kind === 'main' ? v.plan.parts[0] : v.plan.parts.find((x) => x.spends === (kind === 'surge' ? 'Action Surge' : 'Haste'));
+    if (part) swing(part);
   };
-  // at will: the weapon, or the cantrip when there is no weapon or when it does more than the weapon
-  const atWill = (better) => { const v = view(); if (v.cantrip && !raging && (!v.plan || (better && v.cantrip.total > v.plan.total))) cast(v.cantrip.name); else attack(); };
+  // an action that goes to a spell, falling back on what the build does at will
+  const spellAct = (name, kind) => {
+    if (cast(name)) { if (left && kind === 'surge') left.surge--; return name; }
+    const v = view();
+    if (kind === 'main' && v.plan && v.cantrip && !raging && v.cantrip.total > v.plan.total) cast(v.cantrip.name); else weaponAct(kind);
+    return 'weapon';
+  };
   const bonusAttack = () => { const p = view().plan; const part = p && p.parts.find((x) => x.bonus); if (part && (part.chance == null || crits)) swing(part); };
 
-  // the bonus action comes first when it sets something up for the attacks
-  if (!bonusUsed && view().riders.has(wantQ) && view().riders.get(wantQ).sp.a === 'bonus') bonusUsed = castRider(wantQ);
-  if (!stop && wantA !== 'none') {
-    if (wantA === 'weapon') atWill(false);
-    else if (wantA === 'Haste' && side.haste) { if (!castHaste()) atWill(false); }
-    else if (view().riders.has(wantA)) { if (!castRider(wantA)) atWill(false); }
-    else if (!cast(wantA)) atWill(true);
-    // the action Haste gives, when the weapon turn did not take it already
-    if (!stop && !swung && has('haste') && !attack('Haste') && view().cantrip && !raging) cast(view().cantrip.name);
+  if (!lost) {
+    // the bonus action comes first when it sets something up for the attacks
+    if (!bonusUsed && view().riders.has(wantQ) && view().riders.get(wantQ).sp.a === 'bonus') bonusUsed = castRider(wantQ);
+    let went = '';  // what the action went to: the weapon, or a spell that can be cast again
+    if (!stop && wantA !== 'none') {
+      if (wantA === 'weapon') { weaponAct('main'); went = 'weapon'; }
+      else if (wantA === 'Haste' && side.haste) { if (!castHaste()) { weaponAct('main'); went = 'weapon'; } }
+      else if (view().riders.has(wantA)) { if (!castRider(wantA)) { weaponAct('main'); went = 'weapon'; } }
+      else went = spellAct(wantA, 'main');
+    }
+    // the actions on top: Action Surge (once a Short Rest, when switched on) and the one Haste gives
+    const extras = [];
+    if (on.includes('surge') && (side.stats.fighter || 0) >= 2) extras.push('surge');
+    if (has('haste') || (!left && base.includes('haste'))) extras.push('haste');
+    extras.forEach((kind) => {
+      if (stop || wantA === 'none' || wantX === 'none') return;
+      const want = wantX === 'same' ? went || 'weapon' : wantX;
+      const settled = view().spells.get(want);
+      if (want === 'weapon' || !settled || (settled.setup && named(want))) weaponAct(kind); else spellAct(want, kind);
+    });
+    if (!stop && !bonusUsed && wantQ !== 'none') {
+      if (wantQ.indexOf('quick:') === 0) { if (!(opts.has('Quickened Spell') && cast(wantQ.slice(6), true))) bonusAttack(); }
+      else if (view().spells.has(wantQ) && view().spells.get(wantQ).sp.a === 'bonus') { if (!cast(wantQ)) bonusAttack(); }
+      else bonusAttack();
+    }
   }
-  if (!stop && !bonusUsed && wantQ !== 'none') {
-    if (wantQ.indexOf('quick:') === 0) { if (!(opts.has('Quickened Spell') && cast(wantQ.slice(6), true))) bonusAttack(); }
-    else if (view().spells.has(wantQ) && view().spells.get(wantQ).sp.a === 'bonus') { if (!cast(wantQ)) bonusAttack(); }
-    else bonusAttack();
+
+  // ----- the enemy's turn: what it does to the build is set on the page -----
+  const foe = side.foe;
+  if (left && (foe.attacks || foe.moves || has('rage') || fight.effects.some((e) => e.later && e.later.some((p) => p.when)))) {
+    const attacked = lines.some((l) => l.kind === 'attack');
+    const hits = Math.min(foe.hits, foe.attacks);
+    for (let h = 0; h < hits; h++) {
+      // what answers a melee hit
+      fight.effects.filter((e) => e.kind === 'later' && e.later.some((p) => p.when === 'struck')).forEach((e) => {
+        const out = rollLater(e, 'struck');
+        out.forEach((l) => { l.how = t('when struck'); });
+        lines.push(...out);
+        if (e.pool != null) { e.pool -= foe.damage; if (e.pool <= 0) { drop([e]); notes.push(t('{name} ends.', { name: e.name })); } }
+      });
+      // damage taken can break Concentration: Constitution save against 10 or half the damage, whichever is higher
+      const held = fight.effects.filter((e) => e.conc);
+      if (held.length && foe.damage > 0) {
+        const dc = Math.max(10, Math.floor(foe.damage / 2));
+        const d20 = rollD20(side.conAdv ? 1 : 0);
+        if (d20 === 1 || d20 + side.con < dc) {
+          drop(held);
+          if (held.some((e) => e.kind === 'haste')) fight.lethargic = n + 1;
+          notes.push(t('A hit breaks the Concentration ({roll} {bonus} against DC {dc}): {name} ends.', { roll: d20, bonus: (side.con < 0 ? '− ' : '+ ') + Math.abs(side.con), dc, name: held.map((e) => e.name).join(', ') }));
+        }
+      }
+    }
+    // one reaction a round
+    const v = view();
+    if (side.react === 'Riposte') {
+      if (foe.attacks - hits > 0 && v.riposte && left.dice > 0) {
+        left.dice--;
+        // weapon damage and the superiority die: 1d8, 1d10 with Improved Combat Superiority (the wiki's Riposte page)
+        const die = (side.stats.gains || []).includes('Improved Combat Superiority') ? '1d10' : '1d8';
+        const line = rollWeapon(v.st, Object.assign({}, v.riposte, { extraDice: [...(v.riposte.extraDice || []), [die, '', 'Riposte']] }), target, riders());
+        Object.assign(line, { name: 'Riposte', how: t('reaction') });
+        lines.push(line);
+      }
+    } else if (side.react && hits > 0 && v.reacts.has(side.react)) {
+      const x = v.reacts.get(side.react);
+      if (pay(x, 0, true)) { const out = rollSpell(v.st, x, target, []); out.forEach((l) => { l.how = t('reaction'); }); lines.push(...out); }
+      else if (!fight.noReact) { fight.noReact = true; notes.push(t('Nothing left to pay for {spell}: no more reactions with it.', { spell: x.name })); }
+    }
+    // damage that waits for the enemy to move (Booming Blade)
+    fight.effects.filter((e) => e.kind === 'later' && e.later.some((p) => p.when === 'moves')).forEach((e) => {
+      if (foe.moves) { const out = rollLater(e, 'moves'); out.forEach((l) => { l.how = t('when it moves'); }); lines.push(...out); }
+      drop([e]);
+    });
+    // Rage ends early in a turn with no attack made and no damage taken
+    const rage = has('rage');
+    if (rage && !attacked && !hits) { drop([rage]); notes.push(t('Rage ends early: no attack made and no damage taken this turn.')); }
   }
   return done();
 }
 // One turn the way the averages see it: `action` every turn ('' for the weapon), with `left` to spend (nothing
 // runs out when it is null).
 function simTurn(stats, style, target, action, left) {
-  const side = sideOf(stats, style, target, [0, 1, 2, 3].map(() => ({ a: action || 'weapon', q: 'auto' })));
-  return fightTurn(side, { turn: 0, left, dealt: 0, effects: [], lethargic: 0 });
+  const side = sideOf(stats, style, target, [0, 1, 2, 3].map(() => ({ a: action || 'weapon', q: 'auto', x: 'same' })));
+  return fightTurn(side, { turn: 0, left, dealt: 0, effects: [], lethargic: 0, used: [] });
 }
 // Many fights with a side's plan: the average damage of a turn and of the first turn, and how many turns the
 // enemy lasts (or, with no hit points to go by, the damage of ten turns).
@@ -368,7 +473,7 @@ function simFights(side, hp, count) {
 let sim = { key: '', fight: null, turns: [], many: null };
 // In Honour mode the enemy has its Honour hit points, or the Tactician ones when its page gives no others.
 const enemyHp = (e) => (honourMode() ? e.hp.h || e.hp.t || e.hp.b : e.hp.b);
-const sideKey = (side) => [side.b.id, side.act, side.at, side.b.active, side.steps, side.b.elixir, simBase(side).list.map((x) => x.total.toFixed(2)), simBase(side).plan ? simBase(side).plan.total.toFixed(2) : ''];
+const sideKey = (side) => [side.b.id, side.act, side.at, side.b.active, side.steps, side.b.elixir, side.react, side.foe, simBase(side).list.map((x) => x.total.toFixed(2)), simBase(side).plan ? simBase(side).plan.total.toFixed(2) : ''];
 // Everything the test needs from the build on screen; a change in any of it starts the test over.
 function simContext() {
   const b = curBuild();
@@ -418,10 +523,15 @@ function stepOptions(ctx, i, f) {
     x.sp.co ? t('Concentration') : '', x.later ? t('then {x}', { x: x.later }) : ''].filter(Boolean).join(' · '), pic(x.sp.i, 'pic small'), x.slot ? t('Spells') : t('At will')];
   const rider = (x) => [x.name, x.name, x.sp.d || '', [dicePart(x.rider) + ' ' + t('on every hit'), x.slot ? t('level {n} slot', { n: x.slot }) : '', x.sp.du || '', x.sp.co ? t('Concentration') : ''].filter(Boolean).join(' · '), pic(x.sp.i, 'pic small'), t('Sets up')];
   const out = i < 3 ? [['', t('As from turn 4 on'), '', '', '', '']] : [];
-  if (f === 'a') {
+  if (f === 'x') {
+    out.push(['same', t('The same as the action'), t('The weapon again, or the same spell once more while a slot is left.'), '', '', t('At will')]);
+    if (v.plan) out.push(['weapon', t('Weapon attacks'), v.plan.parts[0].n + ' × ' + v.plan.parts[0].row.name + ' · ' + t('with Haste in Honour mode, one attack'), '', '', t('At will')]);
+    v.list.filter((x) => x.sp.a === 'action').forEach((x) => out.push(spell(x, x.name)));
+  } else if (f === 'a') {
     if (v.plan) out.push(['weapon', t('Weapon attacks'), v.plan.parts.filter((x) => !x.bonus).map((x) => `${x.n} × ${x.row.name} (${x.how})`).join(' + '), t('{n} on average', { n: v.plan.parts.filter((x) => !x.bonus).reduce((a, x) => a + x.n * x.each, 0).toFixed(1) }), '', t('At will')]);
     else if (i === 3 && v.cantrip) out.push(['weapon', v.cantrip.name, v.cantrip.text + ' · ' + v.cantrip.how, t('{n} on average', { n: v.cantrip.total.toFixed(1) }), pic(v.cantrip.sp.i, 'pic small'), t('At will')]);
     v.list.filter((x) => x.sp.a === 'action' && !(i === 3 && !v.plan && x === v.cantrip)).forEach((x) => out.push(spell(x, x.name)));
+    (v.list.setups || []).filter((x) => x.sp.a === 'action').forEach((x) => out.push([x.name, x.name, x.sp.d || '', [x.text, x.slot ? t('level {n} slot', { n: x.slot }) : '', x.sp.du || ''].filter(Boolean).join(' · '), pic(x.sp.i, 'pic small'), t('Sets up')]));
     if (side.haste) out.push(['Haste', 'Haste', side.haste.sp.d || '', [t('level {n} slot', { n: side.haste.slot }), side.haste.sp.du || '', t('Concentration')].join(' · '), pic(side.haste.sp.i, 'pic small'), t('Sets up')]);
     [...v.riders.values()].filter((x) => x.sp.a === 'action').forEach((x) => out.push(rider(x)));
   } else {
@@ -434,15 +544,26 @@ function stepOptions(ctx, i, f) {
   out.push(['none', t('Nothing'), '', '', '', t('At will')]);
   return out;
 }
+const STEP_DEFAULT = { a: 'weapon', q: 'auto', x: 'same' };
+// The reactions a build can answer the enemy with: [value, name, description, facts, picture].
+function reactOptions(ctx) {
+  const v = ctx.v;
+  const out = [...v.reacts.values()].map((x) => [x.name, x.name, x.sp.d || '', [x.text + ' · ' + x.how, t('when the enemy lands a hit'), /rest/i.test(x.sp.rc || '') ? x.sp.rc : x.slot ? t('level {n} slot', { n: x.slot }) : ''].filter(Boolean).join(' · '), pic(x.sp.i, 'pic small')]);
+  if (v.riposte) out.push(['Riposte', 'Riposte', featureText('Riposte') || '', t('when the enemy misses a melee attack') + ' · Superiority Dice', '']);
+  return out;
+}
 const stepLabel = (ctx, i, f, value) => { const row = stepOptions(ctx, i, f).find((x) => x[0] === value); return row ? row : null; };
 function simPlanHtml(ctx) {
   const names = [t('Turn {n}', { n: 1 }), t('Turn {n}', { n: 2 }), t('Turn {n}', { n: 3 }), t('From turn 4 on')];
+  const on = ctx.side.stats.active || [];
+  // the third field shows when the build can have a second action: Action Surge, or Haste cast or switched on
+  const extra = (ctx.side.stats.fighter || 0) >= 2 || !!ctx.side.haste || on.includes('haste');
   const cell = (i, f, label) => {
-    const value = ctx.side.steps[i][f] || (i === 3 ? (f === 'a' ? 'weapon' : 'auto') : '');
+    const value = ctx.side.steps[i][f] || (i === 3 ? STEP_DEFAULT[f] : '');
     const row = value ? stepLabel(ctx, i, f, value) : null;
     return `<div class="field"><span>${label}</span>${slotButton('sim-step-open', `data-i="${i}" data-f="${f}"`, row ? row[1] : '', row ? row[4] : '', i < 3 ? t('as from turn 4 on') : t('— choose —'))}</div>`;
   };
-  return `<div class="sim-plan">${names.map((name, i) => `<div class="sim-step"><b>${name}</b>${cell(i, 'a', t('Action'))}${cell(i, 'q', t('Bonus action'))}</div>`).join('')}</div>`;
+  return `<div class="sim-plan">${names.map((name, i) => `<div class="sim-step${extra ? ' three' : ''}"><b>${name}</b>${cell(i, 'a', t('Action'))}${extra ? cell(i, 'x', t('Action on top (Action Surge, Haste)')) : ''}${cell(i, 'q', t('Bonus action'))}</div>`).join('')}</div>`;
 }
 const sideName = (side) => (side.b.name || t('Unnamed')) + ' · ' + t((ACTS.find(([k]) => k === side.act) || ['', ''])[1]);
 function simManyHtml(ctx) {
@@ -479,13 +600,15 @@ function renderDamage() {
     left.slots.length ? t('Spell slots') + ' ' + left.slots.map((n, i) => `<span class="slot-n${n ? '' : ' out'}" title="${t('Level {n}', { n: i + 1 })}">${i + 1}<i>×${n}</i></span>`).join('') : '',
     left.pactLevel ? esc(t('Pact Magic slots')) + ' <b>' + left.pact + '</b>' : '',
     full.points ? 'Sorcery Points <b>' + left.points + '</b>' : '', full.ki ? 'Ki Points <b>' + left.ki + '</b>' : '',
-    full.rage ? 'Rage Charges <b>' + left.rage + '</b>' : '', full.surge ? 'Action Surge <b>' + left.surge + '</b>' : ''].filter(Boolean);
+    full.rage ? 'Rage Charges <b>' + left.rage + '</b>' : '', full.surge ? 'Action Surge <b>' + left.surge + '</b>' : '', full.dice ? 'Superiority Dice <b>' + left.dice + '</b>' : ''].filter(Boolean);
   const work = fight.effects.filter((e) => !e.quiet).map((e) => esc(e.name) + (isFinite(e.until) ? ' <b>' + t('{n} turn(s) left', { n: e.until - fight.turn }) + '</b>' : '') + (e.conc ? ' · ' + t('Concentration') : ''));
   const on = side.stats.active || [];
+  const reacts = reactOptions(ctx);
   const rules = [
     on.includes('rage') ? t('Rage (switched on above) is entered with the bonus action, lasts 10 turns and takes a Rage Charge each time; without a charge the build fights without it.') : '',
     on.includes('haste') ? t('Haste (switched on above) is on the build for the first 10 turns, as if someone else cast it; the turn after it ends is lost to Lethargic.') : '',
-    side.haste ? t('Haste cast by the build holds its Concentration: another Concentration spell ends it, and leaves the caster Lethargic.') : ''].filter(Boolean);
+    side.haste ? t('Haste cast by the build holds its Concentration: another Concentration spell ends it, and leaves the caster Lethargic.') : '',
+    side.haste || on.includes('haste') ? t('The action Haste gives is used from the turn Haste is cast. The wiki says "an additional action each turn" and does not single out that first turn, so this is how the planner reads it.') : ''].filter(Boolean);
   const totals = turns.map((x) => x.total);
   const mean = turns.length ? fight.dealt / turns.length : 0;
   const box = (label, value, hint) => `<div class="stat"><span>${label}</span><b>${value}</b>${hint ? `<small>${hint}</small>` : ''}</div>`;
@@ -497,6 +620,15 @@ function renderDamage() {
       <p class="muted">${t('What the build does with its action and its bonus action in each of the first three turns and in the ones after. A spell that is still at work is not cast again; with no slot left, the turn goes to what the build does at will.')}</p>
       ${simPlanHtml(ctx)}
       ${castTools(side.stats, v.list)}
+      ${reacts.length ? `<div class="stat-tools"><div class="field"><span>${t('Reaction')}</span>${slotButton('sim-react-open', '', side.react && reacts.some((r) => r[0] === side.react) ? side.react : '', '', t('— none —'))}</div></div>` : ''}
+      <h3 class="group">${t('What the enemy does on its turn')}</h3>
+      <div class="stat-tools foe-tools">
+        <div class="field ac-field"><span>${t('Melee attacks on the build')}</span>${stepper(side.foe.attacks, 'data-ui="foeAttacks" data-v="0"', 0, 8)}</div>
+        <div class="field ac-field"><span>${t('Of which hit')}</span>${stepper(side.foe.hits, 'data-ui="foeHits" data-v="0"', 0, side.foe.attacks)}</div>
+        <div class="field ac-field"><span>${t('Damage of each hit')}</span>${stepper(side.foe.damage, 'data-ui="foeDamage" data-v="10"', 1, 99)}</div>
+        <div class="field"><span>${t('Movement')}</span><button class="btn tiny${side.foe.moves ? ' gold' : ''}" data-act="foe-moves">${side.foe.moves ? t('It moves every turn') : t('It stays where it is')}</button></div>
+      </div>
+      <p class="muted">${t('With no attacks and no movement, the enemy only takes damage. Hits on the build can break Concentration and keep Rage going; a miss opens Riposte, a hit opens Hellish Rebuke, Armour of Agathys and Fire Shield; movement sets off Booming Blade.')}</p>
       ${rules.map((x) => `<p class="muted">${x}</p>`).join('')}
       <p class="turn"><b>${expected.toFixed(1)}</b>${t('expected on average from the action of the later turns against {who}', { who: esc(who) })}${chosen ? ': ' + esc(chosen.text + ' · ' + chosen.how) : v.plan ? ': ' + v.plan.parts.map((x) =>
         `${x.chance != null ? Math.round(x.chance * 100) + '%' : x.n} × ${esc(x.row.name)} (${esc(x.how)})`).join(' + ') : ''}</p>
@@ -554,9 +686,19 @@ Object.assign(actions, {
     if (!ctx) return;
     const full = simResources(ctx.side.stats);
     if (el.dataset.k === 'long') sim.fight.left = full;
-    else Object.assign(sim.fight.left, { pact: full.pact, ki: full.ki, surge: full.surge });
+    else Object.assign(sim.fight.left, { pact: full.pact, ki: full.ki, surge: full.surge, dice: full.dice });
+    if (el.dataset.k === 'long') sim.fight.used = [];
   },
   'sim-reset'() { sim.key = ''; },
+  'foe-moves'() { state.ui.foeMoves = !state.ui.foeMoves; },
+  'sim-react-open'() {
+    const ctx = simContext();
+    if (!ctx) return false;
+    const rows = reactOptions(ctx);
+    openChooser(t('Reaction'), t('One reaction a round, on the enemy\'s turn, when what it answers happens.'), [{ label: t('Reaction'), n: 1, min: 0, options: rows.map((r) => r.slice(1)), chosen: rows.filter((r) => r[0] === ctx.side.react).map((r) => r[1]) }],
+      (done) => { const row = rows.find((r) => r[1] === done[0].chosen[0]); (state.ui.simReacts || (state.ui.simReacts = {}))[ctx.b.id] = row ? row[0] : ''; });
+    return false;
+  },
   'sim-build-open'() { simBuildChooser(t('Build'), curBuild(), (id) => { if (id) { state.ui.buildId = id; state.ui.wizard = ''; } }); return false; },
   'sim-b-open'() {
     const sb = state.ui.simB;
@@ -576,9 +718,10 @@ Object.assign(actions, {
     const i = Number(el.dataset.i);
     const f = el.dataset.f;
     const rows = stepOptions(ctx, i, f);
-    const cur = ctx.side.steps[i][f] || (i === 3 ? (f === 'a' ? 'weapon' : 'auto') : '');
-    const title = [t('Turn {n}', { n: 1 }), t('Turn {n}', { n: 2 }), t('Turn {n}', { n: 3 }), t('From turn 4 on')][i] + ' · ' + (f === 'a' ? t('Action') : t('Bonus action'));
-    openChooser(title, f === 'a' ? t('What the action of the turn goes to.') : t('What the bonus action of the turn goes to. A spell that sets something up is cast before the attacks.'),
+    const cur = ctx.side.steps[i][f] || (i === 3 ? STEP_DEFAULT[f] : '');
+    const title = [t('Turn {n}', { n: 1 }), t('Turn {n}', { n: 2 }), t('Turn {n}', { n: 3 }), t('From turn 4 on')][i] + ' · ' + (f === 'a' ? t('Action') : f === 'x' ? t('Action on top (Action Surge, Haste)') : t('Bonus action'));
+    openChooser(title, f === 'a' ? t('What the action of the turn goes to.') : f === 'x' ? t('What a second action goes to, on the turns the build has one: Action Surge once a Short Rest, and Haste while it lasts.')
+      : t('What the bonus action of the turn goes to. A spell that sets something up is cast before the attacks.'),
       [{ label: title, n: 1, min: 0, options: rows.map((r) => r.slice(1)), chosen: rows.filter((r) => r[0] === cur).map((r) => r[1]) }],
       (done) => {
         const row = rows.find((r) => r[1] === done[0].chosen[0]);

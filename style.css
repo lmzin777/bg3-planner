@@ -928,3 +928,7 @@ button.chip:hover { border-color: var(--gold); color: var(--text); }
 .sim-many tbody th { color: var(--muted); font-weight: 500; }
 .sim-many td b { font: 600 19px var(--serif); color: var(--gold-hi); }
 .sim-many td small { color: var(--muted); margin-left: 6px; }
+
+.sim-step.three { grid-template-columns: 150px repeat(3, minmax(0, 1fr)); }
+@media (max-width: 900px) { .sim-step, .sim-step.three { grid-template-columns: 1fr; } }
+.foe-tools { margin-bottom: 6px; }
