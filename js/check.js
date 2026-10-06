@@ -44,10 +44,12 @@ function levelPending(b, i) {
   return out;
 }
 
-// [{ level: 'warn' | 'note', where, text }] - 'warn' is something to fix or choose, 'note' is worth a look.
+// [{ level: 'warn' | 'note', where, text, go }] - 'warn' is something to fix or choose, 'note' is worth a look.
+// `go` says where in the build it is settled: { s: the section, l: the level (from 0), a: the act of the gear }.
 function buildIssues(b) {
   const out = [];
-  const add = (level, where, text) => { if (!out.some((x) => x.where === where && x.text === text)) out.push({ level, where, text }); };
+  let go = { s: 'creation' };
+  const add = (level, where, text) => { if (!out.some((x) => x.where === where && x.text === text)) out.push({ level, where, text, go }); };
   const c = b.creation;
   const info = levelInfo(b);
   const level = charLevel(b);
@@ -69,26 +71,35 @@ function buildIssues(b) {
   }
 
   const progression = t('Level progression');
+  go = { s: 'levels' };
   if (!level) add('warn', progression, t('No class chosen yet'));
   else {
     if (level < 12) add('note', progression, t('{n} of 12 levels have a class', { n: level }));
     const last = b.levels.reduce((a, l, i) => (l.cls ? i : a), -1);
-    b.levels.forEach((l, i) => { if (!l.cls && i < last) add('warn', progression, t('Level {n} has no class, but later levels do', { n: i + 1 })); });
+    b.levels.forEach((l, i) => { go = { s: 'levels', l: i }; if (!l.cls && i < last) add('warn', progression, t('Level {n} has no class, but later levels do', { n: i + 1 })); });
+    go = { s: 'levels' };
     const levels = classLevels(b);
     Object.keys(levels).forEach((cls) => {
       const d = CLASS_DATA[cls];
       if (d && d.subclassLevel && levels[cls] >= d.subclassLevel && !info.some((x) => x.cls === cls && x.sub)) {
+        // (the way there is the level at which the class picks it)
+        const at = info.findIndex((x) => x.cls === cls && x.n === d.subclassLevel);
+        go = at >= 0 ? { s: 'levels', l: at } : { s: 'levels' };
         add('warn', progression, t('{cls}: subclass not chosen (it is picked at {cls} level {n})', { cls, n: d.subclassLevel }));
       }
     });
     // choices the class makes while levelling: fighting style, invocations, metamagic, manoeuvres…
     Object.keys(levels).forEach((cls) => classChoices(b, cls).forEach((g) => {
       const have = chosenOf(b, cls, g).length;
+      // (the way there is the first level of the class that still has one of them to choose)
+      const at = have < g.need ? b.levels.findIndex((l, i) => info[i].cls === cls && levelPending(b, i).some((x) => x.indexOf(g.name + ':') === 0)) : -1;
+      go = at >= 0 ? { s: 'levels', l: at } : { s: 'levels' };
       if (have < g.need) add('warn', progression, t('{cls}: {name} — {have} of {need} chosen', { cls, name: g.name, have, need: g.need }));
     }));
     b.levels.forEach((l, i) => {
       const x = info[i];
       if (!x.cls) return;
+      go = { s: 'levels', l: i };
       const n = i + 1;
       if (grantsFeat(x) && !l.picks.some((p) => /^feat\b/i.test(p.trim()))) add('warn', progression, t('Level {n}: feat not chosen', { n }));
       // a feat that asks for more (an ability, skills, spells…) written without them
@@ -109,9 +120,12 @@ function buildIssues(b) {
       });
     });
     // the same feat twice is not possible in the game (Ability Improvement is)
+    go = { s: 'levels' };
     const feats = featsTaken(b).filter((y) => y.name !== 'Ability Improvement');
-    feats.forEach((y, k) => { const first = feats.findIndex((z) => z.name === y.name); if (first < k) add('warn', progression, t('{feat} is taken twice, at levels {a} and {b}', { feat: y.name, a: feats[first].level + 1, b: y.level + 1 })); });
+    feats.forEach((y, k) => { const first = feats.findIndex((z) => z.name === y.name); go = { s: 'levels', l: y.level }; if (first < k) add('warn', progression, t('{feat} is taken twice, at levels {a} and {b}', { feat: y.name, a: feats[first].level + 1, b: y.level + 1 })); });
+    go = { s: 'spells' };
     Object.keys(b.prepared || {}).forEach((cls) => { const max = preparedMax(b, cls); if (b.prepared[cls].length > max) add('warn', progression, t('{cls}: {n} spells prepared, it can prepare {max}', { cls, n: b.prepared[cls].length, max })); });
+    go = { s: 'levels' };
     const loose = b.levels.reduce((a, l) => a + (l.notes || []).length, 0);
     if (loose) add('note', progression, t('{n} line(s) in the levels are not a choice of their level and do not count', { n: loose }));
     // notes, not errors: a spell granted by race or feat may be written among the choices, and a planner
@@ -127,6 +141,7 @@ function buildIssues(b) {
 
   ACTS.forEach(([act, label], ai) => {
     const where = t('Gear · {act}', { act: t(label) });
+    go = { s: 'gear', a: act };
     const worn = wornItems(b, act);
     const prof = proficiencies(b, act);
     const taken = partyTaken(b, act);
@@ -148,15 +163,18 @@ function buildIssues(b) {
   });
 
   const numbers = t('Final numbers');
+  go = { s: 'numbers' };
   ABILS.forEach(([ab, short]) => {
     if (Number((c.extra || {})[ab]) && ACTS.some(([act]) => abilityScores(b, act).sources[ab].length)) {
       add('note', numbers, t('{ab} has a manual bonus and is also changed by gear or the elixir: make sure it is not counted twice', { ab: short }));
     }
   });
+  go = { s: 'permanent' };
   PERMANENT.forEach((p) => {
     const mine = (b.permanent || {})[p.n];
     if (mine && permanentEffect(p).choice && !mine.ab) add('warn', t('Permanent bonuses'), t('{name}: choose the ability it goes to', { name: p.n }));
   });
+  go = { s: 'numbers' };
   if (b.elixir && !CONSUMABLE_BY_NAME.has(norm(b.elixir))) add('note', numbers, t('The elixir "{x}" is not in the database, so it changes no number', { x: b.elixir }));
   return out;
 }
@@ -165,17 +183,34 @@ function checkLive(b) {
   const issues = buildIssues(b);
   const warns = issues.filter((x) => x.level === 'warn');
   const notes = issues.filter((x) => x.level === 'note');
-  const open = state.ui.checkOpen !== false;
   const groups = [];
   issues.forEach((x) => { let g = groups.find((y) => y[0] === x.where); if (!g) groups.push(g = [x.where, []]); g[1].push(x); });
   const head = !issues.length ? `<span class="okline">${t('Nothing pending: every choice is made and the gear fits the build.')}</span>`
     : [warns.length ? `<b class="warn">${t('{n} to review', { n: warns.length })}</b>` : '', notes.length ? `<span class="muted">${t('{n} note(s)', { n: notes.length })}</span>` : ''].filter(Boolean).join(' · ');
-  return `<div class="check-head"><h2>${t('Build check')}</h2><span>${head}</span>
-      ${issues.length ? `<button class="btn tiny" data-act="check-toggle">${open ? t('Hide') : t('Show')}</button>` : ''}</div>
-    ${issues.length && open ? `<div class="issues">${groups.map(([where, list]) => `<div><h4>${esc(where)}</h4><ul>${list.map((x) => `<li class="${x.level}">${esc(x.text)}</li>`).join('')}</ul></div>`).join('')}</div>` : ''}`;
+  // every entry is a way to where it is settled: its section, its level, the gear of its act
+  const link = (x, text, cls) => `<button class="${cls}" data-act="check-go" data-s="${x.go.s}"${x.go.l != null ? ` data-l="${x.go.l}"` : ''}${x.go.a ? ` data-a="${x.go.a}"` : ''} title="${t('Go there to settle it')}">${text}</button>`;
+  return `<div class="check-head"><h2>${t('Build check')}</h2><span>${head}</span></div>
+    ${issues.length ? `<div class="issues">${groups.map(([where, list]) => `<div><h4>${link({ go: { s: list[0].go.s, a: list[0].go.a } }, esc(where) + ' <i>→</i>', 'issue-where')}</h4>
+      <ul>${list.map((x) => `<li class="${x.level}">${link(x, esc(x.text) + ' <i>→</i>', 'issue')}</li>`).join('')}</ul></div>`).join('')}</div>` : ''}`;
 }
 const checkCard = (b) => `<section class="card check" id="check-live">${checkLive(b)}</section>`;
 
 Object.assign(actions, {
-  'check-toggle'() { state.ui.checkOpen = state.ui.checkOpen === false; },
+  // from an entry of the check to where it is settled: the section is opened, the gear is set to the act, and the
+  // level (or the section) comes into view, lit for a moment
+  'check-go'(el) {
+    const key = el.dataset.s;
+    (state.ui.closed || (state.ui.closed = {}))[key] = false;
+    if (el.dataset.a) state.ui.act = el.dataset.a;
+    save();
+    render();
+    const sec = $('#sec-' + key);
+    const row = sec && el.dataset.l != null ? sec.querySelectorAll('.lvl')[Number(el.dataset.l)] : null;
+    const target = row || sec;
+    if (!target) return false;
+    target.scrollIntoView({ block: row ? 'center' : 'start' });
+    target.classList.add('lit');
+    setTimeout(() => target.classList.remove('lit'), 1800);
+    return false;
+  },
 });

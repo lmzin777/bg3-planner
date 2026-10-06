@@ -25,6 +25,8 @@ function ownedTexts(b, act) {
   Object.values(wornItems(b, act)).forEach((it) => liveSentences(it, b).forEach((text) => out.push([it.n, text, 'item'])));
   const actNum = ACTS.findIndex(([k]) => k === act) + 1;
   PERMANENT.forEach((p) => { if ((b.permanent || {})[p.n] && p.a <= actNum) out.push([p.n, p.x, 'permanent']); });
+  const elixir = CONSUMABLE_BY_NAME.get(norm(b.elixir));
+  if (elixir) out.push([elixir.n, elixir.x, 'elixir']);
   return out;
 }
 
@@ -119,7 +121,8 @@ function availableToggles(b, act) {
   [['meta:twin', 'Twinned Spell'], ['meta:heighten', 'Heightened Spell'], ['meta:quicken', 'Quickened Spell']].forEach(([key, name]) => { if (taken.has(name)) add(key, name, (meta.find((o) => o[0] === name) || [])[1] || '', {}); });
   if ((levels.Fighter || 0) >= 2) add('surge', 'Action Surge', featureText('Action Surge'), {});
   if (levels.Barbarian) add('rage', 'Rage', featureText('Rage'), { damage: Number(classColumn('Barbarian', levels.Barbarian, /rage damage/i)) || 0 }, 'melee');
-  if (levels.Rogue) add('sneak', 'Sneak Attack', featureText('Sneak Attack'), { damageDice: classColumn('Rogue', levels.Rogue, /sneak attack/i) }, 'finesse');
+  // (once a turn: the dice ride on the first attack of the turn that hits)
+  if (levels.Rogue) add('sneak', 'Sneak Attack', featureText('Sneak Attack'), { damageDice: classColumn('Rogue', levels.Rogue, /sneak attack/i), once: true }, 'finesse');
   FEATS.forEach(([name, text]) => {
     if (!/-5 penalty/.test(text) || !hasPick(b, new RegExp('^feat\\s*:\\s*' + escRe(name), 'i'))) return;
     add('feat:' + name, name, text, { attack: -5, damage: 10 }, /ranged/i.test(text.split(';').find((x) => /-5 penalty/.test(x))) ? 'ranged' : 'heavy');
@@ -128,7 +131,8 @@ function availableToggles(b, act) {
   // spells the build knows and features it has, when their text gives a bonus this planner can add
   const names = [...new Set([...currentSpells(b).map((s) => s.name), ...gains])];
   names.forEach((name) => {
-    if (/^(Rage|Sneak Attack|Improved Divine Smite)$/.test(name)) return;
+    // (Divine Smite takes a spell slot on each hit: the Damage test rolls it, by the choice made in its plan)
+    if (/^(Rage|Sneak Attack|Divine Smite|Improved Divine Smite)$/.test(name)) return;
     const text = featureText(name);
     const fx = text && textEffect(text);
     if (fx) add('text:' + name, name, text, fx, fx.melee ? 'melee' : 'all');
@@ -148,6 +152,10 @@ function activeEffects(b, act, mods) {
   const gains = allGains(b);
   if (gains.includes('Aura of Protection') && mods.cha > 0) list.push({ key: '', label: 'Aura of Protection', fx: { saves: mods.cha }, scope: 'all' });
   if (gains.includes('Improved Divine Smite')) list.push({ key: '', label: 'Improved Divine Smite', fx: textEffect(featureText('Improved Divine Smite')) || {}, scope: 'melee' });
+  // the elixir kept active: a die on attack rolls and saving throws (Heroism), a die on weapon damage (the Colossus)
+  const elixir = CONSUMABLE_BY_NAME.get(norm(b.elixir));
+  const brew = elixir && textEffect(elixir.x);
+  if (brew) list.push({ key: '', label: elixir.n, fx: brew, scope: 'all' });
   return list;
 }
 // Whether an effect of that scope applies to an attack row.

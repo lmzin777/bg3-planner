@@ -531,6 +531,9 @@ function finalStats(b, act, opts) {
   if (hasPick(b, /^feat\b.*\balert\b/i)) initiative.push(['Alert', 5]);
   [...new Set(gains)].forEach((g) => { const m = /\+(\d) (?:bonus )?to Initiative/i.exec(featureText(g)); if (m) initiative.push([g, Number(m[1])]); });
   gearBonus(worn, 'initiative').parts.forEach((p) => initiative.push(p));
+  const brew = CONSUMABLE_BY_NAME.get(norm(b.elixir));
+  const brewInit = brew && /\+(\d) (?:bonus )?to Initiative/i.exec(brew.x);
+  if (brewInit) initiative.push([brew.n, Number(brewInit[1])]);
   const dc = gearBonus(worn, 'spellDc');
   const sa = gearBonus(worn, 'spellAttack');
   const levels = classLevels(b);
@@ -556,7 +559,8 @@ function finalStats(b, act, opts) {
       if (fx.attack) { r.attack.push([x.label, fx.attack]); r.attackTotal += fx.attack; }
       if (fx.attackDice) (r.attackDice = r.attackDice || []).push(fx.attackDice);
       if (fx.damage) { r.damage.push([x.label, fx.damage]); r.damageTotal += fx.damage; }
-      if (fx.damageDice) (r.extraDice = r.extraDice || []).push([fx.damageDice, fx.damageType || '', x.label]);
+      // (a fourth entry, 'turn', marks dice that come once a turn and not with every hit)
+      if (fx.damageDice) (r.extraDice = r.extraDice || []).push([fx.damageDice, fx.damageType || '', x.label].concat(fx.once ? ['turn'] : []));
     });
   });
   return {
@@ -605,7 +609,7 @@ function statsLive(b) {
       <div class="atk-name">${r.item ? pic(r.item.i, 'pic small') : ''}<b>${esc(r.name)}</b><small>${r.slot === 'unarmed' ? '' : t(SLOT_LABEL[r.slot])}${r.proficient ? '' : ` · <em>${t('not proficient')}</em>`}</small></div>
       <div class="atk-num"><span>${t('Attack')}</span><b>${signed(r.attackTotal)}${(r.attackDice || []).map((d) => ' + ' + esc(d)).join('')}</b><small>${partsText(r.attack)}<br>${chance(r)}</small></div>
       <div class="atk-num"><span>${t('Damage')}</span><b>${esc(damageText(r))}</b><small>${esc(r.type)}${r.damage.length ? ' · ' + partsText(r.damage) : ''}${
-        (r.extraDice || []).map((d) => ' · ' + esc(d[0] + (d[1] ? ' ' + d[1] : '') + ' ' + d[2])).join('')}</small></div>
+        (r.extraDice || []).map((d) => ' · ' + esc(d[0] + (d[1] ? ' ' + d[1] : '') + ' ' + d[2]) + (d[3] === 'turn' ? ' (' + t('once a turn') + ')' : '')).join('')}</small></div>
     </div>`).join('');
   const casting = s.casting.map((c) => `<div class="atk">
       <div class="atk-name"><b>${esc(c.label)}</b><small>${abilityShort(c.ability)} ${signed(s.mods[c.ability])}</small></div>
@@ -669,7 +673,7 @@ function mainAttack(s, style) {
   const want = style === 'unarmed' ? (r) => r.slot === 'unarmed' : style === 'thrown' ? (r) => r.thrown : style === 'ranged' ? (r) => r.slot === 'rangedMain' : (r) => r.slot === 'meleeMain' && !r.thrown;
   return rows.find(want) || rows.find((r) => r.slot === 'meleeMain' && !r.thrown) || rows[0] || null;
 }
-const avgDamage = (r) => (r ? avgDice(r.dice) + r.damageTotal + (r.extraDice || []).reduce((a, d) => a + avgDice(d[0]), 0) : 0);
+const avgDamage = (r) => (r ? avgDice(r.dice) + r.damageTotal + (r.extraDice || []).filter((d) => d[3] !== 'turn').reduce((a, d) => a + avgDice(d[0]), 0) : 0);
 // "1d8 + 1d6 + 4": the weapon die, the dice switched on, and the flat part.
 const damageText = (r) => [r.dice, ...(r.extraDice || []).map((d) => d[0])].filter(Boolean).join(' + ') + (r.damageTotal ? ' ' + (r.damageTotal > 0 ? '+ ' : '− ') + Math.abs(r.damageTotal) : '');
 // Level, hit points, armour class, initiative, main attack and spell save DC of every member, side by side.

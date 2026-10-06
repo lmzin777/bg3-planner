@@ -8,7 +8,13 @@ const ENEMIES = window.BG3_ENEMIES || [];
 const ENEMY_BY_NAME = new Map(ENEMIES.map((e) => [e.n, e]));
 // Honour mode changes two things here: Extra Attack from Deepened Pact does not add to a class's Extra Attack,
 // and the action Haste gives cannot use Extra Attack. On by default, as the guide the planner started from.
-const honourMode = () => state.ui.honour !== false;
+// The difficulty also sets the enemy: its hit points, the actions it has, and +2 to its attack rolls and save DCs
+// from Tactician up (the wiki's Difficulty page).
+const MODES = [['balanced', 'Balanced'], ['tactician', 'Tactician'], ['honour', 'Honour']];
+const gameMode = () => (MODES.some(([k]) => k === state.ui.mode) ? state.ui.mode : state.ui.honour === false ? 'balanced' : 'honour');
+const honourMode = () => gameMode() === 'honour';
+// The enemy's hit points in the difficulty chosen: the page's own for that mode, else those of the mode below.
+const enemyHp = (e) => (gameMode() === 'honour' ? e.hp.h || e.hp.t || e.hp.b : gameMode() === 'tactician' ? e.hp.t || e.hp.b : e.hp.b);
 
 // ---------- the enemy ----------
 // A reference enemy of the list, or just an Armour Class and one saving throw bonus for every ability.
@@ -18,9 +24,15 @@ function targetOf() {
     const save = state.ui.targetSave == null ? 3 : Number(state.ui.targetSave);
     return { name: '', ac: Number(state.ui.targetAc) || 16, saves: Object.fromEntries(ABILITY_KEYS.map((k) => [k, save])), res: {} };
   }
+  return enemyTarget(e);
+}
+// A reference enemy as something to aim at: its Armour Class, saving throws and resistances.
+function enemyTarget(e) {
   const mod = (k) => Math.floor((e.ab[k] - 10) / 2);
   return { name: e.n, enemy: e, ac: e.ac, saves: Object.fromEntries(ABILITY_KEYS.map((k) => [k, mod(k) + (e.sv.includes(k) ? e.pb : 0)])), res: e.res || {} };
 }
+// Fiends and Undead take one more die from Divine Smite; the arrows of slaying only work on their own kind.
+const enemyIs = (target, kind) => !!(target && target.enemy && new RegExp('\\b' + kind, 'i').test(target.enemy.ty || ''));
 const asTarget = (x) => (typeof x === 'number' ? { name: '', ac: x, saves: Object.fromEntries(ABILITY_KEYS.map((k) => [k, 3])), res: {} } : x || targetOf());
 // How much of a damage type gets through: nothing if immune, half if resistant, double if vulnerable.
 // "rn" and "in" hold only against damage that is not magical.
@@ -42,8 +54,34 @@ function rowDamage(stats, row, target) {
   const p = hitChance(bonus, target.ac, stats.crit, stats.advantage);
   const magical = rowMagical(stats, row);
   const f = typeFactor(target, row.type, magical);
-  const dice = avgDice(row.dice) * f + (row.extraDice || []).reduce((a, d) => a + avgDice(d[0]) * typeFactor(target, d[1] || row.type, magical), 0);
-  return { p, each: p.hit * (dice + row.damageTotal * f) + p.crit * dice };
+  const extra = (pick) => (row.extraDice || []).filter(pick).reduce((a, d) => a + avgDice(d[0]) * typeFactor(target, d[1] || row.type, magical), 0);
+  const dice = avgDice(row.dice) * f + extra((d) => d[3] !== 'turn');
+  // `once`: the dice that come once a turn (Sneak Attack), which no single hit can count as its own
+  return { p, each: p.hit * (dice + row.damageTotal * f) + p.crit * dice, once: extra((d) => d[3] === 'turn') };
+}
+// Dice that come once a turn ride on the first attack of the turn that hits: what they are worth over the
+// attacks of a plan, in order. { label, dice, total }
+function onceATurn(parts) {
+  let none = 1;  // the chance that no attack has hit so far
+  let total = 0;
+  let found = null;
+  parts.forEach((x) => {
+    const d = (x.row.extraDice || []).find((y) => y[3] === 'turn');
+    if (!d || !x.once) return;
+    found = found || d;
+    const n = x.chance != null ? x.chance : x.n;
+    const whole = Math.floor(n);
+    for (let k = 0; k < whole; k++) { total += none * (x.p.hit + x.p.crit) * x.once; none *= 1 - x.p.hit; }
+    if (n > whole) { total += none * (n - whole) * (x.p.hit + x.p.crit) * x.once; none *= 1 - (n - whole) * x.p.hit; }
+  });
+  return found ? { label: found[2], dice: found[0], total } : null;
+}
+// Divine Smite (the wiki's Divine Smite page): 2d8 Radiant on a melee weapon hit for a level 1 spell slot, one more
+// d8 for each level of the slot above the first, 5d8 at most; one more d8 against Fiends and Undead. '' when the
+// build has no Divine Smite.
+function smiteDice(stats, target, slot) {
+  if (!(stats.gains || []).includes('Divine Smite')) return '';
+  return Math.min(5, 1 + Math.max(1, slot)) + (enemyIs(target, 'Fiend') || enemyIs(target, 'Undead') ? 1 : 0) + 'd8';
 }
 const POLEARMS = ['Glaives', 'Halberds', 'Pikes', 'Quarterstaves', 'Spears'];
 // A turn of weapon attacks: the Attack action with Extra Attack, the actions switched on (Action Surge, Haste)
@@ -84,17 +122,20 @@ function turnPlan(stats, style, against, without) {
   }
   if (melee && main.item && (main.item.wa || []).includes("Dueller's Enthusiasm") && !(stats.worn || {}).meleeOff) bonus.push(part(main, 1, "Dueller's Enthusiasm", hit));
   if (bonus.length) parts.push(Object.assign(bonus.sort((x, y) => y.n * y.each - x.n * x.each)[0], { bonus: true }));
-  return { target, ac: target.ac, parts, total: parts.reduce((a, x) => a + x.n * x.each, 0) };
+  const once = onceATurn(parts);
+  return { target, ac: target.ac, parts, once, total: parts.reduce((a, x) => a + x.n * x.each, 0) + (once ? once.total : 0) };
 }
 
 // ---------- spells ----------
 // Damage a spell deals after the turn it is cast, and damage it adds to weapon hits instead of dealing itself.
 const LATER = /per turn|when the target moves|delayed|per [\d.]+ ?m moved|when hit by|when the wall breaks|against melee attackers/i;
 const RIDER = /per (?:weapon )?attack/i;
-// Later damage that depends on what the enemy does. Two kinds are rolled in the damage test, when the enemy is
-// set to do it: moving ("moves") and landing a melee hit on the caster ("struck"); the others are only named.
+// Later damage that depends on what happens next. The damage test rolls it when the page says it happens: the
+// enemy moving ("moves"), walking a distance through an area ("walks"), landing a melee hit on the caster
+// ("struck"), or a wall being broken ("broken").
 const SOMETIMES = /when the target moves|when hit by|per [\d.]+ ?m moved|when the wall breaks|against melee attackers/i;
-const whenOf = (note) => (/when the target moves/i.test(note) ? 'moves' : /when hit by|against melee attackers/i.test(note) ? 'struck' : '');
+const whenOf = (note) => (/when the target moves/i.test(note) ? 'moves' : /per [\d.]+ ?m moved/i.test(note) ? 'walks' : /when hit by|against melee attackers/i.test(note) ? 'struck'
+  : /when the wall breaks/i.test(note) ? 'broken' : '');
 const laterKept = (x) => !SOMETIMES.test(x.note) || !!whenOf(x.note);
 const SAVE_NOTE = /Saving Throw/i;
 const ANCESTRY = /^(?:Black|Blue|Brass|Bronze|Copper|Gold|Green|Red|Silver|White) \((\w+)\)$/;
@@ -212,7 +253,12 @@ function spellDamage(stats, entry, target, main) {
   if (hits.rider) return { name: s.n, sp: s, rider: hits.rider, slot, total: 0, cls: entry.cls || '' };
   const cast = stats.casting.find((c) => c.label === entry.title);
   const mod = entry.ability ? stats.mods[entry.ability] : 0;
-  const dc = cast ? cast.dc : 8 + stats.pb + mod;
+  // a DC the wiki's notes give as fixed for this spell, whoever casts it: for the cast itself ("initial damage",
+  // or the one line a spell has), and for what it leaves behind (a cloud, a wall stood in)
+  const fixed = (re) => (s.fd || []).find((x) => re.test(x[0]));
+  const fixedNow = fixed(/initial|casting/i) || ((s.fd || []).length === 1 ? fixed(new RegExp('^' + escRe(s.n) + '$', 'i')) : null);
+  const fixedLater = fixed(/cloud|ending a turn|starting a turn inside/i);
+  const dc = fixedNow ? fixedNow[1] : cast ? cast.dc : 8 + stats.pb + mod;
   const attack = cast ? cast.attack : stats.pb + mod;
   const on = stats.active || [];
   const opts = stats.options || new Set();
@@ -236,9 +282,13 @@ function spellDamage(stats, entry, target, main) {
   const rolled = { attack, ac: target.ac, crit: stats.crit, adv: !!stats.advantage,
     save: saveKey ? { key: saveKey, bonus: target.saves[saveKey], dc, dis: heightened } : null, repeat: 1, parts: [],
     // what it goes on doing: the damage of the following turns, whether it holds Concentration, how many turns it lasts
-    later: [], conc: !!s.co, turns: Number((/(\d+) turn/.exec(s.du || '') || [])[1]) || 0 };
+    later: [], conc: !!s.co, turns: Number((/(\d+) turn/.exec(s.du || '') || [])[1]) || 0,
+    // the save against what it leaves behind, when the wiki gives that one a DC of its own
+    laterSave: fixedLater ? { key: (fixedLater[2] || saveKey || 'con').toLowerCase(), bonus: target.saves[(fixedLater[2] || saveKey || 'con').toLowerCase()], dc: fixedLater[1], dis: false } : null };
   const laterPart = (x, type, times) => ({ mode: saveKey && !whenOf(x.note) ? 'save' : 'auto', dice: x.dice, flat: x.flat, type, f: typeFactor(target, type, true), kept: kept(x), times,
-    once: /delayed/i.test(x.note), when: whenOf(x.note) });
+    once: /delayed/i.test(x.note), when: whenOf(x.note),
+    // an area that is Difficult Terrain halves the distance walked through it
+    halved: /difficult terrain/i.test((s.d || '') + ' ' + (s.xd || '')) });
   const laterText = hits.parts.length || hits.weapon ? hits.later.map((x) => dicePart(x) + ' (' + x.note + ')').join(', ') : '';
   if (hits.weapon) {
     // a smite: one weapon attack with the spell's dice on top; a burst that asks a save comes when the attack hits
@@ -292,7 +342,8 @@ function spellDamage(stats, entry, target, main) {
   const chain = /(\d+) primary target and (\d+) enemies/i.exec(s.tg || '');
   const area = !!(s.ao || s.ar || chain);
   const cap = chain ? Number(chain[1]) + Number(chain[2]) : 0;
-  const targets = area ? Math.max(1, Math.min(cap || 8, Number(state.ui.targets) || 1)) : 1;
+  // (a fight with several enemies rolls the spell against each of them, one at a time)
+  const targets = area ? Math.max(1, Math.min(cap || 8, Number(stats.targets != null ? stats.targets : state.ui.targets) || 1)) : 1;
   const modes = new Set();
   let total = 0;
   now.forEach((x, k) => {
@@ -408,6 +459,7 @@ function turnBox(stats, style) {
   const count = (x) => (x.chance != null ? Math.round(x.chance * 100) + '%' : x.n) + ' × ';
   const weapon = plan ? `<p class="turn"><b>${plan.total.toFixed(1)}</b>${t('average damage in a turn against {who}', { who })}: ${plan.parts.map((x) =>
     `${count(x)}${esc(x.row.name)} (${esc(x.how)}, ${x.each.toFixed(1)} ${t('each')})`).join(' + ')}${
+    plan.once ? ' + ' + esc(plan.once.label) + ' (' + esc(plan.once.dice) + ', ' + t('once a turn') + ', ' + plan.once.total.toFixed(1) + ')' : ''}${
     stats.advantage ? ' · ' + t('with Advantage') : ''}${stats.crit < 20 ? ' · ' + t('critical hit on {n} or more', { n: stats.crit }) : ''}</p>` : '';
   const spends = turnSpends(stats, plan);
   const row = (x) => `<div class="opt"><b>${pic(x.sp.i, 'pic small')}${esc(x.name)}</b><span>${esc(x.text)}</span><span>${esc(x.how)}</span>
@@ -423,7 +475,11 @@ function turnBox(stats, style) {
   };
   const costs = spellSpends(stats, spells);
   const quick = quickTurn(stats, plan, spells);
-  return `${weapon}
+  // Divine Smite: no spell, so it is not in the list above. What a level 1 slot adds to a melee hit.
+  const smite = plan && smiteDice(stats, target, 1);
+  const smiteRow = smite && plan.parts[0].row.slot !== 'rangedMain' ? `<p class="muted">${t('Divine Smite: {dice} Radiant on a melee hit for a level 1 spell slot, {n} on average; one more d8 for each level of the slot, 5d8 at most. Rolled in the Damage test.',
+    { dice: smite, n: (avgDice(smite) * typeFactor(target, 'Radiant', true)).toFixed(1) })}</p>` : '';
+  return `${weapon}${smiteRow}
     ${spends.length ? `<p class="muted">${spends.map(esc).join(' · ')}</p>` : ''}
     ${cantrip && plan && cantrip.total > plan.total ? `<p class="muted">${t('At will, {spell} does more than the weapon: {n} a turn.', { spell: esc(cantrip.name), n: cantrip.total.toFixed(1) })}</p>` : ''}
     ${shown.length || riders.length ? `<h3 class="group">${t('Spells against {who}', { who })}</h3>
@@ -445,8 +501,9 @@ function targetTools() {
   return `<div class="field enemy-field"><span>${t('Enemy')}</span>${slotButton('enemy-open', '', e ? e.n : '', '', t('Any enemy'))}</div>
     ${e ? '' : `<div class="field ac-field"><span>${t('Enemy Armour Class')}</span>${stepper(target.ac, 'data-ui="targetAc" data-v="16"', 5, 30)}</div>
       <div class="field ac-field"><span>${t('Its saving throws')}</span>${stepper(target.saves.str, 'data-ui="targetSave" data-v="3"', -3, 15)}</div>`}
-    <div class="field"><span>${t('Rules')}</span><button class="btn tiny${honourMode() ? ' gold' : ''}" data-act="honour-toggle" title="${t('In Honour mode, Extra Attack from Deepened Pact does not add to a class\'s Extra Attack, and the action Haste gives cannot use Extra Attack.')}">${honourMode() ? t('Honour mode') : t('Standard rules')}</button></div>
-    ${e ? `<p class="enemy-line">${t('Act {n}', { n: e.act })} · ${t('level {n}', { n: e.lv })} · AC ${e.ac} · HP ${[e.hp.b, e.hp.t ? e.hp.t + ' Tactician' : '', e.hp.h ? e.hp.h + ' Honour' : ''].filter(Boolean).join(' / ')} · ${
+    <div><span class="lbl" title="${t('In Honour mode, Extra Attack from Deepened Pact does not add to a class\'s Extra Attack, and the action Haste gives cannot use Extra Attack.')}">${t('Difficulty')}</span><div class="acts mini modes">${MODES.map(([k, label]) =>
+      `<button class="${gameMode() === k ? 'on' : ''}" data-act="mode" data-k="${k}">${label}</button>`).join('')}</div></div>
+    ${e ? `<p class="enemy-line">${t('Act {n}', { n: e.act })} · ${t('level {n}', { n: e.lv })} · AC ${e.ac} · HP <b>${enemyHp(e)}</b> (${[e.hp.b + ' Balanced', e.hp.t ? e.hp.t + ' Tactician' : '', e.hp.h ? e.hp.h + ' Honour' : ''].filter(Boolean).join(' / ')}) · ${
       ABILS.map(([k, short]) => short + ' ' + signed(target.saves[k])).join(' ')}${res.length ? ' · ' + esc(res.join(', ')) : ''}${e.note ? `<br><em>${esc(e.note)}</em>` : ''}</p>` : ''}`;
 }
 
@@ -454,9 +511,17 @@ Object.assign(actions, {
   'enemy-open'() {
     const rows = ENEMIES.map((e) => [e.n, [resText(e).join(', '), e.note || ''].filter(Boolean).join(' — '), `AC ${e.ac} · HP ${e.hp.b} · ${t('level {n}', { n: e.lv })}`, '', t('Act {n}', { n: e.act })]);
     openChooser(t('Enemy'), t('Reference enemies, with the numbers of their page on bg3.wiki. Take the choice back and confirm to measure against just an Armour Class.'),
-      [{ label: t('Enemy'), n: 1, min: 0, options: rows, chosen: state.ui.target ? [state.ui.target] : [] }], (done) => { state.ui.target = done[0].chosen[0] || ''; });
+      [{ label: t('Enemy'), n: 1, min: 0, options: rows, chosen: state.ui.target ? [state.ui.target] : [] }], (done) => {
+        state.ui.target = done[0].chosen[0] || '';
+        // another enemy attacks its own way: what was set by hand for the last one goes
+        ['foeAttacks', 'foeBonus', 'foeAct', 'foeAct2', 'foeSlot'].forEach((k) => { delete state.ui[k]; });
+      });
     return false;
   },
-  'honour-toggle'() { state.ui.honour = !honourMode(); },
+  mode(el) {
+    state.ui.mode = el.dataset.k;
+    // the enemy of another difficulty has other actions: what was set by hand goes
+    ['foeAttacks', 'foeBonus', 'foeAct', 'foeAct2', 'foeSlot'].forEach((k) => { delete state.ui[k]; });
+  },
   'cast-level'(el) { state.ui.castLevel = Number(el.dataset.n) || 0; },
 });

@@ -904,9 +904,9 @@
 
   // ---------- the damage of a turn ----------
   test('spells, extra actions and the enemy enter the damage of a turn', () => {
-    const kept = { target: state.ui.target, honour: state.ui.honour, castLevel: state.ui.castLevel, targets: state.ui.targets };
+    const kept = { target: state.ui.target, mode: state.ui.mode, castLevel: state.ui.castLevel, targets: state.ui.targets };
     state.ui.target = '';
-    state.ui.honour = true;
+    state.ui.mode = 'honour';
     state.ui.castLevel = 0;
     state.ui.targets = 1;
     const made = (classes, creation, subs, gear, picks) => {
@@ -1043,9 +1043,9 @@
     eq(plan(f, 'melee'), [18.3, [['Attack action', 2], ['Action Surge', 2]]], 'a second action, with its Extra Attack');
     f.active = ['haste'];
     eq(plan(f, 'melee'), [13.725, [['Attack action', 2], ['Haste', 1]]], 'in Honour mode the action from Haste is one attack');
-    state.ui.honour = false;
+    state.ui.mode = 'balanced';
     eq(plan(f, 'melee'), [18.3, [['Attack action', 2], ['Haste', 2]]]);
-    state.ui.honour = true;
+    state.ui.mode = 'honour';
     f.active = [];
     const titan = enemy('Steel Watcher Titan');
     eq([typeFactor(titan, 'Lightning', false), typeFactor(titan, 'Slashing', false), typeFactor(titan, 'Slashing', true), typeFactor(titan, 'Poison', true), typeFactor(titan, 'Fire', false)], [2, 0.5, 1, 0, 1]);
@@ -1064,10 +1064,10 @@
     const fw = made([...Array(5).fill('Fighter'), ...Array(5).fill('Warlock')], { abilities: { str: 8, dex: 14, con: 14, int: 10, wis: 12, cha: 15 }, plus2: 'cha', plus1: 'con' }, { 5: 'The Fiend' },
       { meleeMain: 'Longsword' }, { 7: ['Pact Boon: Pact of the Blade'] });
     eq(plan(fw, 'melee')[1], [['Attack action', 2]]);
-    state.ui.honour = false;
+    state.ui.mode = 'balanced';
     eq(plan(fw, 'melee')[1], [['Attack action', 3]]);
     // The damage test rolls what the averages are made of. With every roll in the middle: a d20 is 11, a d8 5, a d6 4.
-    state.ui.honour = true;
+    state.ui.mode = 'honour';
     const realRandom = simRandom;
     const fs = finalStats(f, 'act1');
     simRandom = () => 0.5;
@@ -1130,7 +1130,9 @@
     eq(fightTurn(raging, spent).total, 20, 'no charge: 1d12 (7) + 3, twice');
     // The enemy's turn. A hit of 30 asks a Constitution save against DC 15: 11 + 2 fails, and Moonbeam ends.
     const struck = sideOf(finalStats(dr0(), 'act1'), 'caster', plain, steps([{}, {}, {}, { a: 'Moonbeam' }]));
-    struck.foe = { attacks: 1, hits: 1, damage: 30, moves: false };
+    const foeOf = (more) => Object.assign({ name: '', label: '', kind: 'a', melee: true, attacks: 1, bonus: 5, dc: 0, sv: '', os: 0, hits: null, damage: 10, steps: 0, broken: false, slot: 0, uses: 0, slots: null, fallback: null, parts: [] }, more);
+    struck.foe = foeOf({ damage: 30 });  // 11 + 5 hits the druid's Armour Class of 12
+    struck.hp = 999;
     [fight, rolledTurns] = fightOf(struck, 2);
     eq([rolledTurns.map((x) => x.total), fight.left.slots, fight.effects.length, struck.con], [[6, 6], [4, 0], 0, 2], 'cast again on the second turn, and lost again');
     struck.foe.damage = 20;
@@ -1140,15 +1142,15 @@
     const rebuke = made(Array(5).fill('Warlock'), { abilities: { str: 8, dex: 14, con: 14, int: 10, wis: 12, cha: 15 }, plus2: 'cha', plus1: 'con' }, { 0: 'The Fiend' }, {},
       { 0: ['Cantrip: Eldritch Blast', 'Spell: Hellish Rebuke', 'Spell: Armour of Agathys'], 1: ['Eldritch Invocation: Agonising Blast'] });
     const answering = sideOf(finalStats(rebuke, 'act1'), 'caster', plain, steps([{ a: 'Armour of Agathys' }, {}, {}, { a: 'Eldritch Blast' }]));
-    Object.assign(answering, { react: 'Hellish Rebuke', foe: { attacks: 2, hits: 1, damage: 10, moves: false } });
+    Object.assign(answering, { react: 'Hellish Rebuke', foe: foeOf({ attacks: 2 }) });
     [fight, rolledTurns] = fightOf(answering, 2);
-    eq([rolledTurns.map((x) => [x.name, x.total]), fight.left.pact, fight.effects.length], [[['Armour of Agathys', 27], ['Eldritch Blast', 33]], 0, 0],
-      'turn 1: 15 Cold from the armour (a level 3 pact slot, 15 temporary hit points) and 12 from the rebuke; turn 2: the blast, and 15 more from the armour, which the second hit of 10 ends; no pact slot is left for another rebuke');
+    eq([rolledTurns.map((x) => [x.name, x.total]), fight.left.pact, fight.effects.length, answering.hp - fight.hp], [[['Armour of Agathys', 42], ['Eldritch Blast', 18]], 0, 0, 25],
+      'turn 1: two hits of 10, 15 Cold from the armour for each (a level 3 pact slot: 15 temporary hit points, gone with the second hit) and 12 from the rebuke; turn 2: the blast, and no pact slot for another rebuke. The armour took 15 of the 40 damage');
     // Riposte answers a miss: the Longsword and a superiority die, 1d8 (5) + 1d8 (5) + 3.
     const bm = made(Array(5).fill('Fighter'), { abilities: { str: 15, dex: 14, con: 15, int: 8, wis: 10, cha: 8 }, plus2: 'str', plus1: 'con' }, { 2: 'Battle Master' },
       { chest: 'Chain Mail', meleeMain: 'Longsword', meleeOff: 'Studded Shield' }, { 0: ['Fighting Style: Defence'], 2: ['Manoeuvre: Riposte', 'Manoeuvre: Trip Attack', 'Manoeuvre: Precision Attack'] });
     const parry = sideOf(finalStats(bm, 'act1'), 'melee', plain, steps([]));
-    Object.assign(parry, { react: 'Riposte', foe: { attacks: 1, hits: 0, damage: 10, moves: false } });
+    Object.assign(parry, { react: 'Riposte', foe: foeOf({ bonus: -5 }) });  // 11 − 5 misses an Armour Class of 19
     [fight, rolledTurns] = fightOf(parry, 1);
     eq([rolledTurns[0].total, rolledTurns[0].lines.map((l) => l.name).pop(), fight.left.dice], [29, 'Riposte', 3], 'two attacks of 8 and the riposte of 13; four dice at Battle Master 3');
     // Rage ends in a turn with no attack made and no damage taken, and is entered again with another charge.
@@ -1156,6 +1158,116 @@
     idle.steps = steps([{}, { a: 'none', q: 'none' }, {}, {}]);
     [fight, rolledTurns] = fightOf(idle, 3);
     eq([rolledTurns.map((x) => x.total), fight.left.rage], [[24, 0, 24], 1], 'the third turn takes the bonus action and a second charge');
+    // The build has hit points too. Rage halves a physical hit; a build with none left falls, and the fight is over.
+    const hurt = simSide(bb, 'act1', plain);
+    hurt.foe = foeOf({ bonus: 20, hits: [[['1d8', 6, 'Slashing']]] });
+    [fight, rolledTurns] = fightOf(hurt, 1);
+    eq([hurt.hp - fight.hp, rolledTurns[0].lines.filter((l) => l.kind === 'foe').map((l) => [l.hit, l.taken]), rolledTurns[0].total], [5.5, [[true, 5.5]], 24], '1d8 (5) + 6 = 11 Slashing, half while raging; what the build takes is not damage dealt');
+    hurt.foe = foeOf({ bonus: 20, damage: 500 });
+    [fight, rolledTurns] = fightOf(hurt, 1);
+    eq([fight.down, fight.hp <= 0], [1, true]);
+    const fallen = simFights(hurt, 0, 5);
+    eq([fallen.lost, fallen.main.avg], [1, 24], 'every fight ends in the first turn, with the 24 dealt before falling');
+    // Spike Growth hurts for every 1.5 m walked through it, and being Difficult Terrain it halves the distance.
+    const spikes = (() => { const d = dr0(); d.prepared = { Druid: ['Spike Growth'] }; return sideOf(finalStats(d, 'act1'), 'caster', plain, steps([{}, {}, {}, { a: 'Spike Growth' }])); })();
+    spikes.foe = foeOf({ attacks: 0, steps: 6 });
+    [fight, rolledTurns] = fightOf(spikes, 2);
+    eq([rolledTurns.map((x) => [x.total, x.lines.length]), fight.left.slots], [[[18, 3], [18, 3]], [4, 1]], 'six steps of movement are three inside the spikes: 3 × 2d4 (6), each turn, from one cast');
+    eq(spellDamage(st, { sp: SPELL_BY_NAME.get('wall of ice'), title: st.casting[0].label, ability: 'int', cls: 'Wizard' }, plain).recipe.later.map((p) => p.when), ['broken'], 'the cloud of Wall of Ice waits for the wall to be broken');
+    // Haste on the turn it is cast: its action is used, or left for the turn after, as the page is set.
+    const waiting = sideOf(finalStats(hw, 'act1'), 'caster', plain, steps([{ a: 'Haste' }, {}, {}, { a: 'weapon' }]));
+    waiting.hasteNow = false;
+    [fight, rolledTurns] = fightOf(waiting, 2);
+    eq(rolledTurns.map((x) => [x.name, x.total]), [['Haste', 0], ['Fire Bolt + Fire Bolt', 24]]);
+    // The reference enemies bring their melee attack from their page.
+    const owl = ENEMIES.find((e) => e.n === 'Owlbear').acts[0];
+    eq([owl.n, owl.b, owl.w, owl.hits], ['Multiattack (Owlbear)', 7, [['Proficiency', 2], ['STR', 5]], [[['2d8', 5, 'Slashing']], [['1d10', 5, 'Piercing']]]], 'claws and beak; the bonus with the parts it is worked out from');
+    const withActs = ENEMIES.filter((e) => e.acts);
+    ok(withActs.length >= 70 && withActs.every((e) => e.acts.every((a) => a.hits.length && a.hits.every((h) => h.every((c) => /^\d+d\d+$/.test(c[0]))) && (a.hits[0].length || a.cd) && (a.k !== 's' || (a.dc > 0 && a.sv)))),
+      'nearly all have something to do, with dice for every hit (or a condition to leave) and a DC for every save');
+    const acts = (name) => ENEMIES.find((e) => e.n === name).acts;
+    eq([acts('Sarevok Anchev')[0].n, !!acts('Sarevok Anchev')[0].g, acts('Sarevok Anchev').find((a) => a.n === 'Deathbringer Assault').c], ['Main Hand Attack (Sword of Chaos)', true, 1],
+      'Sarevok strikes with the sword of his loot, and says it is worked out; Deathbringer Assault waits for a condition');
+    const fireball = acts('Lorroakan').find((a) => a.n === 'Fireball');
+    eq([acts('Lorroakan')[0].n, fireball.k, fireball.sv, fireball.dc, fireball.os, fireball.sl, ENEMIES.find((e) => e.n === 'Lorroakan').rs[3]], ['Fire Bolt', 's', 'dex', 16, 0.5, 3, 3],
+      'a caster: the cantrip turn after turn, and Fireball with a save, a level 3 slot and the three slots he has');
+    // A spell of the enemy against the build's saving throw: Lorroakan's Fireball, 8d6 (32), on a Barbarian with Dexterity 14.
+    const burnt = simSide(bb, 'act1', plain);
+    // (in Balanced mode: from Tactician up, his attack rolls and save DCs are 2 higher)
+    state.ui.mode = 'balanced';
+    const lorroakan = ENEMIES.find((e) => e.n === 'Lorroakan');
+    burnt.foe = foeOf(Object.assign(foeMove(fireball, lorroakan), { slots: { 3: 1 }, fallback: foeMove(acts('Lorroakan')[0], lorroakan) }));
+    [fight, rolledTurns] = fightOf(burnt, 2);
+    eq([rolledTurns.map((x) => x.lines.filter((l) => l.kind === 'foe').map((l) => [l.how, l.mode, l.taken])), burnt.hp - fight.hp],
+      [[[['Fireball', 's', 32]], [['Fire Bolt', 'a', 18]]], 50], '11 + 2 fails DC 16: all of it, Fire being no damage Rage resists; with his one slot gone he goes on with Fire Bolt, which at his level 10 is 3d10 (18)');
+    // The difficulty: hit points of the mode, +2 to attack rolls and DCs from Tactician up, the actions of the mode.
+    const modes = (fn) => ['balanced', 'tactician', 'honour'].map((m) => { state.ui.mode = m; return fn(); });
+    const goblin = ENEMIES.find((e) => e.n === 'Goblin Warrior');
+    eq(modes(() => [enemyHp(goblin), enemyHp(lorroakan)]), [[15, 98], [19, 127], [23, 127]], 'the Honour hit points when the page has them, else the Tactician ones');
+    eq(modes(() => { const m = foeMove(fireball, lorroakan, 5); return [m.dc, m.slot, m.hits[0][0][0]]; }), [[16, 5, '10d6'], [18, 5, '10d6'], [18, 5, '10d6']], 'DC 16, and 18 from Tactician up; with a level 5 slot, 10d6');
+    eq(modes(() => foeMove(acts('Lorroakan')[0], lorroakan).bonus), [8, 10, 10]);
+    eq(modes(() => modeActs(ENEMIES.find((e) => e.n === 'Viconia DeVir')).some((a) => a.n === 'Dark Deliverance')), [false, false, true], 'an action of Honour mode only');
+    eq(modes(() => modeActs(ENEMIES.find((e) => e.n === 'Raphael')).filter((a) => !a.q && a.k !== 'e')[0].n), ['Multiattack (Raphael)', 'Multiattack (Raphael, tactician)', 'Multiattack (Raphael, tactician)'], 'the Tactician version takes the place of the plain one');
+    const yurgir = ENEMIES.find((e) => e.n === 'Yurgir');
+    const dror = ENEMIES.find((e) => e.n === 'Dror Ragzlin');
+    eq([yurgir.ea, modes(() => foeMove(dror.acts[0], dror).hits.length)], [[0, 1, 1], [2, 2, 2]], 'Extra Attack by mode; a Main Hand Attack is made once more for each');
+    state.ui.mode = 'balanced';
+    // A resistance of the build halves what it takes: a Tiefling and fire.
+    const tief = made(Array(5).fill('Barbarian'), { race: 'Tiefling', subrace: 'Asmodeus Tiefling', abilities: { str: 15, dex: 14, con: 15, int: 8, wis: 10, cha: 8 }, plus2: 'str', plus1: 'con' }, {}, { meleeMain: 'Greataxe' });
+    const warm = simSide(tief, 'act1', plain);
+    warm.foe = foeOf(foeMove(fireball));
+    eq([[...warm.resist.always], fightOf(warm, 1)[1][0].lines.filter((l) => l.kind === 'foe').map((l) => l.taken)], [['Fire'], [16]]);
+    // Evasion: nothing on a passed Dexterity save that would halve, half on a failed one. Rogue 7, DEX save +6.
+    const slippery = sideOf(finalStats(made(Array(7).fill('Rogue'), { abilities: { str: 8, dex: 15, con: 14, int: 10, wis: 14, cha: 10 }, plus2: 'dex', plus1: 'con' }, {}, { meleeMain: 'Dagger' }), 'act1'), 'melee', plain, steps([]));
+    slippery.foe = foeOf(foeMove(fireball, lorroakan));
+    const evaded = (dc) => { slippery.foe.dc = dc; return fightOf(slippery, 1)[1][0].lines.filter((l) => l.kind === 'foe').map((l) => [l.passed, l.taken]); };
+    eq([slippery.evasion, slippery.saves.dex, evaded(16), evaded(18)], [true, 6, [[true, 0]], [[false, 16]]]);
+    // What the enemy does with its bonus action, and healing itself: 3d6 (12) back of the damage dealt.
+    const salve = foeMove(ENEMIES.find((e) => e.n === 'Raphael').acts.find((a) => a.n === 'Infernal Salve'), null);
+    const mended = sideOf(fs, 'melee', plain, steps([]));
+    mended.foe = foeOf({ attacks: 0, extra: salve });
+    [fight, rolledTurns] = fightOf(mended, 2);
+    eq([salve.kind, rolledTurns.map((x) => x.total), fight.dealt, rolledTurns[1].lines.filter((l) => l.kind === 'foe').map((l) => l.healed)], ['e', [16, 16], 8, [12]], '16 dealt, 12 healed, 16 more, 12 healed again');
+    // Spells that only protect. Blade Ward: half of physical damage for two turns. Mirror Image: +9 to Armour Class, 3 less for each attack evaded.
+    const careful = made(Array(5).fill('Wizard'), { abilities: { str: 8, dex: 14, con: 14, int: 15, wis: 12, cha: 10 }, plus2: 'int', plus1: 'wis' }, { 1: 'Evocation School' }, {},
+      { 0: ['Cantrip: Fire Bolt', 'Cantrip: Blade Ward'], 2: ['Spell: Mirror Image'] });
+    const guarded = sideOf(finalStats(careful, 'act1'), 'caster', plain, steps([{ a: 'Blade Ward' }, {}, {}, { a: 'weapon' }]));
+    guarded.foe = foeOf({ bonus: 20 });
+    eq([guarded.wards.map((w) => w.name), fightOf(guarded, 3)[1].map((x) => x.lines.filter((l) => l.kind === 'foe').map((l) => l.taken))], [['Blade Ward', 'Mirror Image'], [[5], [5], [10]]]);
+    guarded.steps = steps([{ a: 'Mirror Image' }, {}, {}, { a: 'weapon' }]);
+    guarded.foe = foeOf({ attacks: 2, bonus: 5, damage: 3 });
+    [fight, rolledTurns] = fightOf(guarded, 3);
+    eq(rolledTurns.map((x) => x.lines.filter((l) => l.kind === 'foe').map((l) => [l.against, l.hit])), [[[21, false], [18, false]], [[15, true], [15, true]], [[15, true], [15, true]]],
+      'Armour Class 12 + 9: 11 + 5 misses twice, then against 15 it hits and no more duplicates are lost');
+    // The temporary list of things to check by hand.
+    const review = reviewItems();
+    ok(review.length > 20 && review.find((x) => x.key === 'enemy:The Netherbrain').points.some((p) => /set by hand/.test(p)) && review.find((x) => x.key === 'enemy:Sarevok Anchev').points.some((p) => /Sword of Chaos/.test(p)),
+      'every enemy with something worked out or left out is on it');
+    // Shield turns a hit into a miss when 5 more Armour Class is enough, and takes a level 1 slot and the reaction.
+    const sw = made(Array(5).fill('Wizard'), { abilities: { str: 8, dex: 14, con: 14, int: 15, wis: 12, cha: 10 }, plus2: 'int', plus1: 'wis' }, { 1: 'Evocation School' }, {}, { 0: ['Cantrip: Fire Bolt', 'Spell: Shield'] });
+    const warded = sideOf(finalStats(sw, 'act1'), 'caster', plain, steps([]));
+    Object.assign(warded, { react: 'Shield', foe: foeOf({ attacks: 2, bonus: 3 }) });
+    [fight, rolledTurns] = fightOf(warded, 1);
+    eq([warded.ac, rolledTurns[0].lines.filter((l) => l.kind === 'foe').map((l) => [l.hit, l.against]), fight.left.slots, warded.hp - fight.hp], [12, [[false, 17], [false, 17]], [3, 3, 2], 0],
+      '11 + 3 hits 12 but not 17: both attacks of the turn miss');
+    // Uncanny Dodge halves the first damage of the round.
+    const rg = made(Array(5).fill('Rogue'), { abilities: { str: 8, dex: 15, con: 14, int: 10, wis: 14, cha: 10 }, plus2: 'dex', plus1: 'con' }, {}, { meleeMain: 'Dagger' });
+    const nimble = sideOf(finalStats(rg, 'act1'), 'melee', plain, steps([]));
+    Object.assign(nimble, { react: 'Uncanny Dodge', foe: foeOf({ attacks: 2, bonus: 20 }) });
+    eq([nimble.dodge, fightOf(nimble, 1)[1][0].lines.filter((l) => l.kind === 'foe').map((l) => l.taken)], [true, [5, 10]]);
+    // Second Wind at half the hit points: the bonus action, 1d10 (6) + Fighter level, once a Short Rest.
+    const hardy = sideOf(finalStats(f, 'act1'), 'melee', plain, steps([]));
+    hardy.heal = healOptions(hardy.stats).find((o) => o.kind === 'wind');
+    hardy.foe = foeOf({ bonus: 20, damage: 30 });
+    const bout = newFight(hardy);
+    fightTurn(hardy, bout);
+    hardy.foe = foeOf({ attacks: 0 });
+    const after = fightTurn(hardy, bout);
+    eq([hardy.hp, hardy.heal.dice, hardy.heal.flat, hardy.hp - bout.hp, bout.left.wind, after.name], [49, '1d10', 5, 19, 0, 'Second Wind + Weapon attacks'], '49 hit points, 30 taken, 11 back');
+    ok(healOptions(hardy.stats).some((o) => o.name === 'Potion of Healing' && o.dice === '2d4' && o.flat === 2), 'potions drunk with the bonus action are on offer too');
+    // Wall of Ice: the wiki's notes fix its DCs, 15 for the wall and 16 (Constitution) for the cloud it leaves.
+    const ice = spellDamage(st, { sp: SPELL_BY_NAME.get('wall of ice'), title: st.casting[0].label, ability: 'int', cls: 'Wizard' }, plain);
+    eq([ice.recipe.save.dc, ice.recipe.laterSave.dc, ice.recipe.laterSave.key, /DC 15/.test(ice.how)], [15, 16, 'con', true], 'not the wizard\'s own DC of 14');
     // A spell that only answers the enemy, and a flat damage line: Armour of Agathys.
     state.ui.castLevel = 3;
     const agathys = spellDamage(st, { sp: SPELL_BY_NAME.get('armour of agathys'), title: st.casting[0].label, ability: 'int', cls: 'Wizard' }, plain);
@@ -1168,7 +1280,7 @@
     const rolled = Array.from({ length: 4000 }, () => simTurn(fs, 'melee', plain, '', null).total).reduce((a, x) => a + x, 0) / 4000;
     ok(Math.abs(rolled - 9.15) < 0.6, 'four thousand turns rolled average what was worked out: ' + rolled.toFixed(2) + ' against 9.15');
     Object.assign(state.ui, kept);
-    ok(ENEMIES.length > 20 && ENEMIES.every((e) => e.ac > 9 && e.hp.b > 0 && e.act >= 1 && e.act <= 3), 'the reference enemies carry their numbers');
+    ok(ENEMIES.length > 75 && ENEMIES.every((e) => e.ac > 5 && e.hp.b > 0 && e.act >= 1 && e.act <= 3) && ENEMIES.filter((e) => e.ty).length > 75, 'the reference enemies carry their numbers, and the kind of creature they are');
     // the two fights that are a puzzle first, in the state where damage counts
     const grym = enemy('Grym (Superheated)');
     eq([typeFactor(grym, 'Bludgeoning', false), typeFactor(grym, 'Slashing', true), typeFactor(grym, 'Fire', true), typeFactor(grym, 'Force', true)], [2, 0.5, 0, 0.5]);
@@ -1176,6 +1288,247 @@
     eq([enemy('Gerringothe Thorm').enemy.hp.b, /Coin Armour/.test(enemy('Gerringothe Thorm').enemy.note)], [606, true]);
     eq([enemy('Balthazar').ac, /Mage Armour \(13 \+ Dexterity modifier\)/.test(enemy('Balthazar').enemy.note)], [15, true], 'no Armour Class on his page: 13 from Mage Armour + Dexterity 14');
     eq([typeFactor({ res: { Fire: 'rm' } }, 'Fire', true), typeFactor({ res: { Fire: 'rm' } }, 'Fire', false), typeFactor({ res: { Fire: 'ip' } }, 'Fire', true), typeFactor({ res: { Fire: 'ip' } }, 'Fire', false)], [0.5, 1, 0.5, 0]);
+  });
+
+  test('the damage test plays hits, conditions, Initiative, parties and several enemies', () => {
+    const kept = Object.assign({}, state.ui);
+    Object.assign(state.ui, { mode: 'honour', castLevel: 0, targets: 1, target: '' });
+    const made = (classes, creation, subs, gear, picks) => {
+      const b = build(classes, Object.assign({ race: 'Human', background: 'Soldier' }, creation));
+      Object.keys(subs || {}).forEach((i) => { b.levels[i].sub = subs[i]; });
+      Object.keys(gear || {}).forEach((k) => { b.gear.act1.slots[k].name = gear[k]; });
+      Object.keys(picks || {}).forEach((i) => { b.levels[i].picks = picks[i]; });
+      return b;
+    };
+    const saves = (n) => ({ str: n, dex: n, con: n, int: n, wis: n, cha: n });
+    const plain = { name: '', ac: 16, saves: saves(3), res: {} };
+    const weak = { name: '', ac: 16, saves: saves(0), res: {} };
+    const steps = (list) => [0, 1, 2, 3].map((i) => Object.assign({ a: '', q: '', x: '' }, list[i]));
+    const foeOf = (more) => Object.assign({ name: '', label: '', kind: 'a', melee: true, attacks: 1, bonus: 5, dc: 0, sv: '', os: 0, hits: null, damage: 10, steps: 0, broken: false, slot: 0, uses: 0, slots: null, fallback: null, parts: [] }, more);
+    const fightOf = (side, turns) => { const fight = newFight(side); return [fight, Array.from({ length: turns }, () => fightTurn(side, fight))]; };
+    const str = { abilities: { str: 15, dex: 14, con: 15, int: 8, wis: 10, cha: 8 }, plus2: 'str', plus1: 'con' };
+    const dex = { abilities: { str: 8, dex: 15, con: 14, int: 10, wis: 14, cha: 10 }, plus2: 'dex', plus1: 'con' };
+    const realRandom = simRandom;
+    simRandom = () => 0.5;  // every d20 an 11, every die its upper middle
+    let fight;
+    let turns;
+
+    // The conditions come from their pages on the wiki, as flags.
+    eq([CONDITIONS.Prone.f.adv, CONDITIONS.Prone.f.near, CONDITIONS.Stunned.f.skip, CONDITIONS.Paralysed.f.crit, CONDITIONS.Frightened.f.dis, CONDITIONS.Frightened.f.src, CONDITIONS.Blinded.f.dis, CONDITIONS['Hold Person'].f.rep],
+      [1, 1, 1, 1, 1, 1, 1, 'wis'], 'Prone, Stunned, Paralysed, Frightened, Blinded, and the save Hold Person repeats');
+    // Frightened counts down on the turn of whoever caused it: two turns of it are gone after the source's second turn.
+    const source = { conds: [] };
+    const victim = { conds: [] };
+    addCond(victim, 'Frightened', 2, source);
+    condEnd(victim, () => 0, () => {}, []);
+    condEnd(source, () => 0, () => {}, [victim]);
+    eq(victim.conds.map((c) => c.left), [1]);
+    condEnd(source, () => 0, () => {}, [victim]);
+    eq(victim.conds.length, 0);
+
+    // Sneak Attack rides on the first attack that hits, once a turn: not on the off-hand attack that follows.
+    const rogue = made(Array(5).fill('Rogue'), dex, {}, { meleeMain: 'Dagger', meleeOff: 'Dagger' });
+    rogue.active = ['sneak'];
+    const sneaky = sideOf(finalStats(rogue, 'act1'), 'melee', plain, steps([]));
+    const once = turnPlan(sneaky.stats, 'melee', plain).once;
+    ok(once && once.dice === '3d6' && Math.abs(once.total - 9.135) < 0.01, 'on average: 3d6 on the first of two attacks to hit, 0.6 × 10.5 + 0.45 × 0.6 × 10.5; got ' + (once && once.total));
+    [fight, turns] = fightOf(sneaky, 1);
+    eq([turns[0].lines.map((l) => !!l.turnDice), turns[0].lines[0].damage - turns[0].lines[1].damage >= 12], [[true, false], true], 'the dice are on the first hit only');
+
+    // Divine Smite: a spell slot on a melee hit, the highest left first; 2d8, one more d8 a level, 5d8 at most.
+    const paladin = made(Array(5).fill('Paladin'), str, {}, { meleeMain: 'Longsword', meleeOff: 'Studded Shield' });
+    const holy = sideOf(finalStats(paladin, 'act1'), 'melee', plain, steps([]));
+    ok(holy.stats.gains.includes('Divine Smite'), 'a Paladin of level 5 has Divine Smite');
+    state.ui.target = 'Yurgir';
+    const fiend = targetOf();
+    state.ui.target = '';
+    eq([smiteDice(holy.stats, plain, 1), smiteDice(holy.stats, plain, 2), smiteDice(holy.stats, plain, 6), smiteDice(holy.stats, fiend, 1), smiteDice(sneaky.stats, plain, 1)], ['2d8', '3d8', '5d8', '3d8', ''],
+      'and one more against a Fiend; a Rogue has none');
+    const bare = fightOf(holy, 1)[1][0].total;
+    holy.smite = { when: 'all', low: false };
+    [fight, turns] = fightOf(holy, 1);
+    eq([turns[0].total - bare, fight.left.slots], [30, [4, 0]], 'two hits, each with a level 2 slot: 3d8 (15) more');
+    holy.smite = { when: 'crit', low: true };
+    eq(fightOf(holy, 1)[1][0].total, bare, 'kept for critical hits: none here');
+
+    // Trip Attack: the Superiority Die on the damage, and Prone on a failed Strength save, which gives Advantage.
+    const bm = made(Array(5).fill('Fighter'), str, { 2: 'Battle Master' }, { chest: 'Chain Mail', meleeMain: 'Longsword', meleeOff: 'Studded Shield' },
+      { 0: ['Fighting Style: Defence'], 2: ['Manoeuvre: Riposte', 'Manoeuvre: Trip Attack', 'Manoeuvre: Precision Attack'] });
+    const tripper = sideOf(finalStats(bm, 'act1'), 'melee', weak, steps([]));
+    eq([tripper.weaponDc, tripper.die], [14, '1d8'], 'weapon action DC: 8 + 3 + 3');
+    tripper.hit = { name: 'Trip Attack', every: false };
+    [fight, turns] = fightOf(tripper, 1);
+    eq([turns[0].lines.map((l) => l.kind), turns[0].lines[1].passed, fight.left.dice, turns[0].notes.some((n) => /Prone/.test(n)), turns[0].lines[0].damage - turns[0].lines[2].damage],
+      [['attack', 'save', 'attack'], false, 3, true, 5], 'one die a turn: 1d8 (5) on the first hit, 11 + 0 against DC 14 fails');
+    tripper.hit = { name: 'Precision Attack', every: false };
+    [fight, turns] = fightOf(tripper, 1);
+    eq([turns[0].lines.map((l) => l.bonus), fight.left.dice], [[11, 6], 3], 'Precision Attack: 1d8 (5) on the first attack roll');
+
+    // Stunning Strike: a Ki Point on a hit; a Stunned enemy loses its turn.
+    const monk = made(Array(5).fill('Monk'), { abilities: { str: 8, dex: 15, con: 14, int: 10, wis: 15, cha: 8 }, plus2: 'dex', plus1: 'wis' });
+    const fist = sideOf(finalStats(monk, 'act1'), 'unarmed', weak, steps([]));
+    fist.foe = foeOf({ bonus: 20 });
+    const struck = fightOf(fist, 1)[1][0].lines.filter((l) => l.kind === 'foe').length;
+    fist.hit = { name: 'Stunning Strike', every: false };
+    [fight, turns] = fightOf(fist, 1);
+    eq([struck, turns[0].lines.filter((l) => l.kind === 'foe').length, turns[0].notes.some((n) => /Stunned: no action/.test(n))], [1, 0, true], 'the enemy that would have struck does nothing');
+
+    // A spell that only leaves a condition: Hold Person, held by Concentration.
+    const mage = made(Array(5).fill('Wizard'), { abilities: { str: 8, dex: 14, con: 14, int: 15, wis: 12, cha: 10 }, plus2: 'int', plus1: 'wis' }, { 1: 'Evocation School' }, {},
+      { 0: ['Cantrip: Fire Bolt', 'Spell: Magic Missile'], 2: ['Spell: Hold Person'], 4: ['Spell: Fireball'] });
+    const holder = sideOf(finalStats(mage, 'act1'), 'caster', weak, steps([{ a: 'Hold Person' }, {}, {}, { a: 'Fire Bolt' }]));
+    holder.foe = foeOf({ bonus: 20 });
+    eq(holder.controls.map((c) => [c.name, c.key, c.dc]), [['Hold Person', 'wis', 14]]);
+    [fight, turns] = fightOf(holder, 2);
+    eq([turns[0].name, fight.enc.foes[0].conds.map((c) => c.name), fight.effects.some((e) => e.kind === 'hold' && e.conc), turns.map((x) => x.lines.filter((l) => l.kind === 'foe').length), fight.left.slots[1]],
+      ['Hold Person', ['Hold Person'], true, [0, 0], 2], 'the enemy fails its save and the one it repeats, and does not act');
+    state.ui.target = 'Owlbear';
+    const beast = targetOf();
+    state.ui.target = '';
+    const wrong = sideOf(finalStats(mage, 'act1'), 'caster', beast, steps([{ a: 'Hold Person' }, {}, {}, { a: 'Fire Bolt' }]));
+    [fight, turns] = fightOf(wrong, 1);
+    eq([turns[0].name, fight.left.slots[1]], ['Fire Bolt', 3], 'Hold Person is for Humanoids: it is not cast on a Beast, and no slot is spent');
+
+    // A fight in rounds: who acts first, and who is Surprised.
+    const fighter = made(Array(5).fill('Fighter'), str, { 2: 'Champion' }, { chest: 'Chain Mail', meleeMain: 'Longsword', meleeOff: 'Studded Shield' }, { 0: ['Fighting Style: Defence'] });
+    const sword = () => sideOf(finalStats(fighter, 'act1'), 'melee', plain, steps([]));
+    const brute = () => foeState(foeOf({ bonus: 20, damage: 5 }), plain, 0);
+    let enc = newEncounter([sword()], [brute()], { first: 'foes' });
+    let round = encRound(enc);
+    eq([round.entries.map((e) => e.kind), enc.fights[0].hp], [['foe', 'side'], 44], 'the enemy first, when the page says so');
+    enc = newEncounter([sword()], [brute()], { first: 'roll' });
+    encRound(enc);
+    eq(enc.init.map((x) => [x.kind, x.total]), [['side', 5], ['foe', 3]], 'Initiative: d4 (3) + 2 for the build, + 0 for an enemy with no page');
+    enc = newEncounter([sword()], [brute()], { first: 'party', surprise: 'foes' });
+    eq([encRound(enc).entries.map((e) => e.lines.filter((l) => l.kind === 'foe').length), encRound(enc).entries.map((e) => e.lines.filter((l) => l.kind === 'foe').length)], [[0, 0], [0, 1]],
+      'a Surprised enemy does nothing in the first round');
+    enc = newEncounter([sword()], [brute()], { first: 'foes', surprise: 'party' });
+    eq(encRound(enc).entries.map((e) => e.lines.length), [1, 0], 'a Surprised build takes no action in the first round');
+
+    // A party: both members act, the enemy goes for the first, and Bless reaches the other member.
+    const cleric = made(['Cleric'], { abilities: { str: 14, dex: 10, con: 14, int: 8, wis: 15, cha: 10 }, plus2: 'wis', plus1: 'con' }, { 0: 'Life Domain' }, { meleeMain: 'Mace' });
+    cleric.prepared = { Cleric: ['Bless'] };
+    const priest = Object.assign(sideOf(finalStats(cleric, 'act1'), 'melee', plain, steps([{ a: 'Bless' }, {}, {}, { a: 'weapon' }])), { name: 'Priest' });
+    ok(priest.bless, 'the cleric can cast Bless');
+    enc = newEncounter([priest, Object.assign(sword(), { name: 'Sword' })], [brute()], { first: 'party', aim: 'first' });
+    round = encRound(enc);
+    eq([round.entries.map((e) => e.name), round.entries[1].lines.map((l) => l.bonus), enc.fights.map((x) => x.hp < enc.sides[enc.fights.indexOf(x)].hp), enc.fights[0].effects.map((e) => [e.kind, e.to])],
+      [['Bless', 'Weapon attacks', ''], [9, 9], [true, false], [['bless', [0, 1]]]], 'the fighter rolls 6 + 1d4 (3); the enemy strikes the first member');
+
+    // Several enemies: a spell with an area is rolled against each; an attack moves on when its target falls.
+    const blaster = () => sideOf(finalStats(mage, 'act1'), 'caster', plain, steps([{}, {}, {}, { a: 'Fireball' }]));
+    const dummy = (hp, name) => Object.assign(foeState(foeOf({ attacks: 0 }), plain, hp), { name });
+    enc = newEncounter([blaster()], [dummy(100, 'A'), dummy(100, 'B'), dummy(100, 'C')], { first: 'party' });
+    round = encRound(enc);
+    eq([round.entries[0].lines.map((l) => [l.to, l.damage]), enc.foes.map((x) => x.dealt)], [[['A', 16], ['B', 16], ['C', 16]], [16, 16, 16]], 'Fireball: 8d6 (32), halved on a passed save, on each of the three');
+    enc = newEncounter([sword()], [dummy(5, 'A'), dummy(5, 'B')], { first: 'party' });
+    round = encRound(enc);
+    eq([round.entries[0].lines.map((l) => l.to), encWon(enc), enc.foes.map((x) => x.dead)], [['A', 'B'], true, [1, 1]], 'the second attack goes to the enemy still standing');
+    enc = newEncounter([sword()], [dummy(100, 'A'), dummy(5, 'B')], { first: 'party', focus: 'helpers' });
+    eq(encRound(enc).entries[0].lines.map((l) => l.to), ['B', 'A'], 'the helpers first, when the page says so');
+
+    // An enemy answers a hit once a round: Yurgir's Legendary Action of Honour mode, which may leave the build Blinded.
+    const yurgir = ENEMIES.find((e) => e.n === 'Yurgir');
+    eq([['balanced', 'honour'].map((m) => { state.ui.mode = m; return foeAnswers(yurgir).map((a) => a.label); }), foeAnswers(yurgir).find((a) => a.melee).cd], [[[], ['Blinding Ambush (ranged)', 'Blinding Ambush']],
+      { name: 'Blinded', turns: 2, sv: 'con', dc: 17 }], 'only in Honour mode; the save DC of its page + 2');
+    const hunted = sword();
+    hunted.foe = Object.assign(foeOf({ attacks: 0 }), { rx: foeAnswers(yurgir) });
+    [fight, turns] = fightOf(hunted, 1);
+    let answers = turns[0].lines.filter((l) => l.kind === 'foe');
+    eq([answers.length, /Blinding Ambush · Legendary Action/.test(answers[0].how), answers[0].taken, answers[1].passed, fight.conds.map((c) => c.name)], [2, true, 30, true, []],
+      'one answer for the two hits: 5d10 (30) Radiant, then the save against Blinded, 11 + 6 against DC 17');
+    hunted.foe.rx.forEach((a) => { a.cd.dc = 18; });
+    [fight, turns] = fightOf(hunted, 1);
+    answers = turns[0].lines.filter((l) => l.kind === 'foe');
+    eq([answers[1].passed, fight.conds.map((c) => [c.name, c.left]), turns[0].lines.filter((l) => l.kind === 'attack').length], [false, [['Blinded', 1]], 2], 'a failed save: Blinded for 2 turns, one of them gone with this turn');
+
+    // Arrows, coatings and elixirs, read from their text.
+    const item = (n) => CONSUMABLE_BY_NAME.get(norm(n));
+    eq([arrowFx(item('Arrow of Fire')), arrowFx(item('Arrow of Undead Slaying')), arrowFx(item('Smokepowder Arrow')).save, arrowFx(item('Arrow of Darkness'))],
+      [{ extra: ['2d4', 'Fire'], save: { key: 'dex', dc: 12 }, kept: 0 }, { double: 'Undead' }, { key: 'dex', dc: 15 }, null]);
+    eq([coatFx(item('Drow Poison')), coatFx(item('Diluted Oil of Sharpness')).attack, coatFx(item('Wyvern Toxin')).later], [{ save: { key: 'con', dc: 13 }, conds: ['Poisoned', 'Sleeping'] }, 1, ['1d8', 'Poison']]);
+    const archer = made(Array(5).fill('Ranger'), dex, {}, { rangedMain: 'Longbow' });
+    const bow = sideOf(finalStats(archer, 'act1'), 'ranged', plain, steps([]));
+    bow.arrow = { name: 'Arrow of Fire', fx: arrowFx(item('Arrow of Fire')), n: 1 };
+    [fight, turns] = fightOf(bow, 1);
+    eq([turns[0].lines.map((l) => l.kind), fight.left.arrows], [['attack', 'save', 'attack'], 0], 'the one arrow carried goes with the first attack; the enemy saves against its burst');
+    fighter.elixir = 'Elixir of Bloodlust';
+    const thirsty = sword();
+    eq([thirsty.brew.blood, elixirFx(Object.assign({}, thirsty.stats, { build: Object.assign({}, fighter, { elixir: 'Elixir of Heroism' }) })).temp,
+      simResources(Object.assign({}, holder.stats, { build: Object.assign({}, mage, { elixir: 'Elixir of Arcane Cultivation' }) })).slots[0] - simResources(holder.stats).slots[0]], [5, 10, 1]);
+    enc = newEncounter([thirsty], [dummy(5, 'A'), dummy(100, 'B')], { first: 'party' });
+    round = encRound(enc);
+    eq([round.entries[0].lines.length, enc.fights[0].temp], [4, 5], 'Bloodlust: a kill gives one more action, two attacks more, and 5 temporary hit points');
+    fighter.elixir = '';
+
+    // The manoeuvres that are not about one hit, and what a party does for its own.
+    eq([CONDITIONS.Goaded.f.dis, CONDITIONS.Distracted.f.ally, CONDITIONS.Distracted.f.once, CONDITIONS['Evasive Footwork'].f.guard], [1, 1, 1, 1], 'Goaded, Distracted and Evasive Footwork, from their pages');
+    const captain = made(Array(5).fill('Fighter'), str, { 2: 'Battle Master' }, { chest: 'Chain Mail', meleeMain: 'Longsword', meleeOff: 'Studded Shield' },
+      { 0: ['Fighting Style: Defence'], 2: ['Manoeuvre: Distracting Strike', 'Manoeuvre: Sweeping Attack', 'Manoeuvre: Rally'] });
+    const lead = (more, plan) => Object.assign(sideOf(finalStats(captain, 'act1'), 'melee', plain, steps(plan || [])), { name: 'Captain' }, more);
+    const mate = () => Object.assign(sword(), { name: 'Sword', b: fighter });
+    // Distracting Strike: the next attack roll of an ally has Advantage; the fighter's own does not spend it.
+    enc = newEncounter([lead({ hit: { name: 'Distracting Strike', every: false } }), mate()], [dummy(1000, 'A')], { first: 'party' });
+    enc.round = 1;
+    buildTurn(enc, 0);
+    eq([enc.foes[0].conds.map((c) => c.name), enc.fights[0].left.dice], [['Distracted'], 3]);
+    buildTurn(enc, 1);
+    eq(enc.foes[0].conds.length, 0, 'spent by the ally\'s first attack');
+    // Sweeping Attack: one attack on every enemy for the Superiority Die alone, then the rest of the Attack action.
+    enc = newEncounter([lead({}, [{}, {}, {}, { a: 'Sweeping Attack' }])], [dummy(100, 'A'), dummy(100, 'B'), dummy(100, 'C')], { first: 'party' });
+    round = encRound(enc);
+    eq([round.entries[0].lines.map((l) => [l.name, l.to, l.damage]), enc.fights[0].left.dice], [[['Sweeping Attack', 'A', 5], ['Sweeping Attack', 'B', 5], ['Sweeping Attack', 'C', 5], ['Longsword', 'A', 8]], 3],
+      '1d8 (5) on each, with nothing added; the second attack of the action follows');
+    // A member at 0 hit points is Downed. Rally brings it back with the bonus action; Help, with the action.
+    const felled = (more) => { const e = newEncounter([lead(more), mate()], [dummy(1000, 'A')], { first: 'party' }); e.round = 1; Object.assign(e.fights[1], { hp: -4, down: 1, fell: true, death: { ok: 0, bad: 0 } }); return e; };
+    enc = felled({ rally: true });
+    let mine = buildTurn(enc, 0);
+    eq([mine.name, enc.fights[1].hp, enc.fights[1].temp, enc.fights[1].down, enc.fights[0].left.dice, mine.lines.length], ['Rally + Weapon attacks', 1, 8, 0, 3, 2], 'back at 1 hit point, with 8 temporary ones; the action is still there');
+    enc = felled({ helps: true });
+    mine = buildTurn(enc, 0);
+    eq([mine.name, enc.fights[1].hp, enc.fights[1].down, mine.lines.length], ['Help', 1, 0, 0], 'the action goes to the ally');
+    enc = felled({});
+    eq([[1, 2, 3, 4].map(() => { const e = downedTurn(enc, 1); return e ? enc.fights[1].death.ok : null; }), enc.fights[1].dead], [[1, 2, 3, null], false], 'death saving throws: three of 11 and it is Stable');
+    simRandom = () => 0;
+    enc = felled({});
+    [1, 2, 3].forEach(() => downedTurn(enc, 1));
+    eq([enc.fights[1].dead, buildTurn(enc, 1), encLost(enc)], [true, null, false], 'three failed and it is dead; the party is not lost while one stands');
+    simRandom = () => 0.5;
+    // Commander's Strike: one attack and the bonus action of the fighter, for an attack of the ally with the die on it.
+    const marshal = made(Array(5).fill('Fighter'), str, { 2: 'Battle Master' }, { chest: 'Chain Mail', meleeMain: 'Longsword', meleeOff: 'Studded Shield' },
+      { 0: ['Fighting Style: Defence'], 2: ['Manoeuvre: Commander\'s Strike', 'Manoeuvre: Evasive Footwork', 'Manoeuvre: Goading Attack'] });
+    const order = (more) => Object.assign(sideOf(finalStats(marshal, 'act1'), 'melee', plain, steps([])), { name: 'Marshal' }, more);
+    enc = newEncounter([order({ cmd: fighter.id }), mate()], [dummy(1000, 'A')], { first: 'party' });
+    round = encRound(enc);
+    eq([round.entries.map((e) => e.lines.map((l) => l.how)), round.entries[1].lines[2].damage - round.entries[1].lines[0].damage, enc.fights[0].left.dice],
+      [[['Attack action'], ['Attack action', 'Attack action', 'Commander\'s Strike']], 5, 3], 'the fighter attacks once; the ally, three times, the third with 1d8 (5) more');
+    // Evasive Footwork takes a die each turn; Goading Attack leaves the enemy Goaded when it fails its save.
+    enc = newEncounter([order({ foot: true, hit: { name: 'Goading Attack', every: false } })], [Object.assign(foeState(foeOf({ attacks: 0 }), weak, 1000), { name: 'A' })], { first: 'party' });
+    enc.round = 1;
+    mine = buildTurn(enc, 0);
+    eq([enc.fights[0].left.dice, mine.notes.some((n) => /Evasive Footwork/.test(n)), enc.foes[0].conds.map((c) => c.name)], [2, true, ['Goaded']]);
+    // Where a member stands: a melee attack goes for whoever is next to the enemy, though the archer is first in the party.
+    enc = newEncounter([Object.assign(sideOf(finalStats(archer, 'act1'), 'ranged', plain, steps([])), { name: 'Bow' }), mate()], [brute()], { first: 'party', aim: 'first' });
+    encRound(enc);
+    eq([enc.sides.map((x) => x.front), enc.fights.map((x, k) => x.hp < enc.sides[k].hp)], [[false, true], [false, true]]);
+    // Sneak Attack needs Advantage, or an ally next to the target: alone, the page says whether one is there.
+    const alone = (ally) => encRound(newEncounter([sideOf(finalStats(rogue, 'act1'), 'melee', plain, steps([]))], [dummy(1000, 'A')], { first: 'party', ally })).entries[0].lines.map((l) => !!l.turnDice);
+    eq([alone(true), alone(false)], [[true, false], [false, false]]);
+    // Arcane Acuity: the Elixir of Battlemage's Power keeps it at 3, on spell attack rolls and on the save DC.
+    const plainBolt = fightOf(sideOf(finalStats(mage, 'act1'), 'caster', plain, steps([{}, {}, {}, { a: 'Fire Bolt' }])), 1)[1][0].lines[0].bonus;
+    mage.elixir = 'Elixir of Battlemage\'s Power';
+    const sharp = (spell) => sideOf(finalStats(mage, 'act1'), 'caster', plain, steps([{}, {}, {}, { a: spell }]));
+    eq([sharp('Fire Bolt').acu.floor, fightOf(sharp('Fire Bolt'), 1)[1][0].lines[0].bonus - plainBolt, fightOf(sharp('Fireball'), 1)[1][0].lines[0].against], [3, 3, 17], '+3 to hit, and DC 14 + 3');
+    mage.elixir = '';
+    // A helper may have its action chosen, like the main enemy.
+    eq([simFoe(enemyTarget(yurgir), true).label, simFoe(enemyTarget(yurgir), { foeAct: 'Infernal Dagger' }).label, simFoe(enemyTarget(yurgir), { foeAct: 'none' }).attacks], ['Concussive Burst', 'Infernal Dagger', 0]);
+
+    // Many fights of a setup, with the numbers of each kept for the chart.
+    simRandom = realRandom;
+    const many = encFights(() => newEncounter([sword()], [Object.assign(foeState(foeOf({ bonus: 5, damage: 4 }), plain, 60), { name: 'A' })], {}), 40);
+    ok(many.perRound.length === 40 && many.rounds.length + Math.round(many.lost * 40) === 40 && many.members.length === 1 && many.main.avg > 3, 'forty fights against 60 hit points: ' + JSON.stringify(many.main));
+    Object.keys(state.ui).forEach((k) => { if (!(k in kept)) delete state.ui[k]; });
+    Object.assign(state.ui, kept);
   });
 
   test('only the choices a level grants count: the rest finds its place or becomes a note', () => {
@@ -1616,8 +1969,9 @@
     await click(q('.pslot[data-act="enemy-open"]'), 'enemy');
     await pick('Raphael');
     ok(/Raphael/.test(q('.turn').textContent) && /AC 21/.test(q('.enemy-line').textContent) && shown() < base * 2, 'the numbers are now against Raphael: harder to hit, and a common sword is resisted');
-    await click(q('[data-act="honour-toggle"]'), 'rules');
-    eq(state.ui.honour, false);
+    await click(q('[data-act="mode"][data-k="balanced"]'), 'difficulty');
+    eq([state.ui.mode, honourMode()], ['balanced', false]);
+    state.ui.mode = 'honour';
     // a caster: the slot its spells are cast with
     const w = build(Array(5).fill('Wizard'), { race: 'Human', background: 'Sage', abilities: { str: 8, dex: 14, con: 14, int: 15, wis: 12, cha: 10 }, plus2: 'int', plus1: 'wis' });
     w.levels[0].picks = ['Cantrip: Fire Bolt', 'Spell: Magic Missile'];
@@ -1641,7 +1995,7 @@
     b.levels[0].picks = ['Fighting Style: Defence'];
     b.levels[2].sub = 'Champion';
     b.gear.act1.slots.meleeMain.name = 'Longsword';
-    Object.assign(state.ui, { act: 'act1', target: '', targetAc: 16, simAction: '', honour: true });
+    Object.assign(state.ui, { act: 'act1', target: '', targetAc: 16, simAction: '', mode: 'honour' });
     show(b);
     await click(q('#tabs [data-tab="items"][data-kind="ring"]'), 'Items › Ring');
     eq([state.ui.tab, lib.items.kind, all('#lib-results .lib-card').length > 0, q('#tabs .nav-menu button.on').textContent], ['items', 'ring', true, 'Ring']);
@@ -1654,29 +2008,85 @@
     await click(q('.hub-card [data-act="build-select"]'), 'a build of the list');
     eq([state.ui.tab, q('#tabs .nav-top.on').textContent.replace('▾', '')], ['builds', 'Builds']);
     await click(q('#tabs [data-tab="damage"]'), 'Damage test');
+    eq([all('.sim-tabs button').length, q('.sim-tabs button.on').dataset.k, !!q('[data-act="sim-party-open"]')], [4, 'build', true], 'four steps; the first says who fights');
+    await click(q('.sim-tabs [data-k="enemy"]'), 'the enemy');
+    ok(q('.foe-tools [data-ui="foeAttacks"]') && q('[data-act="sim-set"][data-k="simFirst"]') && !q('[data-act="helper-open"]'), 'what the enemy does can be set; helpers wait for a reference enemy');
+    await click(q('[data-act="sim-set"][data-k="simFirst"][data-v="party"]'), 'the build acts first');
+    await click(q('.sim-tabs [data-k="plan"]'), 'the plan');
     ok(Math.abs(Number(q('.sim .turn b').textContent) - 10.45) < 0.06, 'the expected average of the turn, the Longsword held in both hands: 2 × (0.55 × 8.5 + 0.1 × 5.5); shown ' + q('.sim .turn b').textContent);
-    await click(q('[data-act="sim-roll"][data-n="10"]'), 'roll 10 turns');
-    eq([all('.sim-turn').length, all('.sim-turn li').length], [10, 20], 'ten turns of two attacks each');
     eq(all('.sim-step .pslot').map((x) => x.querySelector('b').textContent), [...Array(9).fill('as from turn 4 on'), 'Weapon attacks', 'The same as the action', 'The best it has'],
       'the plan: three turns that follow the last, which goes to the weapon; a Fighter of level 2 and up has Action Surge, so the action on top is there');
-    ok(q('.foe-tools [data-ui="foeAttacks"]') && !q('[data-act="sim-react-open"]'), 'what the enemy does can be set; this build has no reaction to choose');
+    ok(!q('[data-act="sim-react-open"]') && !q('[data-act="sim-smite-open"]') && !q('[data-act="sim-hit-open"]'), 'this build has no reaction, smite or manoeuvre to choose');
+    await click(q('.sim-tabs [data-k="result"]'), 'the result');
+    await click(q('[data-act="sim-roll"][data-n="10"]'), 'roll 10 rounds');
+    eq([all('.sim-round').length, all('.sim-turn').length, all('.sim-turn li').length], [10, 10, 20], 'ten rounds of two attacks each; an enemy that does nothing has no turn to show');
+    await click(q('.sim-tabs [data-k="plan"]'), 'the plan');
     await click(q('.sim-step .pslot[data-i="0"][data-f="a"]'), 'the action of turn 1');
     await pick('Nothing');
     eq(state.ui.simPlans[b.id][0].a, 'none');
-    await click(q('[data-act="sim-roll"][data-n="1"]'), 'roll a turn');
+    await click(q('.sim-tabs [data-k="result"]'), 'the result');
+    await click(q('[data-act="sim-roll"][data-n="1"]'), 'roll a round');
     eq([all('.sim-turn').length, all('.sim-turn li').length], [1, 0], 'nothing in the first turn, as planned');
     await click(q('[data-act="sim-fights"]'), 'many fights');
-    ok(all('.sim-many tbody tr').length === 3 && all('.sim-many thead th').length === 2, 'the table of the fights rolled, one side');
+    ok(all('.sim-many tbody tr').length === 4 && all('.sim-many thead th').length === 2 && all('.chart').length === 2 && all('.chart .bar').length > 1, 'the table of the fights rolled, one side, and the two charts');
     state.ui.simPlans = {};
+    // a scenario keeps the setup by name
+    q('[data-sim="sceneName"]').value = 'Fighter test';
+    q('[data-sim="sceneName"]').dispatchEvent(new Event('input', { bubbles: true }));
+    await click(q('[data-act="scene-save"]'), 'save the scenario');
+    eq([state.ui.scenes.map((x) => x.name), state.ui.scenes[0].ui.simFirst, q('.pslot[data-act="scene-open"] b').textContent], [['Fighter test'], 'party', 'Fighter test']);
+    await click(q('.sim-tabs [data-k="enemy"]'), 'the enemy');
     await click(q('.pslot[data-act="enemy-open"]'), 'enemy');
     await pick('Goblin Warrior');
+    ok(q('[data-act="helper-open"]'), 'a reference enemy can have helpers');
+    await click(q('[data-act="helper-open"][data-i="0"]'), 'a helper');
+    await pick('Worg');
+    eq([state.ui.help0, sim.enc.foes.map((x) => x.name)], ['Worg', ['Goblin Warrior', 'Worg']]);
+    await click(q('.sim-tabs [data-k="result"]'), 'the result');
     eq(all('.sim-turn').length, 0, 'another enemy starts the test over');
-    await click(q('[data-act="sim-roll"][data-n="kill"]'), 'until it falls');
-    ok(q('.sim-down') && q('[data-act="sim-roll"]').disabled && q('.hpbar.down'), 'the goblin falls and the rolling stops');
+    await click(q('[data-act="sim-roll"][data-n="kill"]'), 'until it is over');
+    ok(q('.sim-down') && q('[data-act="sim-roll"]').disabled && q('.hpbar.down') && all('.hpbar').length >= 3, 'the fight ends and the rolling stops; a bar for each enemy and for the build');
     await click(q('[data-act="sim-reset"]'), 'start over');
     ok(!q('.sim-down') && !all('.sim-turn').length);
+    await click(q('.pslot[data-act="scene-open"]'), 'scenario');
+    await pick('Fighter test');
+    eq([state.ui.target, state.ui.help0, state.ui.simFirst], ['', undefined, 'party'], 'the scenario brings its enemy back');
+    // the temporary list of things to check: a tick and a note for each entry
+    await click(q('#tabs [data-tab="review"]'), 'To check');
+    const note = q('.review-note textarea');
+    note.value = 'seen in game';
+    note.dispatchEvent(new Event('input', { bubbles: true }));
+    eq([state.ui.reviewNotes[note.dataset.review], all('.review-item').length > 80], ['seen in game', true]);
+    ['scenes', 'scene', 'sceneName', 'reviewNotes', 'simFirst', 'simTab', 'help0'].forEach((k) => { delete state.ui[k]; });
     state.ui.target = '';
     state.ui.tab = 'builds';
+  });
+
+  flow('a first visit starts with no build, and every page still opens', async () => {
+    const first = fresh();
+    eq([first.builds.length, first.ui.tab, first.parties.length, fresh(true).builds.length], [0, 'hub', 1, 1], 'nothing in My builds until the visitor makes or copies one');
+    state.builds = [];
+    state.ui.buildId = '';
+    state.ui.wizard = '';
+    for (const tab of ['hub', 'builds', 'party', 'presets', 'damage', 'review', 'items', 'spells']) {
+      state.ui.tab = tab;
+      render();
+      await wait(40);
+      ok(q('.content, .layout'), 'the page ' + tab + ' with no build');
+    }
+    state.ui.tab = 'builds';
+  });
+
+  flow('the build check leads to where each thing is settled', async () => {
+    const b = build(['Fighter', 'Fighter']);
+    show(b);
+    eq([buildIssues(b).every((x) => x.go && x.go.s), !q('[data-act="check-toggle"]'), all('.issues button.issue').length > 2], [true, true, true], 'always in view, each entry with its place');
+    const entry = all('.issues button.issue').find((x) => x.dataset.s === 'levels') || q('.issues button.issue');
+    state.ui.closed = { [entry.dataset.s]: true };
+    render();
+    await click(all('.issues button.issue').find((x) => x.dataset.s === entry.dataset.s && x.dataset.l === entry.dataset.l), 'an entry of the check');
+    ok(!state.ui.closed[entry.dataset.s] && q('#sec-' + entry.dataset.s) && q('.lit'), 'its section is opened and what it points at is lit');
+    state.ui.closed = {};
   });
 
   flow('the party page: ticking an item as obtained', async () => {

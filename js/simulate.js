@@ -1,8 +1,10 @@
-// Damage test: the dice of a fight, rolled. The page takes the build on screen with the enemy and the switches of
-// Final numbers, and rolls what damage.js works out on average: every attack roll, saving throw and damage die,
-// turn after turn, following a plan of turns (an action and a bonus action for each of the first three turns and
-// for the ones after), spending the spell slots and the other things that run out, and counting how long Haste,
-// Rage and the spells that hold Concentration last. Nothing rolled here is saved.
+// Damage test, the engine: the dice of a fight, rolled. What damage.js works out on average is rolled here, die by
+// die: every attack roll, saving throw and damage die, round after round, in Initiative order. A side is a build
+// with its plan of turns (an action, an action on top and a bonus action for each of the first three turns and for
+// the ones after), what it does on a hit, its reaction and what it heals with; a fight sets one build or a whole
+// party against one enemy or several, spends the spell slots and the other things that run out, counts how long
+// Haste, Rage, Concentration and the conditions last, and lets the enemies act and answer. The page is in
+// simpage.js. Nothing rolled here is saved.
 'use strict';
 
 let simRandom = Math.random;  // the tests put a fixed roll here
@@ -31,59 +33,82 @@ const diceBit = (dice, r, label) => (r.rolls.length ? `${r.rolls.length}d${/d(\d
 
 // One weapon attack: the d20 against the Armour Class (a natural 1 misses, the critical threshold always hits),
 // then every damage die, rolled twice on a critical hit. `riders` are the spells at work that add a die to it.
-function rollWeapon(stats, row, target, riders) {
-  const d20 = rollD20(stats.advantage ? 1 : 0);
-  const bonus = row.attackTotal + (row.attackDice || []).reduce((a, x) => a + rollDice(x).sum, 0);
-  const crit = d20 >= stats.crit;
-  const hit = d20 !== 1 && (crit || d20 + bonus >= target.ac);
-  const line = { name: row.name, kind: 'attack', d20, bonus, against: target.ac, hit, crit: hit && crit, damage: 0, text: '' };
+// `x` is what the moment adds: adv and dis (Advantage and Disadvantage, which cancel each other), dice and attack
+// on the attack roll, crit (a hit is a critical hit), damage (flat), turnDice (the dice that come once a turn may
+// ride on this attack), double (the damage counts twice), and onHit(line), called once the hit is known, which
+// returns more dice as [dice, type, label].
+function rollWeapon(stats, row, target, riders, x) {
+  x = x || {};
+  const d20 = rollD20((stats.advantage || x.adv ? 1 : 0) - (x.dis ? 1 : 0));
+  const bonus = row.attackTotal + (x.attack || 0) + [...(row.attackDice || []), ...(x.dice || [])].reduce((a, d) => a + rollDice(d).sum, 0);
+  const natural = d20 >= stats.crit;
+  const hit = d20 !== 1 && (natural || d20 + bonus >= target.ac);
+  const crit = hit && (natural || !!x.crit);
+  const line = { name: row.name, kind: 'attack', d20, bonus, against: target.ac, hit, crit, damage: 0, text: '' };
   if (!hit) return line;
-  const magical = rowMagical(stats, row);
+  const magical = rowMagical(stats, row) || !!x.magical;
   const bits = [];
   let raw = 0;
-  const extra = (riders || []).map((r) => [r.dice, /weapon/i.test(r.type) ? '' : r.type, r.name]);
-  [[row.dice, row.type, ''], ...(row.extraDice || []).map((d) => [d[0], d[1], '']), ...extra].forEach(([dice, type, from]) => {
+  const more = (x.onHit && x.onHit(line)) || [];
+  const own = (row.extraDice || []).filter((d) => d[3] !== 'turn' || x.turnDice);
+  if (own.some((d) => d[3] === 'turn')) line.turnDice = true;
+  const extra = (riders || []).map((r) => [r.dice, /weapon/i.test(r.type) ? '' : r.type, r.name, true]);
+  [[row.dice, row.type, ''], ...own.map((d) => [d[0], d[1], d[3] === 'turn' ? d[2] : '']), ...extra, ...more.map((d) => [d[0], d[1], d[2], true])].forEach(([dice, type, from, spell]) => {
     if (!dice) return;
     const r = rollDice(dice, crit);
     raw += r.sum;
-    line.damage += r.sum * typeFactor(target, type || row.type, from ? true : magical);
+    line.damage += r.sum * typeFactor(target, type || row.type, spell ? true : magical);
     bits.push(diceBit(dice, r, from || (type && type !== row.type ? type : '')));
   });
-  if (row.damageTotal) { raw += row.damageTotal; line.damage += row.damageTotal * typeFactor(target, row.type, magical); bits.push(String(row.damageTotal)); }
+  const flat = row.damageTotal + (x.damage || 0);
+  if (flat) { raw += flat; line.damage += flat * typeFactor(target, row.type, magical); bits.push(String(flat)); }
+  if (x.double) { raw *= 2; line.damage *= 2; bits.push('(× 2)'); }
   line.text = damageBits(bits, raw, line.damage) + ' ' + row.type;
   return line;
 }
-// The saving throw of an enemy against a cast: { d20, passed }.
-const throwSave = (save) => { const d20 = rollD20(save.dis ? -1 : 0); return { d20, passed: d20 + save.bonus >= save.dc }; };
+// The saving throw of an enemy against a cast: { d20, passed }. `m.saveFx(key)` says what its conditions do to it:
+// fail (it fails by itself), dis (Disadvantage).
+function throwSave(save, m) {
+  const fx = (m && m.saveFx && m.saveFx(save.key)) || {};
+  if (fx.fail) return { d20: 0, passed: false, auto: true };
+  const d20 = rollD20(save.dis || fx.dis ? -1 : 0);
+  return { d20, passed: d20 + save.bonus >= save.dc };
+}
 // One part of a spell's damage against a saving throw already rolled.
 function saveLine(name, save, part, thrown) {
   const dice = rollDice(part.dice);
   const raw = dice.sum + part.flat;
   const dealt = raw * part.f * (thrown.passed ? part.kept : 1);
-  return { name, kind: 'save', ab: save.key.toUpperCase(), d20: thrown.d20, bonus: save.bonus, against: save.dc, passed: thrown.passed, kept: part.kept, damage: dealt,
+  return { name, kind: 'save', ab: save.key.toUpperCase(), d20: thrown.d20, auto: !!thrown.auto, bonus: save.bonus, against: save.dc, passed: thrown.passed, kept: part.kept, damage: dealt,
     text: damageBits([dice.rolls.length ? diceBit(part.dice, dice) : '', part.flat ? String(part.flat) : ''], raw, dealt) + ' ' + part.type };
 }
 // One cast of a spell, from the recipe spellDamage leaves: each part by attack roll, by the enemy's saving throw
-// (one for each enemy, for all the parts) or with no roll.
-function rollSpell(stats, x, target, riders) {
+// (one for each enemy, for all the parts) or with no roll. `m` is what the moment adds, as for a weapon attack.
+function rollSpell(stats, x, target, riders, m) {
+  m = m || {};
   const r = x.recipe;
   const lines = [];
+  // Arcane Acuity: that much more on the spell attack roll and on the save DC of the spell
+  const up = m.spell || 0;
+  const save = r.save && up ? Object.assign({}, r.save, { dc: r.save.dc + up }) : r.save;
   if (r.weapon) {
-    const line = rollWeapon(stats, r.weapon, target, riders);
+    const line = rollWeapon(stats, r.weapon, target, riders, m);
     line.name = x.name;
     lines.push(line);
-    if (line.hit && r.save && r.parts.length) { const thrown = throwSave(r.save); r.parts.forEach((part) => lines.push(saveLine(x.name, r.save, part, thrown))); }
+    if (line.hit && save && r.parts.length) { const thrown = throwSave(save, m); r.parts.forEach((part) => lines.push(saveLine(x.name, save, part, thrown))); }
     return lines;
   }
   for (let rep = 0; rep < r.repeat; rep++) {
     const saves = [];
     r.parts.forEach((part) => {
       for (let k = 0; k < part.times; k++) {
-        if (part.mode === 'save') { saves[k] = saves[k] || throwSave(r.save); lines.push(saveLine(x.name, r.save, part, saves[k])); continue; }
-        const d20 = part.mode === 'attack' ? rollD20(r.adv ? 1 : 0) : 0;
-        const crit = part.mode === 'attack' && d20 >= r.crit;
-        const hit = part.mode !== 'attack' || (d20 !== 1 && (crit || d20 + r.attack >= r.ac));
-        const line = { name: x.name, kind: part.mode, d20, bonus: r.attack, against: r.ac, hit, crit: hit && crit, damage: 0, text: '' };
+        if (part.mode === 'save') { saves[k] = saves[k] || throwSave(save, m); lines.push(saveLine(x.name, save, part, saves[k])); continue; }
+        const d20 = part.mode === 'attack' ? rollD20((r.adv || m.adv ? 1 : 0) - (m.dis ? 1 : 0)) : 0;
+        const bonus = r.attack + (part.mode === 'attack' ? up + (m.dice || []).reduce((a, d) => a + rollDice(d).sum, 0) : 0);
+        const natural = part.mode === 'attack' && d20 >= r.crit;
+        const hit = part.mode !== 'attack' || (d20 !== 1 && (natural || d20 + bonus >= r.ac));
+        const crit = part.mode === 'attack' && hit && (natural || !!m.crit);
+        const line = { name: x.name, kind: part.mode, d20, bonus, against: r.ac, hit, crit, damage: 0, text: '' };
         if (hit) {
           const dice = rollDice(part.dice, crit);
           let raw = dice.sum + part.flat;
@@ -121,12 +146,135 @@ function rollLater(e, when) {
   return lines;
 }
 
+// ---------- conditions ----------
+// What the test plays of a condition comes from its page on the wiki (conditions.js): no actions, no reactions,
+// Advantage for whoever attacks it, critical hits from up close, Disadvantage on its own attack rolls, saving
+// throws it fails or rolls with Disadvantage, Concentration ended. A holder is a build's fight or an enemy.
+const CONDITIONS = window.BG3_CONDITIONS || {};
+const condFx = (name) => (CONDITIONS[name] || {}).f || null;
+const condHas = (holder, flag) => holder.conds.some((c) => c.f[flag]);
+// Puts a condition on a holder for a number of turns. `by` is whoever caused it: some conditions count down on
+// that one's turn. `save` ({ key, dc }) is the saving throw repeated to shake it off.
+function addCond(holder, name, turns, by, save) {
+  const f = condFx(name);
+  if (!f) return null;
+  holder.conds = holder.conds.filter((c) => c.name !== name);
+  const c = { name, f, left: Math.max(1, Number(turns) || 2), by, save: save || null };
+  holder.conds.push(c);
+  return c;
+}
+// The start of a holder's turn: the conditions that count down then do; a Prone creature stands up.
+function condStart(holder, note) {
+  holder.conds = holder.conds.filter((c) => {
+    if (c.name === 'Prone') { note(t('{name} ends.', { name: c.name })); return false; }
+    if (c.f.tk !== 'start' || c.f.src) return true;
+    if (--c.left > 0) return true;
+    note(t('{name} ends.', { name: c.name }));
+    return false;
+  });
+}
+// The end of a creature's turn: its own conditions count down and the save to shake one off is rolled; the ones
+// it caused on others, and that count down on its turn, do so too. `saveOf(key)` gives the holder's bonus.
+function condEnd(holder, saveOf, note, others) {
+  holder.conds = holder.conds.filter((c) => {
+    if (c.save && c.f.rep) {
+      const d20 = rollD20(0);
+      if (d20 + saveOf(c.save.key) >= c.save.dc) { note(t('{name} shaken off: {ab} save {roll} against DC {dc}.', { name: c.name, ab: c.save.key.toUpperCase(), roll: d20 + saveOf(c.save.key), dc: c.save.dc })); return false; }
+    }
+    if (c.f.tk === 'start' || c.f.src) return true;
+    if (--c.left > 0) return true;
+    note(t('{name} ends.', { name: c.name }));
+    return false;
+  });
+  (others || []).forEach((o) => { o.conds = o.conds.filter((c) => !(c.f.src && c.f.tk !== 'start' && c.by === holder && --c.left <= 0)); });
+}
+// The start of a creature's turn: the conditions it caused on others that count down then (Distracted) do.
+function condSource(holder, others) {
+  others.forEach((o) => { o.conds = o.conds.filter((c) => !(c.f.src && c.f.tk === 'start' && c.by === holder && --c.left <= 0)); });
+}
+// What a manoeuvre or a strike leaves on a hit, from its page on the wiki: [condition, turns, saving throw]. The
+// save is against the weapon action DC: 8 + proficiency bonus + Strength or Dexterity modifier.
+// Distracting Strike asks no save: the allies of whoever landed it have Advantage on their next attack roll.
+const HIT_CONDITIONS = { 'Trip Attack': ['Prone', 1, 'str'], 'Menacing Attack': ['Frightened', 2, 'wis'], 'Goading Attack': ['Goaded', 1, 'wis'], 'Distracting Strike': ['Distracted', 1, ''],
+  'Stunning Strike': ['Stunned', 1, 'con'] };
+// The manoeuvres that add the Superiority Die to the damage of a hit (their pages give "damage: weapon +
+// superiority die"), the one that adds it to the attack roll, and the one that takes the bonus action as well.
+const HIT_MANOEUVRES = ['Trip Attack', 'Menacing Attack', 'Disarming Attack', 'Pushing Attack', 'Goading Attack', 'Manoeuvring Attack', 'Distracting Strike'];
+
+// ---------- consumables ----------
+// What an arrow does, read from its text: { extra: dice on a hit the enemy can save against, plus: dice on top of
+// the weapon's, double: the kind of creature it does double damage to, many: half the damage to three others,
+// blast: an explosion in place of the weapon damage }. null when it does nothing the test can roll.
+function arrowFx(c) {
+  const x = c.x || '';
+  const save = /(\w+) Saving Throw:? (?:\(DC|DC) (\d+)\)?/i.exec(x);
+  const key = save ? save[1].toLowerCase().slice(0, 3) : '';
+  const blast = /Explodes and deals (\d+d\d+) (\w+) \+ (\d+d\d+) (\w+) damage/i.exec(x);
+  if (blast && save) return { blast: [[blast[1], blast[2]], [blast[3], blast[4]]], save: { key, dc: Number(save[2]) }, kept: /to halve/i.test(x) ? 0.5 : 0 };
+  const extra = /additional (\d+d\d+) (\w+) damage/i.exec(x);
+  if (extra && save) return { extra: [extra[1], extra[2]], save: { key, dc: Number(save[2]) }, kept: /to halve/i.test(x) ? 0.5 : 0 };
+  const plus = /Weapon Damage \+ (\d+d\d+) (\w+)/i.exec(x);
+  if (plus) return { plus: [plus[1], plus[2]] };
+  const twice = /Damage is doubled against (\w+?)s?\./i.exec(x);
+  if (twice) return { double: twice[1].replace(/ie$/, 'y').replace(/Monstrosit$/, 'Monstrosity') };
+  if (/additional half of that damage to three other targets/i.test(x)) return { many: 3 };
+  return null;
+}
+// What a coated weapon does, read from the text of the coating's condition: a bonus to attack and damage rolls,
+// the saving throw a target hit makes, the conditions it gets when it fails, damage that comes at the end of its
+// next turn, dice on top of the hit. null when it does nothing the test can roll.
+function coatFx(c) {
+  const x = (c.cx || '') + ' ' + (c.x || '');
+  const out = {};
+  const hit = /\+(\d) bonus to (Damage and )?Attack Rolls/i.exec(x);
+  if (hit) { out.attack = Number(hit[1]); if (hit[2]) out.damage = Number(hit[1]); out.magical = /become magical/i.test(x); }
+  const save = /(\w+) Saving Throw \(DC (\d+)\)|(\w+) Saving Throw: DC (\d+)/i.exec(x);
+  if (save) out.save = { key: (save[1] || save[3]).toLowerCase().slice(0, 3), dc: Number(save[2] || save[4]) };
+  const conds = (c.cs || []).filter((n) => condFx(n));
+  if (conds.length) out.conds = conds;
+  const later = /take (\d+d\d+) (\w+) damage at the end of their next turn/i.exec(x);
+  if (later) out.later = [later[1], later[2]];
+  const extra = /additional (\d+d\d+) (\w+) damage/i.exec(x);
+  if (extra) { out.extra = [extra[1], extra[2]]; out.kept = /to halve/i.test(x) ? 0.5 : 0; }
+  return Object.keys(out).length ? out : null;
+}
+// What the elixir kept active gives a fight besides numbers: temporary hit points, one more spell slot, an Armour
+// Class to start from, the action a kill gives (Bloodlust).
+function elixirFx(stats) {
+  const c = stats.build && CONSUMABLE_BY_NAME.get(norm(stats.build.elixir));
+  const x = c ? c.x : '';
+  const blood = /when you kill a foe[^.]*additional Action/i.test(x);
+  const temp = Number((/(\d+) temporary hit points/i.exec(x) || [])[1]) || 0;
+  return { name: c ? c.n : '', blood: blood ? temp || 5 : 0, temp: blood ? 0 : temp, slot: Number((/Level (\d) Spell Slot/i.exec(x) || [])[1]) || 0,
+    ac: Number((/Armour Class to (\d+)/i.exec(x) || [])[1]) || 0 };
+}
+
+// Arcane Acuity (+1 to spell attack rolls and to the spell save DC for each turn of it left, 10 at most; a turn
+// goes at the start of each turn and two with every hit taken): what keeps it up (the Elixir of Battlemage's Power:
+// never below 3) and what adds turns to it, read from the gear ("Whenever you deal damage with a weapon attack, you
+// gain Arcane Acuity for 2 turns").
+function acuityOf(stats) {
+  const c = stats.build && CONSUMABLE_BY_NAME.get(norm(stats.build.elixir));
+  const out = { floor: Number((/(\d) stacks of Arcane Acuity/i.exec(c ? c.x : '') || [])[1]) || 0, weapon: 0, fire: 0 };
+  Object.values(stats.worn || {}).forEach((it) => effectTexts(it).forEach((text) => {
+    const m = /deal (Fire )?damage( with a weapon attack)?, you gain Arcane Acuity for (\d) turns/i.exec(text);
+    if (m && m[2]) out.weapon = Math.max(out.weapon, Number(m[3]));
+    else if (m && m[1]) out.fire = Math.max(out.fire, Number(m[3]));
+  }));
+  return out;
+}
+
 // ---------- a side of the test ----------
 // What a build starts a fight with, of the things that run out.
 function simResources(stats) {
   const res = Object.fromEntries((stats.resources || []).map(([n, v]) => [n, Number(v) || 0]));
-  return { slots: (stats.slots || []).slice(), pact: stats.pact ? stats.pact.n : 0, pactLevel: stats.pact ? stats.pact.level : 0,
+  const slots = (stats.slots || []).slice();
+  // an Elixir of Arcane Cultivation is one more spell slot
+  const more = elixirFx(stats).slot;
+  if (more) { while (slots.length < more) slots.push(0); slots[more - 1]++; }
+  return { slots, pact: stats.pact ? stats.pact.n : 0, pactLevel: stats.pact ? stats.pact.level : 0,
     points: res['Sorcery Points'] || 0, ki: res['Ki Points'] || 0, rage: res['Rage Charges'] || 0, surge: (stats.fighter || 0) >= 2 ? 1 : 0,
+    wind: (stats.gains || []).includes('Second Wind') ? 1 : 0, potions: 0, arrows: 0,
     // the Martial Adept feat gives one Superiority Die of its own
     dice: (res['Superiority Dice'] || 0) + ((stats.featNames || new Set()).has('Martial Adept') ? 1 : 0) };
 }
@@ -137,30 +285,187 @@ function takeSlot(left, x, spend) {
   for (let i = x.slot - 1; i < left.slots.length; i++) if (left.slots[i] > 0) { if (spend) left.slots[i]--; return true; }
   return pact();
 }
-// The plan of turns of a build: four steps (turns 1, 2, 3 and every turn after), each with what the action and
-// the bonus action go to. An empty field of the first three follows the last; the last defaults to the weapon
-// and to the best bonus action the build has.
+// Any slot at all, for Divine Smite: the lowest left or the highest. Its level, or 0 when none is left.
+function takeAnySlot(left, low) {
+  const levels = left.slots.map((n, i) => (n > 0 ? i + 1 : 0)).filter(Boolean).concat(left.pact > 0 ? [left.pactLevel] : []);
+  if (!levels.length) return 0;
+  const lv = low ? Math.min(...levels) : Math.max(...levels);
+  if (left.slots[lv - 1] > 0) left.slots[lv - 1]--; else left.pact--;
+  return lv;
+}
+// The plan of turns of a build: four steps (turns 1, 2, 3 and every turn after), each with what the action, the
+// action on top and the bonus action go to. An empty field of the first three follows the last; the last
+// defaults to the weapon and to the best bonus action the build has.
 const simSteps = (b) => { const saved = (state.ui.simPlans || {})[b.id] || []; return [0, 1, 2, 3].map((i) => ({ a: (saved[i] || {}).a || '', q: (saved[i] || {}).q || '', x: (saved[i] || {}).x || '' })); };
-// What the enemy does to the build each turn, as set on the page: melee attacks, how many of them hit, the damage
-// of a hit, and whether it moves.
-const simFoe = () => { const attacks = Math.max(0, Number(state.ui.foeAttacks) || 0); return { attacks, hits: Math.min(attacks, Math.max(0, Number(state.ui.foeHits) || 0)), damage: Math.max(1, Number(state.ui.foeDamage) || 10), moves: !!state.ui.foeMoves }; };
-// Haste among the spells of a build, with the group that casts it.
-function knownHaste(stats) {
+const PHYSICAL = ['Bludgeoning', 'Piercing', 'Slashing'];
+// The enemy's actions in the difficulty chosen: the ones of Balanced mode, the ones Tactician adds, the ones of
+// Honour mode. A "tactician" version of an action takes the place of the plain one.
+function modeActs(e, list) {
+  const mode = gameMode();
+  const there = (a) => !a.md || (a.md === 't' && mode !== 'balanced') || (a.md === 'h' && mode === 'honour');
+  const all = (list || (e && e.acts) || []).filter(there);
+  const plain = (n) => n.replace(/,\s*tactician\)/i, ')').replace(/\s*\(tactician\)/i, '');
+  const harder = all.filter((a) => plain(a.n) !== a.n);
+  return all.filter((a) => !harder.includes(a)).map((a) => harder.find((h) => plain(h.n) === a.n) || a).concat(harder.filter((h) => !all.some((a) => a.n === plain(h.n))));
+}
+// The highest spell slot an enemy has (6 when its page does not say).
+const topSlot = (e) => (e && e.rs ? Math.max(...Object.keys(e.rs).map(Number)) : 6);
+// What an enemy does with one of the actions of its page (enemies.js), as the fight uses it: with the +2 to
+// attack rolls and save DCs of Tactician and Honour mode, one more attack for each Extra Attack it has in the
+// mode, and, for a spell the planner knows, the damage it deals at the enemy's level (a cantrip) or with the
+// slot it is cast with.
+function foeMove(act, e, slotWanted) {
+  const idx = Math.max(0, MODES.findIndex(([k]) => k === gameMode()));
+  const up = idx > 0 && (act.k === 'a' || act.k === 's') ? 2 : 0;
+  let hits = act.hits;
+  let slot = act.sl || 0;
+  const s = act.s && act.k !== 'e' ? SPELL_BY_NAME.get(norm(act.s)) : null;
+  if (s) {
+    if (slot && s.lv) slot = Math.max(s.lv, Math.min(Number(slotWanted) || 0, topSlot(e)));
+    const h = spellHits(s, e ? e.lv : 1, slot || s.lv);
+    if (h && !h.rider && !h.weapon && h.parts.length) {
+      const comps = h.parts.map((p) => [p.dice, p.flat, p.type]);
+      const alike = comps.every((c) => c.join() === comps[0].join());
+      hits = act.k === 'a' && h.beams > 1 ? Array.from({ length: h.beams }, () => comps) : act.k === 'a' && comps.length > 1 && alike ? comps.map((c) => [c]) : [comps];
+    }
+  }
+  if (act.x) hits = Array.from({ length: 1 + (((e && e.ea) || [])[idx] || 0) }, () => act.hits[0]);
+  // the condition it leaves is kept when it is one the test plays, with the +2 of the mode on a save DC of its own
+  const cd = act.cd && condFx(act.cd[0]) ? { name: act.cd[0], turns: act.cd[1] || 2, sv: act.cd[2] || '', dc: act.cd[3] ? act.cd[3] + (idx > 0 ? 2 : 0) : 0 } : null;
+  return { label: act.n, kind: act.k, melee: !!act.m, bonus: (act.b || 0) + (act.k === 'a' ? up : 0), dc: (act.dc || 0) + (act.k === 's' ? up : 0), sv: act.sv || '', os: act.os == null ? 0 : act.os, hits,
+    slot, spell: s ? s.lv : -1, uses: act.u || 0, parts: act.w || [], up, guess: act.g || '', waits: !!act.c, cd, om: act.om || 0, legend: !!act.lg, as: act.as || '' };
+}
+// What an enemy answers a hit with, once a round, in the difficulty chosen: its reactions and, in Honour mode, its
+// Legendary Actions.
+const foeAnswers = (e) => modeActs(e, (e && e.rx) || []).map((a) => foeMove(a, e));
+// The enemy's side of the fight: the action chosen on the page (its usual one when none is), how often it does it
+// each turn, what it goes on with when the action needs a spell slot or runs out, what its bonus action goes to,
+// and what it answers a hit with. With no reference enemy, or one whose page lists nothing to go by, a melee
+// attack set by hand. `fixed` leaves the choices of the page aside: true for what it usually does, or
+// { foeAct } for a helper whose action was chosen.
+function simFoe(target, fixed) {
+  const e = target && target.enemy;
+  const acts = modeActs(e);
+  const mains = acts.filter((a) => !a.q);
+  const usual = mains.find((a) => a.k !== 'e') || null;
+  const ui = fixed ? (fixed === true ? {} : fixed) : state.ui;
+  const num = (key, by) => (ui[key] == null || ui[key] === '' ? by : Number(ui[key]) || 0);
+  const pick = ui.foeAct || '';
+  const act = pick === 'none' ? null : mains.find((a) => a.n === pick) || usual;
+  const move = act ? foeMove(act, e, ui.foeSlot) : { label: '', kind: 'a', melee: true, bonus: 5, dc: 0, sv: '', os: 0, hits: null, slot: 0, spell: -1, uses: 0, parts: [], up: 0, guess: '', waits: false, cd: null, om: 0 };
+  const own = act && usual && usual !== act && (move.slot || move.uses || move.kind === 'e') && !(usual.sl || usual.u || usual.c) ? foeMove(usual, e) : null;
+  const set = num('foeBonus', move.kind === 'a' ? move.bonus : move.dc);
+  const second = acts.filter((a) => a.q).find((a) => a.n === ui.foeAct2);
+  return Object.assign(move, { name: e ? e.n : '', none: pick === 'none', attacks: pick === 'none' ? 0 : Math.max(0, num('foeAttacks', act ? move.hits.length : 0)),
+    bonus: move.kind === 'a' ? set : 0, dc: move.kind === 's' ? set : 0, damage: Math.max(1, num('foeDamage', 10)), steps: Math.max(0, num('foeSteps', 0)), broken: !!ui.foeBroken,
+    slots: e && e.rs ? e.rs : null, fallback: own, extra: second ? foeMove(second, e) : null, rx: state.ui.foeReacts === false ? [] : foeAnswers(e) });
+}
+// How much of a hit's damage the build takes: half with a resistance of its own, with one that Rage gives
+// (Bludgeoning, Piercing and Slashing; all but Psychic for a Bear Heart), or under Blade Ward.
+function takes(side, type, raging, warded) {
+  const physical = !type || PHYSICAL.includes(type);
+  const has = (set, rage) => set.has(type) || (set.has('All damage') && !(rage && type === 'Psychic')) || (set.has('Physical damage') && physical);
+  return has(side.resist.always, false) || (raging && has(side.resist.raging, true)) || (warded && physical) ? 0.5 : 1;
+}
+// What the enemy's action does to the build in a turn, on average.
+function foeAverage(side, move, times) {
+  let sum = 0;
+  for (let k = 0; k < times && move.kind !== 'e'; k++) {
+    const comps = move.hits ? move.hits[Math.min(k, move.hits.length - 1)] : [['', move.damage, '']];
+    const dice = comps.reduce((a, [d, , type]) => a + avgDice(d) * takes(side, type, false), 0);
+    const flat = comps.reduce((a, [, n, type]) => a + n * takes(side, type, false), 0);
+    if (move.kind === 'a') { const p = hitChance(move.bonus, side.ac, 20, false); sum += p.hit * (dice + flat) + p.crit * dice + (1 - p.hit) * (move.om || 0) * (dice + flat); }
+    else if (move.kind === 's') {
+      const one = Math.max(0, Math.min(1, (move.dc - 1 - (side.saves[move.sv] || 0)) / 20));
+      const fail = side.saveAdv.has(move.sv) ? one * one : one;
+      const evades = side.evasion && move.sv === 'dex' && move.os === 0.5;
+      sum += (dice + flat) * (fail * (evades ? 0.5 : 1) + (1 - fail) * (evades ? 0 : move.os));
+    } else sum += dice + flat;
+  }
+  return sum;
+}
+// What the build can heal with, using its bonus action: Second Wind, a healing spell cast that way, a potion.
+function healOptions(stats) {
+  const out = [];
+  const wind = /(\d+d\d+) \+ Fighter Level/i.exec(featureText('Second Wind'));
+  if (wind && (stats.gains || []).includes('Second Wind')) out.push({ value: 'wind', kind: 'wind', name: 'Second Wind', dice: wind[1], flat: stats.fighter || 0, text: featureText('Second Wind'), pic: '', facts: wind[1] + ' + ' + (stats.fighter || 0) + ' · Short Rest' });
+  if (stats.build) spellbook(stats.build, stats.act, stats).forEach((g) => g.spells.forEach((x) => {
+    const m = x.sp && x.sp.a === 'bonus' && /^(\d+d\d+)(?: \+ [\w ]+? mod)? Healing/i.exec(x.sp.dm || '');
+    if (!m || out.some((o) => o.name === x.sp.n)) return;
+    const flat = /mod/i.test(x.sp.dm) && g.ability ? stats.mods[g.ability] : 0;
+    out.push({ value: 'spell:' + x.sp.n, kind: 'spell', name: x.sp.n, dice: m[1], flat, slot: x.sp.lv, cls: g.cls || '', text: x.sp.d || '', pic: pic(x.sp.i, 'pic small'), facts: m[1] + (flat ? ' + ' + flat : '') + ' · ' + t('level {n} slot', { n: x.sp.lv }) });
+  }));
+  CONSUMABLES.filter((c) => c.t === 'Potion' && /bonus/i.test(c.uc || '')).forEach((c) => {
+    const m = /Restore (\d+d\d+)\s*\+\s*(\d+) Healing/i.exec(c.x || '');
+    if (m) out.push({ value: 'potion:' + c.n, kind: 'potion', name: c.n, dice: m[1], flat: Number(m[2]), text: c.x, pic: pic(c.i, 'pic small'), facts: m[1] + ' + ' + m[2] });
+  });
+  return out;
+}
+// A spell among the ones a build can cast, with the group that casts it (Haste, Shield).
+function knownSpell(stats, name) {
   let out = null;
-  if (stats.build) spellbook(stats.build, stats.act, stats).forEach((g) => g.spells.forEach((x) => { if (!out && x.sp && x.sp.n === 'Haste') out = { name: 'Haste', sp: x.sp, slot: x.sp.lv, cls: g.cls || '' }; }));
+  if (stats.build) spellbook(stats.build, stats.act, stats).forEach((g) => g.spells.forEach((x) => { if (!out && x.sp && x.sp.n === name) out = { name, sp: x.sp, slot: x.sp.lv, cls: g.cls || '', title: g.title, ability: g.ability }; }));
+  return out;
+}
+// The spells of a build that deal no damage but leave on an enemy a condition the test plays (Hold Person,
+// Blindness, Tasha's Hideous Laughter), with the save DC of the group that casts them.
+function controlSpells(stats) {
+  const out = [];
+  if (!stats.build) return out;
+  spellbook(stats.build, stats.act, stats).forEach((g) => g.spells.forEach((x) => {
+    const s = x.sp;
+    if (!s || !s.lv || out.some((o) => o.name === s.n) || s.a === 'reaction' || !s.sv || !(s.cn || []).some((c) => condFx(c[0])) || spellLines(s).some((v) => spellHits(s, 12, 6, v[1]))) return;
+    const cast = stats.casting.find((c) => c.label === g.title);
+    out.push({ name: s.n, sp: s, slot: s.lv, cls: g.cls || '', key: String(s.sv).toLowerCase().slice(0, 3), dc: cast ? cast.dc : 8 + stats.pb + (g.ability ? stats.mods[g.ability] : 0) });
+  }));
   return out;
 }
 // A side: the numbers of a build with the gear of an act, the enemy and the plan. `calm()` gives the numbers
 // without Rage, for the turns the build is not raging.
 function sideOf(stats, style, target, steps) {
   const con = (stats.saves || []).find((k) => k.key === 'con');
-  const side = { stats, style, target, steps, memo: new Map(), calm: () => stats, foe: { attacks: 0, hits: 0, damage: 0, moves: false }, react: '',
+  const gains = stats.gains || [];
+  const brew = elixirFx(stats);
+  const side = { stats, style, target, steps, memo: new Map(), calm: () => stats, react: '', name: '',
+    foe: { name: '', label: '', kind: 'a', melee: true, attacks: 0, bonus: 0, dc: 0, sv: '', os: 0, hits: null, damage: 10, steps: 0, broken: false, slot: 0, uses: 0, slots: null, fallback: null, parts: [] },
+    // the build's saving throws, its resistances (always, and while raging), Uncanny Dodge, what it heals with
+    saves: Object.fromEntries((stats.saves || []).map((k) => [k.key, k.bonus])), resist: { always: new Set(), raging: new Set(['Physical damage']) },
+    dodge: gains.includes('Uncanny Dodge'), heal: null, potions: 2,
+    // Evasion, and the saving throws the build rolls with Advantage
+    evasion: gains.includes('Evasion'), saveAdv: new Set(),
+    // the build's Armour Class and hit points with the gear of the act (an Elixir of Barkskin sets the Armour Class
+    // it starts from); whether Haste gives its action on the turn it is cast
+    ac: Math.max((stats.ac || {})[stats.act] || 10, brew.ac), hp: stats.hp || 1, hasteNow: true,
     // the Constitution save that keeps Concentration, with Advantage from a feat that says so (War Caster)
-    con: con ? con.bonus : 0, conAdv: FEATS.some(([name, text]) => (stats.featNames || new Set()).has(name) && /Advantage on Saving Throws to maintain Concentration/i.test(text)) };
+    con: con ? con.bonus : 0, conAdv: FEATS.some(([name, text]) => (stats.featNames || new Set()).has(name) && /Advantage on Saving Throws to maintain Concentration/i.test(text)),
+    // what it does on a hit (Divine Smite; a manoeuvre or Stunning Strike), the arrows it shoots and the coating
+    // on its weapon; the Initiative it rolls with; whether it can be Surprised; the elixir it drank
+    smite: null, hit: null, arrow: null, coat: null, initiative: stats.initiative || 0, wary: false, brew,
+    // Charisma to the saving throws of the allies near a Paladin (Aura of Protection)
+    aura: gains.includes('Aura of Protection') ? Math.max(0, (stats.mods || {}).cha || 0) : 0,
+    die: gains.includes('Improved Combat Superiority') ? '1d10' : '1d8',
+    // where it stands (next to the enemy, or away from it), whether it helps a fallen ally up, the manoeuvres it
+    // uses apart from a hit (Rally, Evasive Footwork, Commander's Strike on an ally), and its Arcane Acuity
+    front: style !== 'ranged' && style !== 'caster', helps: false, rally: false, foot: false, cmd: '', acu: acuityOf(stats),
+    // the weapon action DC: 8 + proficiency bonus + Strength or Dexterity modifier
+    weaponDc: 8 + (stats.pb || 0) + Math.max((stats.mods || {}).str || 0, (stats.mods || {}).dex || 0) };
   let haste;
-  Object.defineProperty(side, 'haste', { get: () => (haste === undefined ? (haste = knownHaste(stats)) : haste) });
+  let shield;
+  let wards;
+  let controls;
+  let bless;
+  // spells that only protect: Blade Ward (Resistance to Bludgeoning, Piercing and Slashing for 2 turns) and Mirror
+  // Image (three duplicates, +3 to Armour Class each, one gone with every attack evaded)
+  Object.defineProperty(side, 'wards', { get: () => wards || (wards = ['Blade Ward', 'Mirror Image'].map((name) => knownSpell(stats, name)).filter(Boolean)) });
+  Object.defineProperty(side, 'haste', { get: () => (haste === undefined ? (haste = knownSpell(stats, 'Haste')) : haste) });
+  Object.defineProperty(side, 'shield', { get: () => (shield === undefined ? (shield = knownSpell(stats, 'Shield')) : shield) });
+  Object.defineProperty(side, 'controls', { get: () => controls || (controls = controlSpells(stats)) });
+  Object.defineProperty(side, 'bless', { get: () => (bless === undefined ? (bless = knownSpell(stats, 'Bless')) : bless) });
   return side;
 }
+// What a build does on a hit, as saved for it on the page: { smite: ''|'all'|'crit', low, hit, every, arrow, arrows, coat }.
+// and where it stands and what it does for its allies: { line: ''|'front'|'back', help, rally, foot, cmd }
+const simHits = (b) => Object.assign({ smite: '', low: false, hit: '', every: false, arrow: '', arrows: 5, coat: '', line: '', help: true, rally: true, foot: false, cmd: '' }, (state.ui.simHits || {})[b.id] || {});
 function simSide(b, act, target) {
   const total = charLevel(b);
   const at = b.current && b.current < total ? b.current : 0;
@@ -168,21 +473,46 @@ function simSide(b, act, target) {
   const side = sideOf(finalStats(b, act, opts), buildProfile(at ? atLevel(b, at) : b, act).style, target, simSteps(b));
   let calm = null;
   side.calm = () => calm || (calm = finalStats(Object.assign({}, b, { active: (b.active || []).filter((k) => k !== 'rage') }), act, opts));
-  return Object.assign(side, { b, act, at, foe: simFoe(), react: (state.ui.simReacts || {})[b.id] || '' });
+  // resistances as the Traits of the build give them: the ones that are always there, and the ones Rage brings
+  const resist = { always: new Set(), raging: new Set() };
+  const traits = traitsOf(at ? atLevel(b, at) : b, act);
+  traits.resist.forEach(([what, source, cond]) => { if (!cond) resist.always.add(what); else if (/^Rage$|Bear Heart/i.test(source)) resist.raging.add(what); });
+  if (!resist.raging.size) resist.raging.add('Physical damage');
+  const heal = healOptions(side.stats).find((o) => o.value === (state.ui.simHeals || {})[b.id]) || null;
+  // "Advantage on Dexterity Saving Throws" among the traits that are always there
+  traits.advantage.forEach(([what, , cond]) => { if (!cond) ABILS.forEach(([k, , name]) => { if (new RegExp(name + ' Saving Throws', 'i').test(what)) side.saveAdv.add(k); }); });
+  // what it does on a hit, when the build has it
+  const h = simHits(b);
+  const st = side.stats;
+  const opt = st.options || new Set();
+  const has = (name) => opt.has(name) || (name === 'Stunning Strike' && (st.gains || []).includes('Stunning Strike'));
+  const arrow = CONSUMABLE_BY_NAME.get(norm(h.arrow));
+  const coat = CONSUMABLE_BY_NAME.get(norm(h.coat));
+  return Object.assign(side, { b, act, at, name: b.name || t('Unnamed'), foe: simFoe(target), react: (state.ui.simReacts || {})[b.id] || '', hasteNow: state.ui.hasteNow !== false, resist, heal,
+    potions: state.ui.simPotions == null ? 2 : Math.max(0, Number(state.ui.simPotions) || 0),
+    smite: h.smite && (st.gains || []).includes('Divine Smite') ? { when: h.smite, low: !!h.low } : null,
+    hit: h.hit && has(h.hit) ? { name: h.hit, every: !!h.every } : null,
+    arrow: arrow && arrowFx(arrow) ? { name: arrow.n, fx: arrowFx(arrow), n: Math.max(0, Number(h.arrows) || 0) } : null,
+    coat: coat && coatFx(coat) ? { name: coat.n, fx: coatFx(coat) } : null,
+    front: h.line ? h.line === 'front' : side.front, helps: h.help !== false, rally: h.rally !== false && opt.has('Rally'),
+    foot: !!h.foot && opt.has('Evasive Footwork') && !!condFx('Evasive Footwork'), cmd: opt.has("Commander's Strike") ? h.cmd || '' : '',
+    wary: traits.immune.some(([what, , cond]) => !cond && /surprised/i.test(what)) });
 }
-// What a side can do with a set of switches on: its weapon turn and its spells. Worked out once for each set.
-function simView(side, calm, on, noKi) {
-  const key = (calm ? 'c|' : 'r|') + on.join(',') + (noKi ? '|k' : '');
+// What a side can do with a set of switches on: its weapon turn and its spells against a target. Worked out once
+// for each set. With `many` enemies in the fight, a spell with an area is rolled against each of them in turn.
+function simView(side, calm, on, noKi, target, many) {
+  const aim = target || side.target;
+  const key = (calm ? 'c|' : 'r|') + on.join(',') + (noKi ? '|k' : '') + '|' + (aim === side.target ? '' : aim.name + ':' + aim.ac) + (many ? '|m' : '');
   let v = side.memo.get(key);
   if (!v) {
-    const st = Object.assign({}, calm ? side.calm() : side.stats, { active: on });
-    const plan = turnPlan(st, side.style, side.target, new Set(noKi ? ['Ki Points'] : []));
-    const list = spellOptions(st, side.target, plan ? plan.parts[0].row : null);
+    const st = Object.assign({}, calm ? side.calm() : side.stats, { active: on }, many ? { targets: 1 } : {});
+    const plan = turnPlan(st, side.style, aim, new Set(noKi ? ['Ki Points'] : []));
+    const list = spellOptions(st, aim, plan ? plan.parts[0].row : null);
     // reactions: the spells cast in answer to a hit (Hellish Rebuke), and Riposte with the melee weapon
     const reacts = new Map();
     if (st.build) spellbook(st.build, st.act, st).forEach((g) => g.spells.forEach((x) => {
       if (!x.sp || x.sp.a !== 'reaction' || reacts.has(x.sp.n)) return;
-      const r = spellDamage(st, { sp: x.sp, title: g.title, ability: g.ability, cls: g.cls || '' }, side.target, plan ? plan.parts[0].row : null);
+      const r = spellDamage(st, { sp: x.sp, title: g.title, ability: g.ability, cls: g.cls || '' }, aim, plan ? plan.parts[0].row : null);
       if (r && !r.rider && r.total > 0) reacts.set(r.name, r);
     }));
     const melee = (st.attacks ? st.attacks.rows : []).find((r) => r.slot === 'meleeMain' && !r.thrown) || (st.attacks ? st.attacks.rows : []).find((r) => r.slot === 'unarmed');
@@ -198,79 +528,411 @@ const simBase = (side) => simView(side, false, side.stats.active || [], false);
 // ---------- a fight ----------
 // With `endless`, nothing runs out and what is switched on simply stays on: one turn of it is the turn the
 // averages describe.
-const newFight = (side, endless) => ({ turn: 0, left: endless ? null : simResources(side.stats), dealt: 0, effects: [], lethargic: 0, used: [] });
-// One turn of a fight: the build's own turn, then the enemy's (what it does to the build is set on the page).
-// { n, name, lines, total, notes }
-function fightTurn(side, fight) {
-  const n = ++fight.turn;
+const sideResources = (side) => Object.assign(simResources(side.stats), { potions: side.potions, arrows: side.arrow ? side.arrow.n : 0 });
+const newRound = () => ({ lost: false, reacted: false, shielded: false, attacked: false, hurt: 0, hurtNow: 0, missNow: 0, kills: 0, crits: 0, sneaked: false, man: 0, bonus: false, blood: false, off: [], stop: false });
+const newFight = (side, endless) => ({ turn: 0, left: endless ? null : sideResources(side), dealt: 0, effects: [], lethargic: 0, used: [], hp: side.hp, down: 0, conds: [],
+  temp: endless ? 0 : (side.brew || {}).temp || 0, round: newRound(), acuity: endless ? 0 : (side.acu || { floor: 0 }).floor, death: null, dead: false, fell: false, onus: null });
+// An enemy in a fight: what it does (`move`, as simFoe gives it), what is aimed at (`target`), its hit points
+// (Infinity when there are none to go by), the damage it took and the conditions on it.
+const foeState = (move, target, hp) => ({ move, target, name: (move && move.name) || (target && target.name) || '', hp: hp || Infinity, dealt: 0, conds: [], reacted: false, acted: false, dead: 0, inoc: {} });
+// A fight: the sides (builds) with a fight state each, the enemies, and how it is set up: who acts first ('roll',
+// 'party' or 'foes'), who is Surprised ('', 'party' or 'foes'), whom an enemy aims at ('random', 'first' or
+// 'weakest'), whom the party strikes first ('main' or 'helpers'), and, for a build alone, whether an ally is taken
+// to stand next to the enemy (`ally`, which Sneak Attack asks for when there is no Advantage).
+function newEncounter(sides, foes, opts) {
+  return { round: 0, live: true, sides, fights: sides.map((s) => newFight(s)), foes, opts: Object.assign({ first: 'roll', surprise: '', aim: 'random', focus: 'main', ally: true }, opts || {}), order: null, init: [] };
+}
+// A build that fell comes back: helped up, healed or rallied.
+function standUp(fight, hp) { Object.assign(fight, { hp: Math.max(1, hp), down: 0, death: null }); }
+const encWon = (enc) => enc.foes.every((f) => f.dead);
+const encLost = (enc) => enc.fights.every((f) => f.down);
+const encOver = (enc) => encWon(enc) || encLost(enc);
+// Initiative (the wiki's Initiative page): a d4 plus the bonus, highest first; a build before an enemy on a tie.
+function rollInitiative(enc) {
+  const all = [...enc.sides.map((s, i) => ({ kind: 'side', i, bonus: s.initiative || 0, name: s.name })),
+    ...enc.foes.map((f, i) => { const e = f.target && f.target.enemy; return { kind: 'foe', i, bonus: e ? (e.in != null ? e.in : Math.floor((e.ab.dex - 10) / 2)) : 0, name: f.name || t('The enemy') }; })];
+  if (enc.opts.first === 'roll') all.forEach((x) => { x.roll = rollDie(4); x.total = x.roll + x.bonus; });
+  const rank = (x) => (enc.opts.first === 'roll' ? x.total * 2 + (x.kind === 'side' ? 1 : 0) : (x.kind === 'side') === (enc.opts.first !== 'foes') ? 1 : 0);
+  enc.init = all.slice().sort((x, y) => rank(y) - rank(x));
+  return enc.init.map((x) => [x.kind, x.i]);
+}
+// Ends effects of a side: what one of them holds on somebody else goes with it (a condition on an enemy, Haste on
+// an ally, who is left Lethargic).
+function dropEffects(enc, fight, list, note) {
+  if (!list.length) return;
+  fight.effects = fight.effects.filter((e) => !list.includes(e));
+  list.forEach((e) => {
+    (e.holds || []).forEach(([holder, name]) => { holder.conds = holder.conds.filter((c) => c.name !== name); });
+    if (e.ally) {
+      const there = e.ally.effects.find((y) => y.kind === 'haste' && y.from === e);
+      if (there) { e.ally.effects = e.ally.effects.filter((y) => y !== there); e.ally.lethargic = e.ally.turn + 1; if (note) note(t('Haste ends on the ally too, who is left Lethargic.')); }
+    }
+  });
+}
+// Everything a side needs to act or to be acted on in a round: its switches, what it sees, how it pays, how its
+// attacks and saving throws are changed by the conditions in play, how a blow lands on it. `out` is where the
+// lines and notes go: the build's own turn, or the turn of the enemy that strikes it.
+function turnTools(enc, i, out) {
+  const side = enc.sides[i];
+  const fight = enc.fights[i];
   const left = fight.left;
+  const R = fight.round;
   const base = side.stats.active || [];
-  const opts = side.stats.options || new Set();
-  const target = side.target;
-  const notes = [];
-  const lines = [];
-  const did = [];
+  const many = enc.foes.length > 1;
   const has = (kind) => fight.effects.find((e) => e.kind === kind);
   const named = (name) => fight.effects.find((e) => e.name === name);
-  const drop = (list) => { fight.effects = fight.effects.filter((e) => !list.includes(e)); };
-  const done = () => { const total = lines.reduce((a, x) => a + x.damage, 0); fight.dealt += total; return { n, name: did.join(' + ') || t('Nothing'), lines, total, notes }; };
+  const note = (text) => { if (!out.notes.includes(text)) out.notes.push(text); };
+  const drop = (list) => dropEffects(enc, fight, list, note);
+  const raging = () => base.includes('rage') && (!left || !!has('rage'));
+  const onNow = () => {
+    const on = base.filter((k) => (k !== 'haste' || !left || !!has('haste')) && (k !== 'rage' || raging()) && (k !== 'surge' || !left || left.surge > 0) && !R.off.includes(k));
+    if (has('haste') && !on.includes('haste')) on.push('haste');
+    return on;
+  };
+  const view = (target) => simView(side, base.includes('rage') && !raging(), onNow(), !!left && left.ki < 1, target || (focus() || enc.foes[0]).target, many);
+  const riders = () => fight.effects.filter((e) => e.kind === 'rider').map((e) => e.rider);
+  // the enemies still standing, the one the party strikes first in front: the main one, or its helpers before it
+  const alive = () => { const list = enc.foes.filter((f) => !f.dead); return enc.opts.focus === 'helpers' && list.length > 1 && list[0] === enc.foes[0] ? list.slice(1).concat(list[0]) : list; };
+  function focus() { return alive()[0] || null; }
+  // Bless cast by anyone of the party on this member (not counted twice with the switch of Final numbers)
+  const blessed = () => !base.includes('text:Bless') && enc.fights.some((f) => f.effects.some((e) => e.kind === 'bless' && e.to.includes(i)));
+  // pays for a cast: a slot, or its one use a rest for a spell that recharges that way; false when it cannot
+  // (`silent` leaves the reason unsaid: a reaction that cannot be paid for just does not happen)
+  const pay = (x, points, silent) => {
+    if (!left) return true;
+    const free = /rest/i.test(x.sp.rc || '');
+    if (free && fight.used.includes(x.name)) { if (!silent) note(t('{spell} was used already: it comes back with a rest.', { spell: x.name })); return false; }
+    if (!free && x.slot && !takeSlot(left, x, false)) { if (!silent) note(t('No spell slot left for {spell}: the turn goes to what the build does at will.', { spell: x.name })); return false; }
+    if (free) fight.used.push(x.name); else if (x.slot) takeSlot(left, x, true);
+    left.points -= points || 0;
+    return true;
+  };
+  // what the conditions in play do to an attack of this build on an enemy: `near` when it is made from up close
+  const mods = (f, near) => {
+    const m = { adv: false, dis: condHas(fight, 'dis'), crit: false, dice: blessed() ? ['1d4'] : [], spell: fight.acuity || 0, once: [],
+      saveFx: (key) => ({ fail: f.conds.some((c) => (c.f.fail || []).includes(key)), dis: f.conds.some((c) => (c.f.sd || []).includes(key)) }) };
+    f.conds.forEach((c) => {
+      if (c.f.ally && c.by === fight) return;  // Distracted: for the allies of whoever caused it, not for that one
+      if (c.f.adv && (!c.f.near || near)) { m.adv = true; if (c.f.once) m.once.push(c); }
+      if (c.f.crit && near) m.crit = true;
+    });
+    const gains = side.stats.gains || [];
+    // Assassinate: Advantage against whoever has not taken a turn yet; a hit on a Surprised creature is a critical hit
+    if (enc.live && !f.acted && gains.includes('Assassinate: Initiative')) m.adv = true;
+    if (enc.live && f.surprised && gains.includes('Assassinate: Ambush')) m.crit = true;
+    return m;
+  };
+  // an attack roll made with the Advantage of a condition that is good for one attack (Distracted) spends it
+  const spend = (m, f) => { if (m.once && m.once.length) f.conds = f.conds.filter((c) => !m.once.includes(c)); };
+  // what every saving throw of the build gets on top: the die of Bless or of what is switched on, and the Aura of
+  // Protection of a Paladin still standing in the same line (within its 3 m)
+  const saveExtra = () => [...(side.stats.savesDice || []), ...(blessed() ? ['1d4'] : [])].reduce((a, d) => a + rollDice(d).sum, 0)
+    + enc.sides.reduce((a, s, k) => (k !== i && !enc.fights[k].down && s.front === side.front ? Math.max(a, s.aura || 0) : a), 0);
+  // a saving throw of the build: { d20, total, passed }. Conditions on it, Advantage from its traits, and the above.
+  const mySave = (key, dc) => {
+    const auto = fight.conds.some((c) => (c.f.fail || []).includes(key));
+    const d20 = auto ? 0 : rollD20((side.saveAdv.has(key) ? 1 : 0) - (fight.conds.some((c) => (c.f.sd || []).includes(key)) ? 1 : 0));
+    const bonus = (side.saves[key] || 0) + saveExtra();
+    return { d20, bonus, passed: !auto && d20 + bonus >= dc, auto };
+  };
+  // damage lands on an enemy: it may fall; else it may answer, once a round
+  const land = (lines, f, near) => {
+    if (f && many) lines.forEach((l) => { l.to = f.name; });
+    out.lines.push(...lines);
+    if (lines.some((l) => l.kind === 'attack')) R.attacked = true;
+    const dmg = lines.reduce((a, l) => a + (l.damage || 0), 0);
+    // Fire damage dealt keeps Arcane Acuity up, with the gear that says so
+    if (left && side.acu.fire && lines.some((l) => l.damage > 0 && /\bFire\b/.test(l.text || ''))) fight.acuity = Math.min(10, (fight.acuity || 0) + side.acu.fire);
+    if (!f) return;
+    if (dmg > 0) {
+      f.dealt += dmg;
+      fight.dealt += dmg;
+      f.conds = f.conds.filter((c) => !c.f.wake);
+      if (f.dealt >= f.hp && !f.dead) { f.dead = enc.round || 1; R.kills++; note(t('{who} falls.', { who: f.name || t('The enemy') })); return; }
+    }
+    if (!f.dead && left && !f.reacted && !f.surprised && !R.answering && (dmg > 0 || lines.some((l) => l.kind === 'attack')) && !condHas(f, 'nr') && !condHas(f, 'skip')) {
+      const rx = (f.move.rx || []).filter((a) => !a.uses || ((f.used || {})[a.label] || 0) < a.uses);
+      const act = rx.find((a) => a.melee === !!near) || rx[0];
+      if (act) {
+        f.reacted = true;
+        R.answering = true;
+        strike(act, 0, f, true);
+        R.answering = false;
+      }
+    }
+  };
+  // the build's Armour Class as the blow comes: Hastened +2, +3 for each duplicate of Mirror Image, Shield +5
+  const armour = () => { const mirror = has('mirror'); return side.ac + (has('haste') ? 2 : 0) + (mirror ? 3 * mirror.images : 0) + (R.shielded ? 5 : 0); };
+  // Concentration ends: by a hit, by a condition
+  const lose = (why) => {
+    const held = fight.effects.filter((e) => e.conc);
+    if (!held.length) return;
+    drop(held);
+    if (held.some((e) => e.kind === 'haste')) fight.lethargic = fight.turn + 1;
+    note(why(held.map((e) => e.name).join(', ')));
+  };
+  // one blow of an enemy on the build
+  function strike(act, k, f, answering) {
+    const move = f.move;
+    const blow = { name: f.name || t('The enemy'), how: (act.label || t('melee attack')) + (answering ? ' · ' + (act.legend ? 'Legendary Action' : t('reaction')) : ''), kind: 'foe', mode: act.kind, d20: 0, bonus: 0, against: 0, hit: true, crit: false, passed: false, kept: 0, damage: 0, taken: 0, text: '' };
+    if (many || enc.sides.length > 1) blow.on = side.name;
+    out.lines.push(blow);
+    if (act.kind === 'e') {
+      // it heals itself: that much of the damage dealt so far is undone
+      const [dice, flat] = act.hits[0][0];
+      const r = rollDice(dice);
+      blow.healed = r.sum + flat;
+      blow.text = [r.rolls.length ? diceBit(dice, r) : '', flat ? String(flat) : ''].filter(Boolean).join(' + ') + ' = ' + tenth(blow.healed);
+      f.dealt = Math.max(0, f.dealt - blow.healed);
+      return;
+    }
+    let share = 1;
+    let landed = true;
+    if (act.kind === 'a') {
+      const ac = armour();
+      // conditions: Advantage against a build that is Prone (from up close), Blinded, Stunned…; Disadvantage for an
+      // enemy that is Frightened, Blinded, Poisoned…
+      const adv = fight.conds.some((c) => c.f.adv && !c.f.ally && (!c.f.near || act.melee));
+      // (Evasive Footwork: Disadvantage for melee attacks on the build)
+      Object.assign(blow, { d20: rollD20((adv ? 1 : 0) - (condHas(f, 'dis') || (act.melee && condHas(fight, 'guard')) ? 1 : 0)), bonus: act.bonus, against: ac });
+      blow.crit = blow.d20 === 20;
+      blow.hit = blow.d20 !== 1 && (blow.crit || blow.d20 + act.bonus >= ac);
+      if (blow.hit && act.melee && fight.conds.some((c) => c.f.crit)) blow.crit = true;
+      // Shield: +5 to Armour Class until the build's next turn, cast when that turns the hit into a miss
+      if (blow.hit && !blow.crit && side.react === 'Shield' && !R.reacted && !R.shielded && side.shield && blow.d20 + act.bonus < ac + 5 && pay(side.shield, 0, true)) {
+        R.reacted = true;
+        R.shielded = true;
+        Object.assign(blow, { hit: false, against: ac + 5 });
+        note(t('Shield: +5 to Armour Class until the next turn.'));
+      }
+      if (!blow.hit) {
+        if (act.melee) R.missNow++;
+        // an attack evaded takes one duplicate of Mirror Image with it
+        const mirror = has('mirror');
+        if (mirror && --mirror.images <= 0) { drop([mirror]); note(t('{name} ends.', { name: mirror.name })); }
+        // (some attacks still deal half their damage on a miss)
+        if (!act.om) return;
+        share = act.om;
+        blow.half = true;
+        landed = false;
+      }
+    } else if (act.kind === 's') {
+      // Evasion: nothing on a passed Dexterity save that would halve, half on a failed one
+      const evades = side.evasion && act.sv === 'dex' && act.os === 0.5;
+      const thrown = mySave(act.sv, act.dc);
+      Object.assign(blow, { d20: thrown.d20, auto: thrown.auto, bonus: thrown.bonus, against: act.dc, ab: act.sv.toUpperCase(), kept: evades ? 0 : act.os, passed: thrown.passed });
+      share = blow.passed ? (evades ? 0 : act.os) : evades ? 0.5 : 1;
+      if (evades) blow.how += ' · Evasion';
+      landed = !blow.passed;
+      blow.hit = share > 0 || (landed && !!act.cd);
+      if (!blow.hit) return;
+    }
+    // what lands on the build: a resistance halves it, and so does Uncanny Dodge, once a round
+    const bits = [];
+    let raw = 0;
+    (act.hits ? act.hits[Math.min(k, act.hits.length - 1)] : [['', move.damage, '']]).forEach(([dice, flat, type]) => {
+      const r = rollDice(dice, blow.crit);
+      raw += r.sum + flat;
+      blow.taken += (r.sum + flat) * share * takes(side, type, !!has('rage'), !!has('ward'));
+      bits.push([r.rolls.length ? diceBit(dice, r) : '', flat || !r.rolls.length ? String(flat) : ''].filter(Boolean).join(' + ') + (type ? ' ' + type : ''));
+    });
+    if (side.react === 'Uncanny Dodge' && !R.reacted && side.dodge && blow.taken > 0) { R.reacted = true; blow.taken /= 2; blow.how += ' · Uncanny Dodge'; }
+    blow.text = bits.join(' + ') + (bits.length > 1 || Math.abs(raw - blow.taken) > 0.001 ? ' = ' + tenth(raw) : '') + (Math.abs(raw - blow.taken) > 0.001 ? ' → ' + tenth(blow.taken) : '');
+    if (blow.taken > 0 || !act.hits || (act.hits[0] || []).length) { R.hurt++; R.hurtNow++; }
+    // what answers a melee hit
+    if (act.kind === 'a' && act.melee && landed) fight.effects.filter((e) => e.kind === 'later' && e.later.some((p) => p.when === 'struck')).forEach((e) => {
+      const back = rollLater(e, 'struck');
+      back.forEach((l) => { l.how = t('when struck'); if (many) l.to = f.name; });
+      out.lines.push(...back);
+      const dmg = back.reduce((a, l) => a + l.damage, 0);
+      f.dealt += dmg;
+      fight.dealt += dmg;
+      if (f.dealt >= f.hp && !f.dead) { f.dead = enc.round || 1; note(t('{who} falls.', { who: f.name || t('The enemy') })); }
+    });
+    // temporary hit points go first (an elixir's, Armour of Agathys), then the build's own
+    let rest = blow.taken;
+    if (fight.temp > 0) { const part = Math.min(fight.temp, rest); fight.temp -= part; rest -= part; }
+    fight.effects.filter((e) => e.pool != null).forEach((e) => {
+      const part = Math.min(e.pool, rest);
+      e.pool -= part;
+      rest -= part;
+      if (e.pool <= 0) { drop([e]); note(t('{name} ends.', { name: e.name })); }
+    });
+    fight.hp -= rest;
+    if (blow.taken > 0) fight.conds = fight.conds.filter((c) => !c.f.wake);
+    // a hit taken costs two turns of Arcane Acuity
+    if (blow.taken > 0 && fight.acuity) fight.acuity = Math.max(side.acu.floor, fight.acuity - 2);
+    if (fight.hp <= 0) {
+      // Downed: out of the fight until helped up or healed, rolling death saving throws meanwhile
+      Object.assign(fight, { down: enc.round || 1, fell: true, death: { ok: 0, bad: 0 }, conds: [], onus: null });
+      R.stop = true;
+      drop(fight.effects.filter((e) => e.conc));
+      note(enc.sides.length > 1 ? t('{who} falls in turn {n}.', { who: side.name, n: fight.down }) : t('The build falls in turn {n}.', { n: fight.down }));
+      return;
+    }
+    // the condition the blow leaves, when the build fails the save against it (the blow's own save counts)
+    if (act.cd && landed && !fight.conds.some((c) => c.name === act.cd.name)) {
+      const cd = act.cd;
+      const own = cd.sv && !(act.kind === 's' && cd.sv === act.sv);
+      const thrown = own ? mySave(cd.sv, cd.dc) : null;
+      if (thrown) out.lines.push({ name: blow.name, how: cd.name, kind: 'foe', mode: 's', on: blow.on, d20: thrown.d20, auto: thrown.auto, bonus: thrown.bonus, against: cd.dc, ab: cd.sv.toUpperCase(), passed: thrown.passed, kept: 0, hit: !thrown.passed, damage: 0, taken: 0, text: '', cond: true });
+      if (!thrown || !thrown.passed) {
+        const c = addCond(fight, cd.name, cd.turns, f, cd.sv && cd.dc ? { key: cd.sv, dc: cd.dc } : null);
+        note(t('{who} is {cond} for {n} turn(s).', { who: side.name || t('The build'), cond: cd.name, n: c.left }));
+        if (c.f.drop) lose((names) => t('{cond} ends the Concentration: {name} ends.', { cond: cd.name, name: names }));
+      }
+    }
+    // damage taken can break Concentration: Constitution save against 10 or half the damage, whichever is higher
+    if (fight.effects.some((e) => e.conc) && blow.taken > 0) {
+      const dc = Math.max(10, Math.floor(blow.taken / 2));
+      const save = rollD20(side.conAdv ? 1 : 0);
+      if (save === 1 || save + side.con < dc) lose((names) => t('A hit breaks the Concentration ({roll} {bonus} against DC {dc}): {name} ends.', { roll: save, bonus: (side.con < 0 ? '− ' : '+ ') + Math.abs(side.con), dc, name: names }));
+    }
+  }
+  return { side, fight, left, R, base, many, has, named, note, drop, raging, onNow, view, riders, alive, focus, blessed, pay, mods, spend, saveExtra, mySave, land, strike, lose };
+}
+// The turn of a build that is Downed: a death saving throw (the wiki's Death Saving Throw page), a d20 against 10
+// with nothing added but the die of Bless and a Paladin's aura. Three passed and it is Stable; three failed, dead.
+function downedTurn(enc, i) {
+  const side = enc.sides[i];
+  const fight = enc.fights[i];
+  const d = fight.death || (fight.death = { ok: 0, bad: 0 });
+  if (d.ok >= 3) return null;
+  const out = { who: i, kind: 'side', title: side.name, name: 'Downed', lines: [], notes: [], total: 0 };
+  const d20 = rollD20(0);
+  const total = d20 + turnTools(enc, i, out).saveExtra();
+  if (d20 !== 1 && total >= 10) d.ok++; else d.bad++;
+  out.notes.push(t('Death saving throw: {roll} against DC 10. {ok} passed, {bad} failed.', { roll: total, ok: d.ok, bad: d.bad }));
+  if (d.bad >= 3) { fight.dead = true; out.notes.push(t('{who} dies.', { who: side.name || t('The build') })); }
+  else if (d.ok >= 3) out.notes.push(t('{who} is Stable: no more death saving throws.', { who: side.name || t('The build') }));
+  return out;
+}
+
+// One turn of a build in a fight. { who, kind: 'side', name, lines, notes, total }
+function buildTurn(enc, i) {
+  const side = enc.sides[i];
+  const fight = enc.fights[i];
+  if (fight.down) return enc.live && !fight.dead ? downedTurn(enc, i) : null;
+  const out = { who: i, kind: 'side', title: side.name, name: '', lines: [], notes: [], total: 0 };
+  const n = ++fight.turn;
+  const keep = fight.round;
+  const R = fight.round = Object.assign(newRound(), { attacked: keep.attacked, hurt: keep.hurt });
+  const T = turnTools(enc, i, out);
+  const { left, base, has, named, note, drop, view, riders, pay, land } = T;
+  const opts = side.stats.options || new Set();
+  const gains = side.stats.gains || [];
+  const lines = out.lines;
+  const did = [];
+  const done = () => {
+    out.total = lines.reduce((a, x) => a + x.damage, 0);
+    out.name = did.join(' + ') || t('Nothing');
+    // the end of the turn: conditions count down, on the build and the ones it caused
+    condEnd(fight, (key) => side.saves[key] || 0, note, enc.foes);
+    return out;
+  };
   // what ran its course; the turn after Haste ends is lost
-  fight.effects = fight.effects.filter((e) => {
-    if (e.until >= n) return true;
-    if (!e.quiet) notes.push(t('{name} ends.', { name: e.name }));
+  fight.effects.filter((e) => e.until < n).forEach((e) => {
+    if (!e.quiet) note(t('{name} ends.', { name: e.name }));
     if (e.kind === 'haste') fight.lethargic = n;
-    return false;
+    drop([e]);
   });
+  condStart(fight, note);
+  condSource(fight, enc.foes);
+  // Arcane Acuity runs down a turn at a time, never below what an elixir keeps it at
+  if (left) fight.acuity = Math.max(side.acu.floor, (fight.acuity || 0) - (n > 1 ? 1 : 0));
+  // the allies that are Downed and can still be brought back
+  const fallen = () => enc.sides.map((s, k) => k).filter((k) => k !== i && enc.fights[k].down && !enc.fights[k].dead);
   // the damage of what was cast on earlier turns
-  fight.effects.filter((e) => e.kind === 'later' && e.from < n).forEach((e) => { const out = rollLater(e, ''); if (!out.length) return; lines.push(...out); if (e.once) { e.until = n; e.quiet = true; } });
+  fight.effects.filter((e) => e.kind === 'later' && e.from < n).forEach((e) => {
+    if (e.foe && e.foe.dead) return;
+    const dealt = rollLater(e, '');
+    if (!dealt.length) return;
+    land(dealt, e.foe || T.focus());
+    if (e.once) { e.until = n; e.quiet = true; }
+  });
   const lost = fight.lethargic === n;
-  if (lost) { notes.push(t('Lethargic after Haste: no action this turn.')); did.push('Lethargic'); }
+  const held = fight.conds.find((c) => c.f.skip);
+  const surprised = !!fight.surprised && enc.round <= 1;
+  if (lost) { note(t('Lethargic after Haste: no action this turn.')); did.push('Lethargic'); }
+  else if (held) { note(t('{cond}: no action this turn.', { cond: held.name })); did.push(held.name); }
+  else if (surprised) note(t('Surprised: no action and no reaction in the first round.'));
+  R.lost = lost || !!held;
+  R.reacted = R.lost || surprised || condHas(fight, 'nr');
   // Haste switched on above comes from someone else: it is there from the first turn, for its ten turns
   if (left && n === 1 && base.includes('haste')) fight.effects.push({ name: 'Haste', kind: 'haste', until: 10 });
-  // Rage is entered with the bonus action, lasts ten turns and takes a charge
-  let bonusUsed = lost;
-  if (!lost && left && base.includes('rage') && !has('rage')) {
-    if (left.rage > 0) { left.rage--; fight.effects.push({ name: 'Rage', kind: 'rage', until: n + 9 }); bonusUsed = true; notes.push(t('Rage: entered with the bonus action.')); }
-    else if (!fight.noRage) { fight.noRage = true; notes.push(t('No Rage Charges left.')); }
+  if (left && n === 1 && side.coat) note(t('{name} on the weapon, for its 10 turns.', { name: side.coat.name }));
+  // at half its hit points or less, the bonus action goes to the healing chosen on the page; a healing spell also
+  // goes to whoever of the party is that low
+  R.bonus = R.lost;
+  // Evasive Footwork: a Superiority Die for Disadvantage on the melee attacks made on the build. The wiki notes that
+  // it ends with the build's own turn, so it only covers what answers the build during that turn.
+  if (!R.lost && left && side.foot && left.dice > 0) { left.dice--; addCond(fight, 'Evasive Footwork', 1, fight); note(t('Evasive Footwork: Disadvantage on melee attacks against the build, until the end of its turn.')); }
+  if (!R.lost && left && side.heal) {
+    const h = side.heal;
+    const low = (k) => !enc.fights[k].down && enc.fights[k].hp <= enc.sides[k].hp / 2;
+    // a healing spell goes first to an ally that is Downed, which stands up with what it heals
+    const who = h.kind === 'spell' && fallen().length ? fallen()[0] : low(i) ? i : h.kind === 'spell' ? enc.sides.map((s, k) => k).filter(low).sort((a, b) => enc.fights[a].hp / enc.sides[a].hp - enc.fights[b].hp / enc.sides[b].hp)[0] : undefined;
+    const can = who === undefined ? false : h.kind === 'wind' ? left.wind > 0 : h.kind === 'potion' ? left.potions > 0 : !has('rage') && takeSlot(left, h, false);
+    if (can) {
+      if (h.kind === 'wind') left.wind--; else if (h.kind === 'potion') left.potions--; else takeSlot(left, h, true);
+      const healed = rollDice(h.dice).sum + h.flat;
+      if (enc.fights[who].down) standUp(enc.fights[who], healed);
+      else enc.fights[who].hp = Math.min(enc.sides[who].hp, enc.fights[who].hp + healed);
+      R.bonus = true;
+      did.push(h.name);
+      note(who === i ? t('{what}: {n} hit points back, with the bonus action.', { what: h.name, n: tenth(healed) }) : t('{what}: {n} hit points back to {who}, with the bonus action.', { what: h.name, n: tenth(healed), who: enc.sides[who].name }));
+    }
   }
-  const raging = base.includes('rage') && (!left || !!has('rage'));
-  const calm = base.includes('rage') && !raging;
-  let on = base.filter((k) => (k !== 'haste' || !left || !!has('haste')) && (k !== 'rage' || raging) && (k !== 'surge' || !left || left.surge > 0));
-  if (has('haste') && !on.includes('haste')) on.push('haste');
-  const view = () => simView(side, calm, on, !!left && left.ki < 1);
+  // Rally: the bonus action and a Superiority Die for 8 temporary hit points, to an ally that is Downed (who is back
+  // at 1 hit point first) or to whoever of the party is at half its hit points or less
+  if (!R.bonus && left && side.rally && left.dice > 0) {
+    const weak = enc.sides.map((s, k) => k).filter((k) => !enc.fights[k].down && enc.fights[k].hp <= enc.sides[k].hp / 2 && enc.fights[k].temp < 8);
+    const k = fallen().length ? fallen()[0] : weak[0];
+    if (k !== undefined) {
+      left.dice--;
+      R.bonus = true;
+      if (enc.fights[k].down) standUp(enc.fights[k], 1);
+      enc.fights[k].temp = Math.max(enc.fights[k].temp, 8);
+      did.push('Rally');
+      note(t('Rally: 8 temporary hit points to {who}, with the bonus action.', { who: enc.sides[k].name || t('The build') }));
+    }
+  }
+  // Rage is entered with the bonus action, lasts ten turns and takes a charge
+  if (!R.bonus && left && base.includes('rage') && !has('rage')) {
+    if (left.rage > 0) { left.rage--; fight.effects.push({ name: 'Rage', kind: 'rage', until: n + 9 }); R.bonus = true; note(t('Rage: entered with the bonus action.')); }
+    else if (!fight.noRage) { fight.noRage = true; note(t('No Rage Charges left.')); }
+  }
+  const raging = T.raging();
   const step = side.steps[Math.min(n, 4) - 1];
   const wantOf = (f, by) => step[f] || side.steps[3][f] || by;
   const wantA = wantOf('a', 'weapon');
   const wantQ = wantOf('q', 'auto');
   const wantX = wantOf('x', 'same');
-  const riders = () => fight.effects.filter((e) => e.kind === 'rider').map((e) => e.rider);
-  let stop = false;     // the rest of the turn is lost
-  let crits = 0;
-  const noSlot = (name) => t('No spell slot left for {spell}: the turn goes to what the build does at will.', { spell: name });
   // one spell at a time holds Concentration. Haste cast on oneself and dropped for another spell leaves the caster
   // Lethargic at once (until the end of the turn), and the new spell ends
   const concentrate = (name) => {
     const own = fight.effects.find((e) => e.kind === 'haste' && e.conc);
     if (own) {
       drop([own]);
-      stop = true;
-      notes.push(t('Casting {spell} drops the Concentration on Haste: Lethargic at once, the new spell ends and the rest of the turn is lost.', { spell: name }));
+      R.stop = true;
+      note(t('Casting {spell} drops the Concentration on Haste: Lethargic at once, the new spell ends and the rest of the turn is lost.', { spell: name }));
       return false;
     }
-    fight.effects = fight.effects.filter((e) => { if (!e.conc) return true; notes.push(t('{name} ends: Concentration goes to {spell}.', { name: e.name, spell: name })); return false; });
+    fight.effects.filter((e) => e.conc).forEach((e) => { note(t('{name} ends: Concentration goes to {spell}.', { name: e.name, spell: name })); drop([e]); });
     return true;
   };
-  const noSpells = (name) => { if (raging) notes.push(t('No spells while raging: {spell} is not cast.', { spell: name })); return raging; };
-  // pays for a cast: a slot, or its one use a rest for a spell that recharges that way; false when it cannot
-  // (`silent` leaves the reason unsaid: a reaction that cannot be paid for just does not happen)
-  const pay = (x, points, silent) => {
-    if (!left) return true;
-    const free = /rest/i.test(x.sp.rc || '');
-    if (free && fight.used.includes(x.name)) { if (!silent) notes.push(t('{spell} was used already: it comes back with a rest.', { spell: x.name })); return false; }
-    if (!free && x.slot && !takeSlot(left, x, false)) { if (!silent) notes.push(noSlot(x.name)); return false; }
-    if (free) fight.used.push(x.name); else if (x.slot) takeSlot(left, x, true);
-    left.points -= points || 0;
-    return true;
+  const noSpells = (name) => { if (raging) note(t('No spells while raging: {spell} is not cast.', { spell: name })); return raging; };
+  // the condition a spell leaves on an enemy that failed its save (or was hit): held by the caster's Concentration
+  // when the spell asks for it. `failed` is how the roll of the cast went, when there was one.
+  const leave = (s, f, save, failed, effect) => {
+    (s.cn || []).filter((c) => condFx(c[0]) && !f.conds.some((y) => y.name === c[0])).forEach((c) => {
+      if (!failed) return;
+      const fx = condFx(c[0]);
+      const key = fx.rep && fx.rep !== 'same' ? fx.rep : save ? save.key : '';
+      const cond = addCond(f, c[0], parseInt(c[1], 10) || 2, fight, save && key ? { key, dc: save.dc } : null);
+      note(t('{who} is {cond} for {n} turn(s).', { who: f.name || t('The enemy'), cond: c[0], n: cond.left }));
+      if (effect) (effect.holds = effect.holds || []).push([f, c[0]]);
+    });
   };
   // a spell that deals damage or answers the enemy; `quick` casts it with the bonus action, for 3 Sorcery Points more
   const cast = (name, quick) => {
@@ -278,37 +940,76 @@ function fightTurn(side, fight) {
     if (!x || noSpells(name)) return false;
     if (named(name) && (x.perTurn || x.setup)) return false;  // still at work: not cast again
     if (left && (x.points || 0) + (quick ? 3 : 0) > left.points) {
-      if (quick && left.points < 3) { notes.push(t('No Sorcery Points left for Quickened Spell.')); return false; }
+      if (quick && left.points < 3) { note(t('No Sorcery Points left for Quickened Spell.')); return false; }
       if (x.points) {
-        on = on.filter((k) => k !== 'meta:twin' && k !== 'meta:heighten');
+        R.off.push('meta:twin', 'meta:heighten');
         x = view().spells.get(name);
-        notes.push(t('No Sorcery Points left for the Metamagic.'));
+        note(t('No Sorcery Points left for the Metamagic.'));
         if (!x) return false;
       }
     }
     if (!pay(x, (x.points || 0) + (quick ? 3 : 0))) return false;
     did.push(name + (quick ? ' (Quickened Spell)' : ''));
-    const r = x.recipe;
-    if (r.conc && !concentrate(name)) return true;
-    const out = rollSpell(view().st, x, target, riders());
-    if (quick) out.forEach((l) => { l.how = 'Quickened Spell'; });
-    lines.push(...out);
-    // what it leaves at work: damage on the following turns (when the attack that carries it hit), damage that
-    // waits for the enemy, Concentration
-    const landed = !out.some((l) => l.kind === 'attack') || out.some((l) => l.kind === 'attack' && l.hit);
-    const later = landed ? r.later : [];
-    const ticking = later.filter((p) => !p.when);
-    const once = ticking.length > 0 && ticking.every((p) => p.once);
-    const moving = later.length > 0 && later.every((p) => p.when === 'moves');
-    if (later.length || r.conc) {
-      drop(fight.effects.filter((e) => e.name === name));
-      const e = { name, kind: 'later', from: n, conc: r.conc, later, save: r.save, once, quiet: moving || (once && later.length === ticking.length),
-        until: moving ? n : once ? n + 1 : r.turns ? n + r.turns - 1 : Infinity };
-      // Armour of Agathys answers while the temporary hit points it gives hold
-      if (x.setup && /temporary hit points/i.test(x.sp.d || '')) e.pool = later.reduce((a, p) => a + p.flat, 0);
-      fight.effects.push(e);
-      if (x.setup) notes.push(t('{spell} cast: {x}.', { spell: name, x: x.text }));
-    }
+    if (x.recipe.conc && !concentrate(name)) return true;
+    // whom it lands on: every enemy an area catches, a second one for Twinned Spell, else the one in front
+    const there = T.alive();
+    const marks = !T.many ? [T.focus()] : x.area ? there.slice(0, x.cap || 8) : x.recipe.repeat > 1 ? there.slice(0, 2) : [T.focus()];
+    let first = true;
+    marks.filter(Boolean).forEach((f) => {
+      const xf = T.many ? view(f.target).spells.get(name) || x : x;
+      const r = T.many && xf.recipe.repeat > 1 && marks.length > 1 ? Object.assign({}, xf.recipe, { repeat: 1 }) : xf.recipe;
+      const dealt = rollSpell(view(f.target).st, Object.assign({}, xf, { recipe: r }), f.target, riders(), T.mods(f, false));
+      if (quick) dealt.forEach((l) => { l.how = 'Quickened Spell'; });
+      // what it leaves at work: damage on the following turns (when the attack that carries it hit), damage that
+      // waits for the enemy, Concentration
+      const landed = !dealt.some((l) => l.kind === 'attack') || dealt.some((l) => l.kind === 'attack' && l.hit);
+      // a wall leaves its cloud only when the page says it is broken; from then on that is damage of every turn
+      const later = (landed ? r.later : []).filter((p) => p.when !== 'broken' || enc.foes[0].move.broken).map((p) => (p.when === 'broken' ? Object.assign({}, p, { when: '' }) : p));
+      const ticking = later.filter((p) => !p.when);
+      const once = ticking.length > 0 && ticking.every((p) => p.once);
+      const moving = later.length > 0 && later.every((p) => p.when === 'moves');
+      let e = null;
+      if (later.length || r.conc) {
+        if (first) drop(fight.effects.filter((y) => y.name === name));
+        e = { name, kind: 'later', from: n, conc: r.conc, later, save: r.laterSave || r.save, once, quiet: moving || (once && later.length === ticking.length) || !first,
+          until: moving ? n : once ? n + 1 : r.turns ? n + r.turns - 1 : Infinity, foe: T.many && !x.setup ? f : null };
+        // Armour of Agathys answers while the temporary hit points it gives hold
+        if (x.setup && /temporary hit points/i.test(x.sp.d || '')) e.pool = later.reduce((a, p) => a + p.flat, 0);
+        fight.effects.push(e);
+        if (x.setup && first) note(t('{spell} cast: {x}.', { spell: name, x: x.text }));
+      }
+      // the condition it leaves, by its saving throw or by the hit
+      const saves = dealt.filter((l) => l.kind === 'save');
+      const hits = dealt.filter((l) => l.kind === 'attack');
+      if ((x.sp.cn || []).some((c) => condFx(c[0])) && (r.save || x.sp.at) && (saves.length || hits.length)) {
+        leave(x.sp, f, r.save, saves.length ? saves.some((l) => !l.passed) : hits.some((l) => l.hit), e && r.conc ? e : null);
+      }
+      land(dealt, f, false);
+      if (hits.length) T.spend(T.mods(f, false), f);
+      first = false;
+    });
+    return true;
+  };
+  // a spell that only leaves a condition (Hold Person): the enemy in front saves against it
+  const castControl = (name) => {
+    const x = side.controls.find((c) => c.name === name);
+    const f = T.focus();
+    if (!x || !f || noSpells(name) || x.sp.cn.every((c) => f.conds.some((y) => y.name === c[0]))) return false;
+    // "Hold a humanoid": no use on anything else
+    if (/\bhumanoid\b/i.test(x.sp.d || '') && f.target.enemy && !enemyIs(f.target, 'Humanoid')) { note(t('{spell} only works on a Humanoid: it is not cast.', { spell: name })); return false; }
+    const high = T.onNow().includes('meta:heighten') && opts.has('Heightened Spell') && (!left || left.points >= 3);
+    if (!pay(x, high ? 3 : 0)) return false;
+    did.push(name);
+    if (x.sp.co && !concentrate(name)) return true;
+    const save = { key: x.key, bonus: f.target.saves[x.key] || 0, dc: x.dc, dis: high };
+    const thrown = throwSave(save, T.mods(f, false));
+    const turns = parseInt((x.sp.cn.find((c) => condFx(c[0])) || [])[1], 10) || 2;
+    const e = x.sp.co ? { name, kind: 'hold', conc: true, until: n + turns - 1, quiet: false } : null;
+    if (e) fight.effects.push(e);
+    leave(x.sp, f, save, !thrown.passed, e);
+    land([{ name, kind: 'save', ab: x.key.toUpperCase(), d20: thrown.d20, auto: !!thrown.auto, bonus: save.bonus, against: save.dc, passed: thrown.passed, kept: 0, damage: 0, cond: true,
+      how: high ? 'Heightened Spell' : '', text: thrown.passed ? '' : x.sp.cn.filter((c) => condFx(c[0])).map((c) => c[0]).join(', ') }], f, false);
+    if (thrown.passed && e) drop([e]);
     return true;
   };
   // a spell that adds a die to every hit while it lasts
@@ -320,43 +1021,195 @@ function fightTurn(side, fight) {
     if (x.sp.co && !concentrate(name)) return true;
     const turns = Number((/(\d+) turn/.exec(x.sp.du || '') || [])[1]) || 0;
     fight.effects.push({ name, kind: 'rider', until: turns ? n + turns - 1 : Infinity, conc: !!x.sp.co, rider: { name, dice: x.rider.dice, type: x.rider.type, all: /attack from/i.test(x.rider.note || '') } });
-    notes.push(t('{spell} cast: {dice} on every hit while it lasts.', { spell: name, dice: dicePart(x.rider) }));
+    note(t('{spell} cast: {dice} on every hit while it lasts.', { spell: name, dice: dicePart(x.rider) }));
     return true;
   };
-  const castHaste = () => {
+  const castWard = (name) => {
+    const x = side.wards.find((w) => w.name === name);
+    if (!x || named(name) || noSpells(name) || !pay(x, 0)) return false;
+    did.push(name);
+    if (x.sp.co && !concentrate(name)) return true;
+    const turns = Number((/(\d+) turn/.exec(x.sp.du || '') || [])[1]) || 1;
+    fight.effects.push(Object.assign({ name, kind: name === 'Mirror Image' ? 'mirror' : 'ward', until: n + turns - 1, conc: !!x.sp.co }, name === 'Mirror Image' ? { images: 3 } : {}));
+    return true;
+  };
+  // Haste, on the caster or on an ally ("Haste>" and the ally's build): the caster holds the Concentration
+  const castHaste = (to) => {
     const x = side.haste;
-    if (!x || has('haste') || noSpells('Haste') || !pay(x, 0)) return false;
-    did.push('Haste');
+    const k = to ? enc.sides.findIndex((s, j) => j !== i && s.b && s.b.id === to && !enc.fights[j].down) : -1;
+    const ally = k >= 0 ? enc.fights[k] : null;
+    if (!x || (ally ? ally.effects.some((e) => e.kind === 'haste') : has('haste')) || noSpells('Haste') || !pay(x, 0)) return false;
+    did.push(ally ? t('Haste on {who}', { who: enc.sides[k].name }) : 'Haste');
     if (!concentrate('Haste')) return true;
-    fight.effects.push({ name: 'Haste', kind: 'haste', until: n + 9, conc: true });
-    if (!on.includes('haste')) on = on.concat('haste');
-    notes.push(t('Haste cast: one more action a turn, for 10 turns.'));
+    if (ally) {
+      const link = { name: 'Haste', kind: 'link', until: n + 9, conc: true, ally };
+      fight.effects.push(link);
+      ally.effects.push({ name: 'Haste', kind: 'haste', until: ally.turn + 10, from: link });
+      note(t('Haste cast on {who}: one more action a turn, for 10 turns.', { who: enc.sides[k].name }));
+      return true;
+    }
+    fight.effects.push({ name: 'Haste', kind: 'haste', until: n + 9, conc: true, from: n });
+    note(t('Haste cast: one more action a turn, for 10 turns.'));
     return true;
   };
-  // weapon attacks
-  const swing = (part) => {
+  // Bless: a d4 on the attack rolls and saving throws of three of the party, the caster first
+  const castBless = () => {
+    const x = side.bless;
+    if (!x || named('Bless') || noSpells('Bless') || !pay(x, 0)) return false;
+    did.push('Bless');
+    if (!concentrate('Bless')) return true;
+    const to = [i, ...enc.sides.map((s, k) => k).filter((k) => k !== i && !enc.fights[k].down)].slice(0, 3);
+    fight.effects.push({ name: 'Bless', kind: 'bless', until: n + 9, conc: true, to });
+    note(t('Bless cast on {who}: 1d4 on attack rolls and saving throws, for 10 turns.', { who: to.map((k) => enc.sides[k].name || t('The build')).join(', ') }));
+    return true;
+  };
+  // ----- weapon attacks -----
+  const hitName = side.hit ? side.hit.name : '';
+  const swing = (part, more) => {
     const k = part.chance != null ? 1 : part.n;
     if (!did.includes(t('Weapon attacks'))) did.push(t('Weapon attacks'));
-    for (let i = 0; i < k; i++) {
-      const line = rollWeapon(view().st, part.row, target, riders());
-      line.how = part.how;
-      if (line.crit) crits++;
-      lines.push(line);
+    for (let s = 0; s < k && !R.stop; s++) {
+      const f = T.focus();
+      if (!f) break;
+      const st = view(f.target).st;
+      const row = part.row;
+      const near = row.slot === 'unarmed' || ((row.slot === 'meleeMain' || row.slot === 'meleeOff') && !row.thrown);
+      const ranged = row.slot === 'rangedMain' || row.slot === 'rangedOff';
+      const weapon = row.slot !== 'unarmed';
+      const m = T.mods(f, near);
+      const how = [part.how];
+      let after = null;   // what a hit leaves: [name, HIT_CONDITIONS entry]
+      // the coating on the weapon, for its ten turns
+      const coat = left && weapon && side.coat && n <= 10 ? side.coat.fx : null;
+      if (coat) { m.attack = coat.attack || 0; m.damage = coat.damage || 0; m.magical = !!coat.magical; }
+      // a special arrow, while there are any
+      const arrow = left && ranged && side.arrow && left.arrows > 0 ? side.arrow : null;
+      const afx = arrow && (!arrow.fx.double || enemyIs(f.target, arrow.fx.double)) ? arrow.fx : null;
+      if (afx) { left.arrows--; how.push(arrow.name); }
+      if (afx && afx.blast) {
+        // it explodes in place of the weapon damage: every enemy near saves against it
+        T.alive().forEach((y) => {
+          const save = { key: afx.save.key, bonus: y.target.saves[afx.save.key] || 0, dc: afx.save.dc };
+          const thrown = throwSave(save, T.mods(y, false));
+          const out2 = afx.blast.map(([dice, type]) => saveLine(arrow.name, save, { dice, flat: 0, type, f: typeFactor(y.target, type, true), kept: afx.kept }, thrown));
+          out2.forEach((l) => { l.how = part.how; });
+          land(out2, y, false);
+        });
+        R.attacked = true;
+        continue;
+      }
+      if (afx && afx.double) m.double = true;
+      // Precision Attack adds the Superiority Die to the attack roll; Feinting Attack gives Advantage
+      const h = left && side.hit && (side.hit.every || !R.man) ? side.hit : null;
+      if (h && h.name === 'Precision Attack' && weapon && left.dice > 0) { left.dice--; R.man++; m.dice = m.dice.concat(side.die); how.push('Precision Attack'); }
+      const feint = h && h.name === 'Feinting Attack' && near && weapon && left.dice > 0 && !R.bonus && !R.man;
+      if (feint) { m.adv = true; how.push('Feinting Attack'); }
+      m.onHit = (line) => {
+        const add = [];
+        // Divine Smite: a spell slot for 2d8 Radiant and more, on a melee weapon hit
+        if (side.smite && left && near && weapon && (side.smite.when === 'all' || line.crit)) {
+          const lv = takeAnySlot(left, side.smite.low);
+          if (lv) add.push([smiteDice(st, f.target, lv), 'Radiant', 'Divine Smite (' + t('level {n} slot', { n: lv }) + ')']);
+          else if (!fight.noSmite) { fight.noSmite = true; note(t('No spell slot left for Divine Smite.')); }
+        }
+        // a manoeuvre: the Superiority Die on the damage, and what it may leave on the target
+        if (h && HIT_MANOEUVRES.includes(h.name) && weapon && left.dice > 0) { left.dice--; R.man++; add.push([side.die, '', h.name]); after = h.name; }
+        if (feint) { left.dice--; R.man++; R.bonus = true; add.push([side.die, '', 'Feinting Attack']); }
+        // Stunning Strike: a Ki Point on a melee hit
+        if (h && h.name === 'Stunning Strike' && near && left.ki > 0) { left.ki--; R.man++; after = h.name; how.push('Stunning Strike'); }
+        if (afx && afx.plus) add.push([afx.plus[0], afx.plus[1], arrow.name]);
+        if (more) add.push(more);
+        return add;
+      };
+      // Sneak Attack, once a turn, needs Advantage on the attack, or an ally next to the target and no Disadvantage
+      const flank = enc.sides.length > 1 ? enc.sides.some((y, k) => k !== i && y.front && !enc.fights[k].down) : enc.opts.ally !== false;
+      m.turnDice = !R.sneaked && (!enc.live || (!m.dis && (st.advantage || m.adv || flank)));
+      const line = rollWeapon(st, row, f.target, riders(), m);
+      T.spend(m, f);
+      line.how = how.join(' · ');
+      if (line.crit) R.crits++;
+      if (line.turnDice) R.sneaked = true;
+      // damage with a weapon attack keeps Arcane Acuity up, with the gear that says so
+      if (left && line.hit && line.damage > 0 && side.acu.weapon) fight.acuity = Math.min(10, (fight.acuity || 0) + side.acu.weapon);
+      const all = [line];
+      if (line.hit) {
+        // what the hit leaves, by the target's save against the weapon action DC
+        const cond = after && HIT_CONDITIONS[after];
+        if (cond && condFx(cond[0]) && !f.conds.some((c) => c.name === cond[0])) {
+          let failed = true;
+          if (cond[2]) {
+            const save = { key: cond[2], bonus: f.target.saves[cond[2]] || 0, dc: side.weaponDc };
+            const thrown = throwSave(save, m);
+            all.push({ name: after, kind: 'save', ab: cond[2].toUpperCase(), d20: thrown.d20, auto: !!thrown.auto, bonus: save.bonus, against: save.dc, passed: thrown.passed, kept: 0, damage: 0, cond: true, text: thrown.passed ? '' : cond[0] });
+            failed = !thrown.passed;
+          }
+          if (failed) { const c = addCond(f, cond[0], cond[1], fight, null); note(t('{who} is {cond} for {n} turn(s).', { who: f.name || t('The enemy'), cond: cond[0], n: c.left })); }
+        }
+        // an arrow that bursts: the target saves against the burst
+        if (afx && afx.extra) {
+          const save = { key: afx.save.key, bonus: f.target.saves[afx.save.key] || 0, dc: afx.save.dc };
+          all.push(saveLine(arrow.name, save, { dice: afx.extra[0], flat: 0, type: afx.extra[1], f: typeFactor(f.target, afx.extra[1], true), kept: afx.kept }, throwSave(save, m)));
+        }
+        // the coating: the save it asks, and what a failed one brings
+        if (coat && (coat.save || coat.conds || coat.extra) && !((f.inoc[side.coat.name] || 0) >= enc.round)) {
+          const save = coat.save ? { key: coat.save.key, bonus: f.target.saves[coat.save.key] || 0, dc: coat.save.dc } : null;
+          const thrown = save ? throwSave(save, m) : { passed: false, d20: 0 };
+          if (coat.extra) all.push(saveLine(side.coat.name, save || { key: 'con', bonus: 0, dc: 0 }, { dice: coat.extra[0], flat: 0, type: coat.extra[1], f: typeFactor(f.target, coat.extra[1], true), kept: coat.kept }, thrown));
+          else if (coat.later) all.push(saveLine(side.coat.name, save, { dice: coat.later[0], flat: 0, type: coat.later[1], f: typeFactor(f.target, coat.later[1], true), kept: 0 }, thrown));
+          else if (save) all.push({ name: side.coat.name, kind: 'save', ab: save.key.toUpperCase(), d20: thrown.d20, auto: !!thrown.auto, bonus: save.bonus, against: save.dc, passed: thrown.passed, kept: 0, damage: 0, cond: true, text: thrown.passed ? '' : (coat.conds || []).join(', ') });
+          if (!thrown.passed) (coat.conds || []).filter((c) => !f.conds.some((y) => y.name === c)).forEach((c) => { const y = addCond(f, c, 2, fight, null); note(t('{who} is {cond} for {n} turn(s).', { who: f.name || t('The enemy'), cond: c, n: y.left })); });
+          else if (save) f.inoc[side.coat.name] = enc.round + 2;  // a passed save leaves it Inoculated for 2 turns
+        }
+      }
+      land(all, f, near);
+      // an Arrow of Many Targets: half the damage to three others
+      if (line.hit && afx && afx.many && T.many) T.alive().filter((y) => y !== f).slice(0, afx.many).forEach((y) => land([{ name: arrow.name, kind: 'auto', hit: true, damage: line.damage / 2, text: t('half of {n}', { n: tenth(line.damage) }) }], y, false));
     }
     if (left && part.spends === 'Action Surge') left.surge--;
     if (left && part.spends === 'Ki Points') left.ki--;
   };
   // an action spent on the weapon: the Attack action, or the attacks Action Surge or Haste allow; with no weapon,
   // the cantrip
-  const weaponAct = (kind) => {
+  // (`less` attacks of it go to something else: Commander's Strike takes one)
+  const weaponAct = (kind, less) => {
     const v = view();
     if (!v.plan) {
       if (v.cantrip && !raging) cast(v.cantrip.name);
       if (left && kind === 'surge') left.surge--;
       return;
     }
-    const part = kind === 'main' ? v.plan.parts[0] : v.plan.parts.find((x) => x.spends === (kind === 'surge' ? 'Action Surge' : 'Haste'));
-    if (part) swing(part);
+    const part = kind === 'main' || kind === 'blood' ? v.plan.parts[0] : v.plan.parts.find((x) => x.spends === (kind === 'surge' ? 'Action Surge' : 'Haste'));
+    if (part) swing(Object.assign({}, part, kind === 'blood' ? { how: 'Elixir of Bloodlust' } : {}, less ? { n: Math.max(0, part.n - less) } : {}));
+  };
+  const meleeRow = () => ((view().st.attacks || {}).rows || []).find((r) => r.slot === 'meleeMain' && !r.thrown);
+  // Commander's Strike: one attack of the Attack action, the bonus action and a Superiority Die, for an ally to make
+  // a melee weapon attack with its reaction on its next turn, with the die on its damage. True when it was given.
+  const command = () => {
+    const k = side.cmd ? enc.sides.findIndex((y, j) => j !== i && y.b && y.b.id === side.cmd) : -1;
+    if (!left || k < 0 || enc.fights[k].down || enc.fights[k].onus || R.bonus || left.dice < 1 || !view().plan) return false;
+    left.dice--;
+    R.bonus = true;
+    enc.fights[k].onus = { die: side.die, by: side.name };
+    did.push("Commander's Strike");
+    note(t('Commander\'s Strike: {who} strikes on its next turn, with its reaction.', { who: enc.sides[k].name }));
+    return true;
+  };
+  // Sweeping Attack: the action and a Superiority Die for one attack roll on every enemy in reach, each dealing the
+  // die alone; the other attacks of the Attack action follow
+  const sweep = () => {
+    const row = meleeRow();
+    if (!row || !view().plan || !opts.has('Sweeping Attack') || (left && left.dice < 1)) return false;
+    if (left) left.dice--;
+    did.push('Sweeping Attack');
+    T.alive().forEach((f) => {
+      const m = T.mods(f, true);
+      const line = rollWeapon(view(f.target).st, Object.assign({}, row, { name: 'Sweeping Attack', dice: side.die, damage: [], damageTotal: 0, extraDice: [] }), f.target, [], m);
+      T.spend(m, f);
+      land([line], f, true);
+    });
+    const part = view().plan.parts[0];
+    if (part.n > 1 && !R.stop) swing(Object.assign({}, part, { n: part.n - 1 }));
+    return true;
   };
   // an action that goes to a spell, falling back on what the build does at will
   const spellAct = (name, kind) => {
@@ -365,379 +1218,292 @@ function fightTurn(side, fight) {
     if (kind === 'main' && v.plan && v.cantrip && !raging && v.cantrip.total > v.plan.total) cast(v.cantrip.name); else weaponAct(kind);
     return 'weapon';
   };
-  const bonusAttack = () => { const p = view().plan; const part = p && p.parts.find((x) => x.bonus); if (part && (part.chance == null || crits)) swing(part); };
+  const bonusAttack = () => { const p = view().plan; const part = p && p.parts.find((x) => x.bonus); if (part && (part.chance == null || R.crits || R.kills)) swing(part); };
+  // what an action goes to when it is none of the weapon or a damaging spell: true when it was done
+  const special = (want) => {
+    if (want === 'Haste' || want.indexOf('Haste>') === 0) return side.haste ? castHaste(want.slice(6)) : false;
+    if (want === 'Bless') return castBless();
+    if (want === 'Sweeping Attack') return sweep();
+    if (side.wards.some((w) => w.name === want)) return castWard(want);
+    if (side.controls.some((c) => c.name === want)) return castControl(want);
+    if (view().riders.has(want)) return castRider(want);
+    return null;  // not one of these
+  };
 
-  if (!lost) {
+  if (!R.lost && T.focus()) {
     // the bonus action comes first when it sets something up for the attacks
-    if (!bonusUsed && view().riders.has(wantQ) && view().riders.get(wantQ).sp.a === 'bonus') bonusUsed = castRider(wantQ);
+    if (!R.bonus && view().riders.has(wantQ) && view().riders.get(wantQ).sp.a === 'bonus') R.bonus = castRider(wantQ);
     let went = '';  // what the action went to: the weapon, or a spell that can be cast again
-    if (!stop && wantA !== 'none') {
-      if (wantA === 'weapon') { weaponAct('main'); went = 'weapon'; }
-      else if (wantA === 'Haste' && side.haste) { if (!castHaste()) { weaponAct('main'); went = 'weapon'; } }
-      else if (view().riders.has(wantA)) { if (!castRider(wantA)) { weaponAct('main'); went = 'weapon'; } }
-      else went = spellAct(wantA, 'main');
+    const acts = !surprised && wantA !== 'none';
+    // Help: the action goes to an ally that is Downed, who is back on its feet with 1 hit point
+    let helped = false;
+    if (acts && left && side.helps && fallen().length) {
+      const k = fallen()[0];
+      standUp(enc.fights[k], 1);
+      helped = true;
+      did.push('Help');
+      note(t('Help: {who} is back up, with 1 hit point.', { who: enc.sides[k].name }));
     }
-    // the actions on top: Action Surge (once a Short Rest, when switched on) and the one Haste gives
+    if (!R.stop && acts && !helped) {
+      if (wantA === 'weapon') { weaponAct('main', command() ? 1 : 0); went = 'weapon'; }
+      else {
+        const sp = special(wantA);
+        if (sp === false) { weaponAct('main'); went = 'weapon'; }
+        else if (sp === null) went = spellAct(wantA, 'main');
+      }
+      // Dread Ambusher: on the first turn of the fight, one more weapon attack with 1d8 on top
+      if (enc.live && n === 1 && went === 'weapon' && gains.includes('Dread Ambusher') && view().plan && !R.stop && T.focus()) swing(Object.assign({}, view().plan.parts[0], { n: 1, how: 'Dread Ambusher' }), ['1d8', '', 'Dread Ambusher']);
+    }
+    // the attack an ally's Commander's Strike gave: one melee weapon attack, with the reaction
+    if (fight.onus && !R.reacted && !R.stop && T.focus() && meleeRow()) {
+      const onus = fight.onus;
+      fight.onus = null;
+      R.reacted = true;
+      swing({ row: meleeRow(), n: 1, how: "Commander's Strike" }, [onus.die, '', "Commander's Strike"]);
+    }
+    // the actions on top: Action Surge (once a Short Rest, when switched on), the one Haste gives, and the one a
+    // kill gives with an Elixir of Bloodlust
     const extras = [];
-    if (on.includes('surge') && (side.stats.fighter || 0) >= 2) extras.push('surge');
-    if (has('haste') || (!left && base.includes('haste'))) extras.push('haste');
-    extras.forEach((kind) => {
-      if (stop || wantA === 'none' || wantX === 'none') return;
+    if (T.onNow().includes('surge') && (side.stats.fighter || 0) >= 2) extras.push('surge');
+    // (on the turn Haste is cast, only when the page is set to count its action from that turn)
+    const hasted = has('haste');
+    if ((hasted && (hasted.from !== n || side.hasteNow)) || (!left && base.includes('haste'))) extras.push('haste');
+    const onTop = (kind) => {
+      if (R.stop || !acts || wantX === 'none' || !T.focus()) return;
       const want = wantX === 'same' ? went || 'weapon' : wantX;
       const settled = view().spells.get(want);
       if (want === 'weapon' || !settled || (settled.setup && named(want))) weaponAct(kind); else spellAct(want, kind);
-    });
-    if (!stop && !bonusUsed && wantQ !== 'none') {
+    };
+    extras.forEach(onTop);
+    if (left && side.brew.blood && R.kills && !R.blood) { R.blood = true; fight.temp = Math.max(fight.temp, side.brew.blood); note(t('Elixir of Bloodlust: a kill gives {n} temporary hit points and one more action.', { n: side.brew.blood })); onTop('blood'); }
+    if (!R.stop && !R.bonus && wantQ !== 'none' && T.focus()) {
       if (wantQ.indexOf('quick:') === 0) { if (!(opts.has('Quickened Spell') && cast(wantQ.slice(6), true))) bonusAttack(); }
       else if (view().spells.has(wantQ) && view().spells.get(wantQ).sp.a === 'bonus') { if (!cast(wantQ)) bonusAttack(); }
+      else if (side.controls.some((c) => c.name === wantQ && c.sp.a === 'bonus')) { if (!castControl(wantQ)) bonusAttack(); }
       else bonusAttack();
     }
   }
-
-  // ----- the enemy's turn: what it does to the build is set on the page -----
-  const foe = side.foe;
-  if (left && (foe.attacks || foe.moves || has('rage') || fight.effects.some((e) => e.later && e.later.some((p) => p.when)))) {
-    const attacked = lines.some((l) => l.kind === 'attack');
-    const hits = Math.min(foe.hits, foe.attacks);
-    for (let h = 0; h < hits; h++) {
-      // what answers a melee hit
-      fight.effects.filter((e) => e.kind === 'later' && e.later.some((p) => p.when === 'struck')).forEach((e) => {
-        const out = rollLater(e, 'struck');
-        out.forEach((l) => { l.how = t('when struck'); });
-        lines.push(...out);
-        if (e.pool != null) { e.pool -= foe.damage; if (e.pool <= 0) { drop([e]); notes.push(t('{name} ends.', { name: e.name })); } }
-      });
-      // damage taken can break Concentration: Constitution save against 10 or half the damage, whichever is higher
-      const held = fight.effects.filter((e) => e.conc);
-      if (held.length && foe.damage > 0) {
-        const dc = Math.max(10, Math.floor(foe.damage / 2));
-        const d20 = rollD20(side.conAdv ? 1 : 0);
-        if (d20 === 1 || d20 + side.con < dc) {
-          drop(held);
-          if (held.some((e) => e.kind === 'haste')) fight.lethargic = n + 1;
-          notes.push(t('A hit breaks the Concentration ({roll} {bonus} against DC {dc}): {name} ends.', { roll: d20, bonus: (side.con < 0 ? '− ' : '+ ') + Math.abs(side.con), dc, name: held.map((e) => e.name).join(', ') }));
-        }
-      }
-    }
-    // one reaction a round
-    const v = view();
-    if (side.react === 'Riposte') {
-      if (foe.attacks - hits > 0 && v.riposte && left.dice > 0) {
-        left.dice--;
-        // weapon damage and the superiority die: 1d8, 1d10 with Improved Combat Superiority (the wiki's Riposte page)
-        const die = (side.stats.gains || []).includes('Improved Combat Superiority') ? '1d10' : '1d8';
-        const line = rollWeapon(v.st, Object.assign({}, v.riposte, { extraDice: [...(v.riposte.extraDice || []), [die, '', 'Riposte']] }), target, riders());
-        Object.assign(line, { name: 'Riposte', how: t('reaction') });
-        lines.push(line);
-      }
-    } else if (side.react && hits > 0 && v.reacts.has(side.react)) {
-      const x = v.reacts.get(side.react);
-      if (pay(x, 0, true)) { const out = rollSpell(v.st, x, target, []); out.forEach((l) => { l.how = t('reaction'); }); lines.push(...out); }
-      else if (!fight.noReact) { fight.noReact = true; notes.push(t('Nothing left to pay for {spell}: no more reactions with it.', { spell: x.name })); }
-    }
-    // damage that waits for the enemy to move (Booming Blade)
-    fight.effects.filter((e) => e.kind === 'later' && e.later.some((p) => p.when === 'moves')).forEach((e) => {
-      if (foe.moves) { const out = rollLater(e, 'moves'); out.forEach((l) => { l.how = t('when it moves'); }); lines.push(...out); }
-      drop([e]);
-    });
-    // Rage ends early in a turn with no attack made and no damage taken
-    const rage = has('rage');
-    if (rage && !attacked && !hits) { drop([rage]); notes.push(t('Rage ends early: no attack made and no damage taken this turn.')); }
-  }
   return done();
+}
+
+// One turn of an enemy in a fight: what it does to a build with its action and its bonus action, and its
+// movement. { who, kind: 'foe', name, lines, notes, total }
+function foeTurn(enc, j) {
+  const f = enc.foes[j];
+  if (f.dead) return null;
+  const move = f.move;
+  const out = { who: j, kind: 'foe', title: f.name || t('The enemy'), name: '', lines: [], notes: [], total: 0 };
+  const note = (text) => { if (!out.notes.includes(text)) out.notes.push(text); };
+  condStart(f, note);
+  condSource(f, enc.fights);
+  const held = f.conds.find((c) => c.f.skip);
+  const idle = !!held || !!f.surprised;
+  if (held) note(t('{who} is {cond}: no action this turn.', { who: out.title, cond: held.name }));
+  else if (f.surprised) note(t('{who} is Surprised: no action and no reaction in the first round.', { who: out.title }));
+  // whom it goes for, among the builds still standing
+  const standing = () => enc.fights.map((x, k) => k).filter((k) => !enc.fights[k].down && enc.fights[k].left);
+  // (a melee attack goes for those who stand next to it, while any of them is up)
+  const pick = (melee) => {
+    let list = standing();
+    if (!list.length) return -1;
+    const front = list.filter((k) => enc.sides[k].front);
+    if (melee && front.length) list = front;
+    if (enc.opts.aim === 'first' || list.length === 1) return list[0];
+    if (enc.opts.aim === 'weakest') return list.slice().sort((a, b) => enc.fights[a].hp - enc.fights[b].hp)[0];
+    return list[Math.floor(simRandom() * list.length)];
+  };
+  let vi = pick(!!move.melee);
+  let T = vi >= 0 ? turnTools(enc, vi, out) : null;
+  if (T && !idle && (move.attacks || move.extra)) {
+    T.R.hurtNow = 0;
+    T.R.missNow = 0;
+    // whether it can pay for an action: a spell slot of its own, one of its uses in the fight
+    const spend = (act) => {
+      if (act.slot) {
+        if (f.slots === undefined) f.slots = move.slots ? Object.assign({}, move.slots) : null;
+        const pool = f.slots;
+        const lv = pool ? Object.keys(pool).map(Number).sort((a, b) => a - b).find((k) => k >= act.slot && pool[k] > 0) : 0;
+        if (pool && !lv) return false;
+        if (pool) pool[lv]--;
+      }
+      if (act.uses) {
+        const used = f.used || (f.used = {});
+        if ((used[act.label] || 0) >= act.uses) return false;
+        used[act.label] = (used[act.label] || 0) + 1;
+      }
+      return true;
+    };
+    const blows = (act, times) => {
+      for (let k = 0; k < times && !f.dead; k++) {
+        if (T.fight.down) { answer(); vi = pick(!!act.melee); if (vi < 0) return; T = turnTools(enc, vi, out); T.R.hurtNow = 0; T.R.missNow = 0; }
+        T.strike(act, k, f);
+      }
+    };
+    // the reaction of the build it struck, when Shield or Uncanny Dodge did not take it
+    function answer() {
+      const { side, fight, left, R } = T;
+      if (fight.down || f.dead) return;
+      const v = T.view(f.target);
+      if (side.react === 'Riposte') {
+        if (!R.reacted && R.missNow > 0 && v.riposte && left.dice > 0) {
+          left.dice--;
+          R.reacted = true;
+          // weapon damage and the superiority die: 1d8, 1d10 with Improved Combat Superiority (the wiki's Riposte page)
+          const m = T.mods(f, true);
+          const line = rollWeapon(v.st, Object.assign({}, v.riposte, { extraDice: [...(v.riposte.extraDice || []), [side.die, '', 'Riposte']] }), f.target, T.riders(), m);
+          T.spend(m, f);
+          Object.assign(line, { name: 'Riposte', how: t('reaction') });
+          T.R.answering = true;
+          T.land([line], f, true);
+          T.R.answering = false;
+        }
+      } else if (side.react && !R.reacted && R.hurtNow > 0 && v.reacts.has(side.react)) {
+        const x = v.reacts.get(side.react);
+        if (T.pay(x, 0, true)) {
+          R.reacted = true;
+          const back = rollSpell(v.st, x, f.target, [], T.mods(f, false));
+          back.forEach((l) => { l.how = t('reaction'); });
+          T.R.answering = true;
+          T.land(back, f, false);
+          T.R.answering = false;
+        } else if (!fight.noReact) { fight.noReact = true; T.note(t('Nothing left to pay for {spell}: no more reactions with it.', { spell: x.name })); }
+      }
+    }
+    // its action: the one chosen while its spell slot and its uses last, else the one it always has
+    let act = move;
+    let times = move.attacks;
+    if (times && !spend(move)) {
+      act = move.fallback;
+      times = act ? act.hits.length : 0;
+      if (!f.out) { f.out = true; note(act ? t('{who} has no more of {a}: it goes on with {b}.', { who: f.name, a: move.label, b: act.label }) : t('{who} has no more of {a}.', { who: f.name, a: move.label })); }
+    }
+    blows(act, times);
+    // its bonus action
+    if (!f.dead && vi >= 0 && move.extra && spend(move.extra)) blows(move.extra, move.extra.hits.length);
+    if (vi >= 0) answer();
+  }
+  // damage that waits for the enemy to move: once when it moves at all (Booming Blade), or for every 1.5 m it
+  // walks through an area (Spike Growth; half the distance where the area is Difficult Terrain)
+  if (!f.dead) enc.fights.forEach((fight, k) => {
+    if (!fight.left) return;
+    const mine = (e) => e.kind === 'later' && (!e.foe || e.foe === f);
+    const sink = turnTools(enc, k, out);
+    fight.effects.filter((e) => mine(e) && e.later.some((p) => p.when === 'moves')).forEach((e) => {
+      if (move.steps > 0 && !idle) { const dealt = rollLater(e, 'moves'); dealt.forEach((l) => { l.how = t('when it moves'); }); sink.R.answering = true; sink.land(dealt, f, false); sink.R.answering = false; }
+      sink.drop([e]);
+    });
+    fight.effects.filter((e) => mine(e) && e.later.some((p) => p.when === 'walks')).forEach((e) => {
+      const walked = idle ? 0 : e.later.some((p) => p.halved) ? Math.floor(move.steps / 2) : move.steps;
+      for (let s = 0; s < walked && !f.dead; s++) { const dealt = rollLater(e, 'walks'); dealt.forEach((l) => { l.how = t('1.5 m walked'); }); sink.R.answering = true; sink.land(dealt, f, false); sink.R.answering = false; }
+    });
+  });
+  // the end of its turn: its conditions count down, and the ones it caused on the builds
+  condEnd(f, (key) => (f.target.saves || {})[key] || 0, note, enc.fights);
+  f.acted = true;
+  out.total = out.lines.reduce((a, x) => a + (x.damage || 0), 0);
+  return out;
+}
+// The end of a round: Rage ends early for a build that made no attack and took no damage; Surprise is over.
+function endRound(enc, last) {
+  enc.fights.forEach((fight, i) => {
+    if (!fight.left) return;
+    const rage = fight.effects.find((e) => e.kind === 'rage');
+    if (rage && !fight.down && !fight.round.attacked && !fight.round.hurt) {
+      dropEffects(enc, fight, [rage]);
+      if (last) last.notes.push(enc.sides.length > 1 ? t('{who}: Rage ends early, no attack made and no damage taken this turn.', { who: enc.sides[i].name }) : t('Rage ends early: no attack made and no damage taken this turn.'));
+    }
+    fight.round.attacked = false;
+    fight.round.hurt = 0;
+    fight.surprised = false;
+  });
+  enc.foes.forEach((f) => { f.surprised = false; f.reacted = false; });
+}
+// One round of a fight, in Initiative order: { n, entries: [turn], total }
+function encRound(enc) {
+  if (!enc.order) {
+    enc.order = rollInitiative(enc);
+    // who is Surprised cannot act or react in the first round; a build that cannot be Surprised is not
+    if (enc.opts.surprise === 'foes') enc.foes.forEach((f) => { f.surprised = true; });
+    if (enc.opts.surprise === 'party') enc.fights.forEach((fight, i) => { fight.surprised = !enc.sides[i].wary; });
+  }
+  enc.round++;
+  const entries = [];
+  enc.order.forEach(([kind, i]) => {
+    if (encOver(enc)) return;
+    const e = kind === 'side' ? buildTurn(enc, i) : foeTurn(enc, i);
+    if (e && (kind === 'side' || e.lines.length || e.notes.length)) entries.push(e);
+  });
+  endRound(enc, entries[entries.length - 1]);
+  return { n: enc.round, entries, total: entries.reduce((a, e) => a + e.total, 0) };
+}
+// One turn of a build alone against the enemy of its side, the build first and the enemy after it:
+// { n, name, lines, total, notes }. The fight keeps what the build did to that enemy in `dealt`.
+function fightTurn(side, fight) {
+  const enc = fight.enc || (fight.enc = { round: 0, sides: [side], fights: [fight], foes: [foeState(side.foe, side.target, 0)], opts: { first: 'party', surprise: '', aim: 'first', focus: 'main' }, order: [], init: [] });
+  enc.foes[0].move = side.foe;  // (the page and the tests may change it between two turns)
+  fight.round = fight.round || newRound();
+  fight.conds = fight.conds || [];
+  enc.round++;
+  const mine = buildTurn(enc, 0);
+  const theirs = fight.left ? foeTurn(enc, 0) : null;
+  const lines = mine.lines.concat(theirs ? theirs.lines : []);
+  const out = { n: fight.turn, name: mine.name, lines, total: lines.reduce((a, x) => a + (x.damage || 0), 0), notes: mine.notes.concat(theirs ? theirs.notes : []) };
+  endRound(enc, out);
+  fight.dealt = enc.foes[0].dealt;
+  return out;
 }
 // One turn the way the averages see it: `action` every turn ('' for the weapon), with `left` to spend (nothing
 // runs out when it is null).
 function simTurn(stats, style, target, action, left) {
   const side = sideOf(stats, style, target, [0, 1, 2, 3].map(() => ({ a: action || 'weapon', q: 'auto', x: 'same' })));
-  return fightTurn(side, { turn: 0, left, dealt: 0, effects: [], lethargic: 0, used: [] });
+  return fightTurn(side, Object.assign(newFight(side, true), { left, hp: Infinity }));
 }
-// Many fights with a side's plan: the average damage of a turn and of the first turn, and how many turns the
-// enemy lasts (or, with no hit points to go by, the damage of ten turns).
+// Many fights with a side's plan: the average damage of a turn and of the first turn, how many turns the enemy
+// lasts in the fights the build wins (or, with no hit points to go by, the damage of ten turns), and in how many
+// of the fights the build falls first.
 function simFights(side, hp, count) {
   const per = [];
   const first = [];
   const main = [];
+  let lost = 0;
   for (let k = 0; k < count; k++) {
     const fight = newFight(side);
     let turns = 0;
-    while (hp ? fight.dealt < hp && turns < 60 : turns < 10) { const r = fightTurn(side, fight); if (!turns) first.push(r.total); turns++; }
+    while (!fight.down && (hp ? fight.dealt < hp && turns < 60 : turns < 10)) { const r = fightTurn(side, fight); if (!turns) first.push(r.total); turns++; }
     per.push(fight.dealt / turns);
-    main.push(hp ? turns : fight.dealt);
+    const won = !fight.down || (hp && fight.dealt >= hp);
+    if (!won) lost++;
+    if (!hp) main.push(fight.dealt); else if (won) main.push(turns);
   }
   const avg = (list) => list.reduce((a, x) => a + x, 0) / list.length;
-  return { count, perTurn: avg(per), first: avg(first), main: { avg: avg(main), min: Math.min(...main), max: Math.max(...main) } };
+  return { count, perTurn: avg(per), first: avg(first), lost: lost / count, main: main.length ? { avg: avg(main), min: Math.min(...main), max: Math.max(...main) } : null };
 }
-
-// ---------- the page ----------
-let sim = { key: '', fight: null, turns: [], many: null };
-// In Honour mode the enemy has its Honour hit points, or the Tactician ones when its page gives no others.
-const enemyHp = (e) => (honourMode() ? e.hp.h || e.hp.t || e.hp.b : e.hp.b);
-const sideKey = (side) => [side.b.id, side.act, side.at, side.b.active, side.steps, side.b.elixir, side.react, side.foe, simBase(side).list.map((x) => x.total.toFixed(2)), simBase(side).plan ? simBase(side).plan.total.toFixed(2) : ''];
-// Everything the test needs from the build on screen; a change in any of it starts the test over.
-function simContext() {
-  const b = curBuild();
-  if (!b || !charLevel(b)) return null;
-  const target = targetOf();
-  const side = simSide(b, state.ui.act, target);
-  const v = simBase(side);
-  const sb = state.ui.simB;
-  const ob = sb && buildById(sb.id);
-  const other = ob && charLevel(ob) && !(ob.id === b.id && (sb.act || state.ui.act) === state.ui.act) ? simSide(ob, sb.act || state.ui.act, target) : null;
-  const hp = target.enemy ? enemyHp(target.enemy) : 0;
-  const key = JSON.stringify([sideKey(side), other ? sideKey(other) : '', target.name, target.ac, target.saves, honourMode(), state.ui.castLevel, state.ui.targets]);
-  if (sim.key !== key) sim = { key, fight: newFight(side), turns: [], many: null };
-  const mainA = side.steps[3].a || 'weapon';
-  const chosen = v.spells.get(mainA) || (!v.plan && mainA === 'weapon' ? v.cantrip : null);
-  return { b, side, other, v, target, hp, chosen, expected: chosen ? chosen.total : v.plan ? v.plan.total : 0, can: !!(v.plan || v.list.length) };
-}
-function simRun(ctx, n, untilDown) {
-  for (let k = 0; k < n; k++) {
-    if (ctx.hp && sim.fight.dealt >= ctx.hp) break;
-    sim.turns.push(fightTurn(ctx.side, sim.fight));
-    if (!untilDown && k + 1 >= n) break;
+// Many fights of a whole setup, each made anew by `make()`: the average damage of a round and of the first one,
+// in how many rounds the enemies fall in the fights won (or the damage of ten rounds, with no hit points to go
+// by), how often the party falls first, and how often each member does; with the numbers of every fight kept for
+// the chart (`perRound`, and `rounds` or `damage`).
+function encFights(make, count) {
+  const perRound = [];
+  const first = [];
+  const rounds = [];
+  const damage = [];
+  let lost = 0;
+  let names = [];
+  let downs = [];
+  let dealt = [];
+  for (let k = 0; k < count; k++) {
+    const enc = make();
+    const mortal = enc.foes.some((f) => isFinite(f.hp));
+    let total = 0;
+    while (!encOver(enc) && (mortal ? enc.round < 60 : enc.round < 10)) { const r = encRound(enc); if (enc.round === 1) first.push(r.total); total += r.total; }
+    perRound.push(total / Math.max(1, enc.round));
+    if (encLost(enc) && !encWon(enc)) lost++;
+    if (!mortal) damage.push(total); else if (encWon(enc)) rounds.push(enc.round);
+    if (!k) { names = enc.sides.map((s) => s.name); downs = enc.sides.map(() => 0); dealt = enc.sides.map(() => 0); }
+    enc.fights.forEach((f, i) => { if (f.fell || f.down) downs[i]++; dealt[i] += f.dealt / Math.max(1, enc.round); });
   }
-}
-const SIM_SHOWN = 30;
-const SIM_FIGHTS = 300;
-function simLine(x) {
-  const sign = (n) => (n < 0 ? ' − ' + Math.abs(n) : ' + ' + n);
-  let roll = '';
-  let out = '';
-  if (x.kind === 'attack') {
-    roll = t('{roll}{bonus} = {total} against AC {ac}', { roll: x.d20, bonus: sign(x.bonus), total: x.d20 + x.bonus, ac: x.against });
-    out = x.crit ? t('critical hit') : x.hit ? t('hit') : x.d20 === 1 ? t('natural 1: miss') : t('miss');
-  } else if (x.kind === 'save') {
-    roll = t('{ab} save {roll}{bonus} = {total} against DC {dc}', { ab: x.ab, roll: x.d20, bonus: sign(x.bonus), total: x.d20 + x.bonus, dc: x.against });
-    out = !x.passed ? t('failed') : x.kept === 1 ? t('passed, all the same') : x.kept ? t('passed: half') : t('passed: nothing');
-  } else roll = t('no roll');
-  const good = x.kind === 'save' ? !x.passed : x.hit;
-  return `<li class="${good ? '' : 'off'}${x.crit ? ' crit' : ''}"><b>${esc(x.name)}${x.how ? `<i>${esc(x.how)}</i>` : ''}</b><span>${esc(roll)}${out ? ` · <em>${esc(out)}</em>` : ''}</span>
-    <span>${esc(x.text || '')}</span><strong>${tenth(x.damage)}</strong></li>`;
-}
-// The choices of a field of the plan: [value, name, description, facts, picture, group].
-function stepOptions(ctx, i, f) {
-  const { v, side } = ctx;
-  const opts = side.stats.options || new Set();
-  const spell = (x, value, name) => [value, name || x.name, x.text + ' · ' + x.how, [t('{n} on average', { n: x.total.toFixed(1) }), x.slot ? t('level {n} slot', { n: x.slot }) : t('at will'), x.points ? sorceryText(x.points) : '',
-    x.sp.co ? t('Concentration') : '', x.later ? t('then {x}', { x: x.later }) : ''].filter(Boolean).join(' · '), pic(x.sp.i, 'pic small'), x.slot ? t('Spells') : t('At will')];
-  const rider = (x) => [x.name, x.name, x.sp.d || '', [dicePart(x.rider) + ' ' + t('on every hit'), x.slot ? t('level {n} slot', { n: x.slot }) : '', x.sp.du || '', x.sp.co ? t('Concentration') : ''].filter(Boolean).join(' · '), pic(x.sp.i, 'pic small'), t('Sets up')];
-  const out = i < 3 ? [['', t('As from turn 4 on'), '', '', '', '']] : [];
-  if (f === 'x') {
-    out.push(['same', t('The same as the action'), t('The weapon again, or the same spell once more while a slot is left.'), '', '', t('At will')]);
-    if (v.plan) out.push(['weapon', t('Weapon attacks'), v.plan.parts[0].n + ' × ' + v.plan.parts[0].row.name + ' · ' + t('with Haste in Honour mode, one attack'), '', '', t('At will')]);
-    v.list.filter((x) => x.sp.a === 'action').forEach((x) => out.push(spell(x, x.name)));
-  } else if (f === 'a') {
-    if (v.plan) out.push(['weapon', t('Weapon attacks'), v.plan.parts.filter((x) => !x.bonus).map((x) => `${x.n} × ${x.row.name} (${x.how})`).join(' + '), t('{n} on average', { n: v.plan.parts.filter((x) => !x.bonus).reduce((a, x) => a + x.n * x.each, 0).toFixed(1) }), '', t('At will')]);
-    else if (i === 3 && v.cantrip) out.push(['weapon', v.cantrip.name, v.cantrip.text + ' · ' + v.cantrip.how, t('{n} on average', { n: v.cantrip.total.toFixed(1) }), pic(v.cantrip.sp.i, 'pic small'), t('At will')]);
-    v.list.filter((x) => x.sp.a === 'action' && !(i === 3 && !v.plan && x === v.cantrip)).forEach((x) => out.push(spell(x, x.name)));
-    (v.list.setups || []).filter((x) => x.sp.a === 'action').forEach((x) => out.push([x.name, x.name, x.sp.d || '', [x.text, x.slot ? t('level {n} slot', { n: x.slot }) : '', x.sp.du || ''].filter(Boolean).join(' · '), pic(x.sp.i, 'pic small'), t('Sets up')]));
-    if (side.haste) out.push(['Haste', 'Haste', side.haste.sp.d || '', [t('level {n} slot', { n: side.haste.slot }), side.haste.sp.du || '', t('Concentration')].join(' · '), pic(side.haste.sp.i, 'pic small'), t('Sets up')]);
-    [...v.riders.values()].filter((x) => x.sp.a === 'action').forEach((x) => out.push(rider(x)));
-  } else {
-    const part = v.plan && v.plan.parts.find((x) => x.bonus);
-    out.push(['auto', t('The best it has'), part ? `${part.chance != null ? Math.round(part.chance * 100) + '%' : part.n} × ${part.row.name} (${part.how})` : t('The build has no attack for its bonus action.'), '', '', t('At will')]);
-    v.list.filter((x) => x.sp.a === 'bonus').forEach((x) => out.push(spell(x, x.name)));
-    [...v.riders.values()].filter((x) => x.sp.a === 'bonus').forEach((x) => out.push(rider(x)));
-    if (opts.has('Quickened Spell')) v.list.filter((x) => x.sp.a === 'action' && !x.weapon).forEach((x) => { const row = spell(x, 'quick:' + x.name, 'Quickened Spell: ' + x.name); row[5] = 'Quickened Spell · ' + sorceryText(3); out.push(row); });
-  }
-  out.push(['none', t('Nothing'), '', '', '', t('At will')]);
-  return out;
-}
-const STEP_DEFAULT = { a: 'weapon', q: 'auto', x: 'same' };
-// The reactions a build can answer the enemy with: [value, name, description, facts, picture].
-function reactOptions(ctx) {
-  const v = ctx.v;
-  const out = [...v.reacts.values()].map((x) => [x.name, x.name, x.sp.d || '', [x.text + ' · ' + x.how, t('when the enemy lands a hit'), /rest/i.test(x.sp.rc || '') ? x.sp.rc : x.slot ? t('level {n} slot', { n: x.slot }) : ''].filter(Boolean).join(' · '), pic(x.sp.i, 'pic small')]);
-  if (v.riposte) out.push(['Riposte', 'Riposte', featureText('Riposte') || '', t('when the enemy misses a melee attack') + ' · Superiority Dice', '']);
-  return out;
-}
-const stepLabel = (ctx, i, f, value) => { const row = stepOptions(ctx, i, f).find((x) => x[0] === value); return row ? row : null; };
-function simPlanHtml(ctx) {
-  const names = [t('Turn {n}', { n: 1 }), t('Turn {n}', { n: 2 }), t('Turn {n}', { n: 3 }), t('From turn 4 on')];
-  const on = ctx.side.stats.active || [];
-  // the third field shows when the build can have a second action: Action Surge, or Haste cast or switched on
-  const extra = (ctx.side.stats.fighter || 0) >= 2 || !!ctx.side.haste || on.includes('haste');
-  const cell = (i, f, label) => {
-    const value = ctx.side.steps[i][f] || (i === 3 ? STEP_DEFAULT[f] : '');
-    const row = value ? stepLabel(ctx, i, f, value) : null;
-    return `<div class="field"><span>${label}</span>${slotButton('sim-step-open', `data-i="${i}" data-f="${f}"`, row ? row[1] : '', row ? row[4] : '', i < 3 ? t('as from turn 4 on') : t('— choose —'))}</div>`;
-  };
-  return `<div class="sim-plan">${names.map((name, i) => `<div class="sim-step${extra ? ' three' : ''}"><b>${name}</b>${cell(i, 'a', t('Action'))}${extra ? cell(i, 'x', t('Action on top (Action Surge, Haste)')) : ''}${cell(i, 'q', t('Bonus action'))}</div>`).join('')}</div>`;
-}
-const sideName = (side) => (side.b.name || t('Unnamed')) + ' · ' + t((ACTS.find(([k]) => k === side.act) || ['', ''])[1]);
-function simManyHtml(ctx) {
-  const m = sim.many;
-  if (!m) return '';
-  const cols = [m.a, m.b].filter(Boolean);
-  const range = (x, unit) => `${x.avg.toFixed(1)}${unit} <small>${t('from {min} to {max}', { min: tenth(x.min), max: tenth(x.max) })}</small>`;
-  const row = (label, cell) => `<tr><th>${label}</th>${cols.map((c) => `<td>${cell(c)}</td>`).join('')}</tr>`;
-  return `<table class="sim-many"><thead><tr><th>${t('{n} fights rolled', { n: m.a.count })}</th>${cols.map((c) => `<th>${esc(c.name)}</th>`).join('')}</tr></thead><tbody>
-    ${row(t('Average damage a turn'), (c) => `<b>${c.perTurn.toFixed(1)}</b>`)}
-    ${row(t('First turn'), (c) => c.first.toFixed(1))}
-    ${row(ctx.hp ? t('Turns until {who} falls', { who: esc(targetLabel(ctx.target)) }) : t('Damage in 10 turns'), (c) => range(c.main, ''))}
-  </tbody></table>`;
-}
-function renderDamage() {
-  const b = curBuild();
-  const ctx = simContext();
-  const head = `<section class="card hero"><h1>${t('Damage test')}</h1>
-    <p class="muted">${t('Rolls the dice of a fight against an enemy: every attack roll, saving throw and damage die, turn after turn, with the spell slots and the other resources running out as they are spent. It uses the build, the gear and the switches below; nothing rolled here is saved.')}</p>
-    <div class="stat-tools">
-      <div class="field"><span>${t('Build')}</span>${slotButton('sim-build-open', '', b ? b.name || t('Unnamed') : '', '', t('— choose —'))}</div>
-      ${ctx ? `<div><span class="lbl">${t('With the gear of')}</span>${actTabs(state.ui.act, 'act')}</div>${targetTools()}` : ''}
-    </div>
-    ${ctx ? togglesRow(b) : ''}</section>`;
-  if (!ctx) return `<div class="content wide sim">${head}<section class="card empty"><h2>${t('Choose a build with at least one level.')}</h2></section></div>`;
-  const { side, other, v, target, hp, chosen, expected, can } = ctx;
-  const who = targetLabel(target);
-  const turns = sim.turns;
-  const fight = sim.fight;
-  const down = hp && fight.dealt >= hp;
-  const left = fight.left;
-  const full = simResources(side.stats);
-  const res = [
-    left.slots.length ? t('Spell slots') + ' ' + left.slots.map((n, i) => `<span class="slot-n${n ? '' : ' out'}" title="${t('Level {n}', { n: i + 1 })}">${i + 1}<i>×${n}</i></span>`).join('') : '',
-    left.pactLevel ? esc(t('Pact Magic slots')) + ' <b>' + left.pact + '</b>' : '',
-    full.points ? 'Sorcery Points <b>' + left.points + '</b>' : '', full.ki ? 'Ki Points <b>' + left.ki + '</b>' : '',
-    full.rage ? 'Rage Charges <b>' + left.rage + '</b>' : '', full.surge ? 'Action Surge <b>' + left.surge + '</b>' : '', full.dice ? 'Superiority Dice <b>' + left.dice + '</b>' : ''].filter(Boolean);
-  const work = fight.effects.filter((e) => !e.quiet).map((e) => esc(e.name) + (isFinite(e.until) ? ' <b>' + t('{n} turn(s) left', { n: e.until - fight.turn }) + '</b>' : '') + (e.conc ? ' · ' + t('Concentration') : ''));
-  const on = side.stats.active || [];
-  const reacts = reactOptions(ctx);
-  const rules = [
-    on.includes('rage') ? t('Rage (switched on above) is entered with the bonus action, lasts 10 turns and takes a Rage Charge each time; without a charge the build fights without it.') : '',
-    on.includes('haste') ? t('Haste (switched on above) is on the build for the first 10 turns, as if someone else cast it; the turn after it ends is lost to Lethargic.') : '',
-    side.haste ? t('Haste cast by the build holds its Concentration: another Concentration spell ends it, and leaves the caster Lethargic.') : '',
-    side.haste || on.includes('haste') ? t('The action Haste gives is used from the turn Haste is cast. The wiki says "an additional action each turn" and does not single out that first turn, so this is how the planner reads it.') : ''].filter(Boolean);
-  const totals = turns.map((x) => x.total);
-  const mean = turns.length ? fight.dealt / turns.length : 0;
-  const box = (label, value, hint) => `<div class="stat"><span>${label}</span><b>${value}</b>${hint ? `<small>${hint}</small>` : ''}</div>`;
-  const log = turns.slice(-SIM_SHOWN).reverse().map((x) => `<article class="sim-turn"><header><b>${t('Turn {n}', { n: x.n })}</b><span>${esc(x.name)}</span><strong>${tenth(x.total)}</strong></header>
-    ${x.notes.map((n) => `<p class="muted">${esc(n)}</p>`).join('')}${x.lines.length ? `<ul>${x.lines.map(simLine).join('')}</ul>` : ''}</article>`).join('');
-  return `<div class="content wide sim">${head}
-    <section class="card">
-      <h2>${t('The turns')}</h2>
-      <p class="muted">${t('What the build does with its action and its bonus action in each of the first three turns and in the ones after. A spell that is still at work is not cast again; with no slot left, the turn goes to what the build does at will.')}</p>
-      ${simPlanHtml(ctx)}
-      ${castTools(side.stats, v.list)}
-      ${reacts.length ? `<div class="stat-tools"><div class="field"><span>${t('Reaction')}</span>${slotButton('sim-react-open', '', side.react && reacts.some((r) => r[0] === side.react) ? side.react : '', '', t('— none —'))}</div></div>` : ''}
-      <h3 class="group">${t('What the enemy does on its turn')}</h3>
-      <div class="stat-tools foe-tools">
-        <div class="field ac-field"><span>${t('Melee attacks on the build')}</span>${stepper(side.foe.attacks, 'data-ui="foeAttacks" data-v="0"', 0, 8)}</div>
-        <div class="field ac-field"><span>${t('Of which hit')}</span>${stepper(side.foe.hits, 'data-ui="foeHits" data-v="0"', 0, side.foe.attacks)}</div>
-        <div class="field ac-field"><span>${t('Damage of each hit')}</span>${stepper(side.foe.damage, 'data-ui="foeDamage" data-v="10"', 1, 99)}</div>
-        <div class="field"><span>${t('Movement')}</span><button class="btn tiny${side.foe.moves ? ' gold' : ''}" data-act="foe-moves">${side.foe.moves ? t('It moves every turn') : t('It stays where it is')}</button></div>
-      </div>
-      <p class="muted">${t('With no attacks and no movement, the enemy only takes damage. Hits on the build can break Concentration and keep Rage going; a miss opens Riposte, a hit opens Hellish Rebuke, Armour of Agathys and Fire Shield; movement sets off Booming Blade.')}</p>
-      ${rules.map((x) => `<p class="muted">${x}</p>`).join('')}
-      <p class="turn"><b>${expected.toFixed(1)}</b>${t('expected on average from the action of the later turns against {who}', { who: esc(who) })}${chosen ? ': ' + esc(chosen.text + ' · ' + chosen.how) : v.plan ? ': ' + v.plan.parts.map((x) =>
-        `${x.chance != null ? Math.round(x.chance * 100) + '%' : x.n} × ${esc(x.row.name)} (${esc(x.how)})`).join(' + ') : ''}</p>
-    </section>
-    <section class="card">
-      <h2>${t('The fight')}</h2>
-      ${hp ? `<div class="hpbar${down ? ' down' : ''}"><i style="width:${Math.max(0, 100 - fight.dealt / hp * 100).toFixed(1)}%"></i><span>${esc(who)} · ${t('{left} of {hp} hit points', { left: tenth(Math.max(0, hp - fight.dealt)), hp })}</span></div>` : ''}
-      ${down ? `<p class="sim-down">${t('{who} falls in turn {n}.', { who: esc(who), n: turns.length })}</p>` : ''}
-      <div class="row-btns sim-btns">
-        <button class="btn primary" data-act="sim-roll" data-n="1"${down || !can ? ' disabled' : ''}>${t('Roll a turn')}</button>
-        <button class="btn" data-act="sim-roll" data-n="10"${down || !can ? ' disabled' : ''}>${t('Roll 10 turns')}</button>
-        ${hp ? `<button class="btn" data-act="sim-roll" data-n="kill"${down || !can ? ' disabled' : ''}>${t('Roll until it falls')}</button>` : ''}
-        <button class="btn" data-act="sim-rest" data-k="short" title="${t('Pact Magic slots, Ki Points and Action Surge come back.')}">Short Rest</button>
-        <button class="btn" data-act="sim-rest" data-k="long" title="${t('Everything comes back.')}">Long Rest</button>
-        <button class="btn" data-act="sim-reset"${turns.length ? '' : ' disabled'}>${t('Start over')}</button>
-      </div>
-      ${res.length ? `<p class="points sim-res"><b>${t('Left to spend')}</b> ${res.join(' · ')}</p>` : ''}
-      ${work.length ? `<p class="points sim-res"><b>${t('At work')}</b> ${work.join(' · ')}</p>` : ''}
-      ${turns.length ? `<div class="stat-row">${box(t('Turns'), turns.length)}${box(t('Total damage'), tenth(fight.dealt))}${box(t('Average a turn'), mean.toFixed(1))}
-        ${box(t('Best turn'), tenth(Math.max(...totals)))}${box(t('Worst turn'), tenth(Math.min(...totals)))}</div>
-        <div class="sim-log">${log}</div>${turns.length > SIM_SHOWN ? `<p class="muted">${t('The last {n} turns are shown.', { n: SIM_SHOWN })}</p>` : ''}`
-    : `<p class="muted">${t('Nothing rolled yet. A change in the build, the enemy or the plan starts the fight over.')}</p>`}
-      <p class="muted">${t('Resistance halves and vulnerability doubles each roll as it is, without rounding, so the rolled average meets the expected one.')}</p>
-    </section>
-    <section class="card">
-      <h2>${t('Many fights, side by side')}</h2>
-      <p class="muted">${t('Rolls {n} fights with the plan above, each from a Long Rest, and sets them next to another build or to the same build with the gear of another act. The other side follows its own plan and switches: to change them, put it on screen with "Swap sides".', { n: SIM_FIGHTS })}</p>
-      <div class="stat-tools">
-        <div class="field"><span>${t('Compare with')}</span>${slotButton('sim-b-open', '', other ? other.b.name || t('Unnamed') : '', '', t('— nothing —'))}</div>
-        ${other ? `<div><span class="lbl">${t('With the gear of')}</span>${actTabs(other.act, 'sim-b-act')}</div>` : ''}
-      </div>
-      <div class="row-btns sim-btns">
-        <button class="btn primary" data-act="sim-fights"${can ? '' : ' disabled'}>${t('Roll {n} fights', { n: SIM_FIGHTS })}</button>
-        ${other ? `<button class="btn" data-act="sim-swap">${t('Swap sides')}</button>` : ''}
-      </div>
-      ${simManyHtml(ctx)}
-    </section>
-  </div>`;
-}
-
-Object.assign(actions, {
-  'sim-roll'(el) {
-    const ctx = simContext();
-    if (!ctx) return;
-    if (el.dataset.n === 'kill') simRun(ctx, 200, true); else simRun(ctx, Number(el.dataset.n) || 1);
-  },
-  'sim-fights'() {
-    const ctx = simContext();
-    if (!ctx) return;
-    sim.many = { a: Object.assign(simFights(ctx.side, ctx.hp, SIM_FIGHTS), { name: sideName(ctx.side) }),
-      b: ctx.other ? Object.assign(simFights(ctx.other, ctx.hp, SIM_FIGHTS), { name: sideName(ctx.other) }) : null };
-  },
-  'sim-rest'(el) {
-    const ctx = simContext();
-    if (!ctx) return;
-    const full = simResources(ctx.side.stats);
-    if (el.dataset.k === 'long') sim.fight.left = full;
-    else Object.assign(sim.fight.left, { pact: full.pact, ki: full.ki, surge: full.surge, dice: full.dice });
-    if (el.dataset.k === 'long') sim.fight.used = [];
-  },
-  'sim-reset'() { sim.key = ''; },
-  'foe-moves'() { state.ui.foeMoves = !state.ui.foeMoves; },
-  'sim-react-open'() {
-    const ctx = simContext();
-    if (!ctx) return false;
-    const rows = reactOptions(ctx);
-    openChooser(t('Reaction'), t('One reaction a round, on the enemy\'s turn, when what it answers happens.'), [{ label: t('Reaction'), n: 1, min: 0, options: rows.map((r) => r.slice(1)), chosen: rows.filter((r) => r[0] === ctx.side.react).map((r) => r[1]) }],
-      (done) => { const row = rows.find((r) => r[1] === done[0].chosen[0]); (state.ui.simReacts || (state.ui.simReacts = {}))[ctx.b.id] = row ? row[0] : ''; });
-    return false;
-  },
-  'sim-build-open'() { simBuildChooser(t('Build'), curBuild(), (id) => { if (id) { state.ui.buildId = id; state.ui.wizard = ''; } }); return false; },
-  'sim-b-open'() {
-    const sb = state.ui.simB;
-    simBuildChooser(t('Compare with'), sb ? buildById(sb.id) : null, (id) => { state.ui.simB = id ? { id, act: (sb && sb.act) || (id === state.ui.buildId ? ACTS.map(([k]) => k).find((k) => k !== state.ui.act) : state.ui.act) } : null; });
-    return false;
-  },
-  'sim-b-act'(el) { if (state.ui.simB) state.ui.simB.act = el.dataset.k; },
-  'sim-swap'() {
-    const sb = state.ui.simB;
-    if (!sb || !buildById(sb.id)) return;
-    const mine = { id: state.ui.buildId, act: state.ui.act };
-    Object.assign(state.ui, { buildId: sb.id, act: sb.act || state.ui.act, simB: mine, wizard: '' });
-  },
-  'sim-step-open'(el) {
-    const ctx = simContext();
-    if (!ctx) return false;
-    const i = Number(el.dataset.i);
-    const f = el.dataset.f;
-    const rows = stepOptions(ctx, i, f);
-    const cur = ctx.side.steps[i][f] || (i === 3 ? STEP_DEFAULT[f] : '');
-    const title = [t('Turn {n}', { n: 1 }), t('Turn {n}', { n: 2 }), t('Turn {n}', { n: 3 }), t('From turn 4 on')][i] + ' · ' + (f === 'a' ? t('Action') : f === 'x' ? t('Action on top (Action Surge, Haste)') : t('Bonus action'));
-    openChooser(title, f === 'a' ? t('What the action of the turn goes to.') : f === 'x' ? t('What a second action goes to, on the turns the build has one: Action Surge once a Short Rest, and Haste while it lasts.')
-      : t('What the bonus action of the turn goes to. A spell that sets something up is cast before the attacks.'),
-      [{ label: title, n: 1, min: 0, options: rows.map((r) => r.slice(1)), chosen: rows.filter((r) => r[0] === cur).map((r) => r[1]) }],
-      (done) => {
-        const row = rows.find((r) => r[1] === done[0].chosen[0]);
-        const plans = state.ui.simPlans || (state.ui.simPlans = {});
-        const steps = simSteps(ctx.b);
-        steps[i][f] = row ? row[0] : '';
-        plans[ctx.b.id] = steps;
-      });
-    return false;
-  },
-});
-// The list of builds that have at least one level, to choose one from; two of the same name are told apart by
-// their place in the list.
-function simBuildChooser(title, cur, done) {
-  const list = state.builds.filter((x) => charLevel(x));
-  const rows = list.map((x, i) => { const name = x.name || t('Unnamed'); const same = list.slice(0, i).filter((y) => (y.name || t('Unnamed')) === name).length; return [name + (same ? ' (' + (same + 1) + ')' : ''), splitText(x), '', '', '']; });
-  openChooser(title, t('The builds of My builds that have at least one level.'), [{ label: title, n: 1, min: 0, options: rows, chosen: cur && list.includes(cur) ? [rows[list.indexOf(cur)][0]] : [] }],
-    (res) => { const i = rows.findIndex((r) => r[0] === res[0].chosen[0]); done(i >= 0 ? list[i].id : ''); });
+  const avg = (list) => (list.length ? list.reduce((a, x) => a + x, 0) / list.length : 0);
+  const main = rounds.length ? rounds : damage;
+  return { count, perTurn: avg(perRound), first: avg(first), lost: lost / count, main: main.length ? { avg: avg(main), min: Math.min(...main), max: Math.max(...main) } : null,
+    perRound, rounds, damage, members: names.map((name, i) => ({ name, down: downs[i] / count, perTurn: dealt[i] / count })) };
 }

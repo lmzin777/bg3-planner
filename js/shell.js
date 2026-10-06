@@ -22,7 +22,9 @@ function navHtml() {
   return groups.map(([label, attrs, on, entries], i) => `<div class="nav-group${navShut === i ? ' shut' : ''}">
       <button class="nav-top${on ? ' on' : ''}" data-act="tab" ${attrs} aria-haspopup="true">${esc(label)}<i>▾</i></button>
       <div class="nav-menu">${entries.join('')}</div></div>`).join('')
-    + `<button class="nav-top${tab === 'damage' ? ' on' : ''}" data-act="tab" data-tab="damage">${t('Damage test')}</button>`;
+    + `<button class="nav-top${tab === 'damage' ? ' on' : ''}" data-act="tab" data-tab="damage">${t('Damage test')}</button>`
+    // temporary: the list of things to check by hand (js/review.js)
+    + `<button class="nav-top${tab === 'review' ? ' on' : ''}" data-act="tab" data-tab="review">${t('To check')}<i class="count">${reviewLeft()}</i></button>`;
 }
 // a menu that was just used opens again once the pointer goes to another group or leaves the menu
 (() => {
@@ -45,7 +47,7 @@ function render() {
   $$('[data-i18n-title]').forEach((el) => { el.title = t(el.dataset.i18nTitle); });
   $('#tabs').innerHTML = navHtml();
   $$('#langs button').forEach((b) => b.classList.toggle('on', b.dataset.lang === state.ui.lang));
-  const views = { hub: renderHub, party: renderParty, presets: renderPresets, items: renderItems, spells: renderSpells, damage: renderDamage };
+  const views = { hub: renderHub, party: renderParty, presets: renderPresets, items: renderItems, spells: renderSpells, damage: renderDamage, review: renderReview };
   $('#app').innerHTML = (views[state.ui.tab] || renderBuilds)();
   // the section menu sticks below the header, which is sticky itself on wide screens
   const top = $('.top');

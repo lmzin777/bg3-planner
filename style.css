@@ -932,3 +932,66 @@ button.chip:hover { border-color: var(--gold); color: var(--text); }
 .sim-step.three { grid-template-columns: 150px repeat(3, minmax(0, 1fr)); }
 @media (max-width: 900px) { .sim-step, .sim-step.three { grid-template-columns: 1fr; } }
 .foe-tools { margin-bottom: 6px; }
+
+.hpbar.mine i { background: linear-gradient(180deg, #4f8f58, #2f5c38); }
+.sim-down.lost { color: var(--danger); }
+.sim-turn li.foe b { color: var(--muted); }
+.sim-turn li.foe strong { color: var(--danger); }
+
+/* ---------- difficulty, and the temporary list of things to check ---------- */
+.acts.mini.modes button { padding: 5px 12px; }
+.nav-top i.count { font-size: 11px; margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: var(--field); border: 1px solid var(--line); opacity: 1; }
+.review-list { display: grid; gap: 12px; }
+.review-item header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.review-item header > div { flex: 1; min-width: 0; }
+.review-item h2 { margin: 0; font-size: 18px; }
+.review-item ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; }
+.review-item.done { opacity: .55; }
+.review-item.done h2 { text-decoration: line-through; }
+
+/* ---------- damage test: the four steps, a round of turns, the chart, scenarios ---------- */
+.sim .hero { margin-bottom: 10px; }
+.scene-tools { align-items: end; margin: 10px 0 0; }
+.scene-tools .field { max-width: 300px; }
+.scene-tools .btn { margin-bottom: 1px; }
+.sim-sum { margin: 12px 0 10px; font-size: 14px; }
+.sim-sum b { color: var(--gold-hi); font-family: var(--serif); font-size: 16px; }
+.secnav.sim-tabs { position: static; margin: 0; padding: 4px 0 0; }
+.secnav.sim-tabs button { padding: 7px 16px; font-size: 13px; }
+.secnav.sim-tabs button.on { background: var(--gold); color: #1a130a; border-color: var(--gold); }
+.sim-next { justify-content: flex-end; margin: 4px 0 20px; }
+.sim-members { margin: 0 0 12px; }
+.sim-members .lbl { display: block; font: 700 10.5px var(--sans); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 5px; }
+.sim-round { display: grid; gap: 6px; }
+.sim-round h4 { display: flex; justify-content: space-between; align-items: baseline; margin: 6px 2px 0; font: 600 13px var(--sans); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+.sim-round h4 strong { font: 600 17px var(--serif); color: var(--gold-hi); letter-spacing: 0; }
+.sim-turn.theirs { border-style: dashed; }
+.sim-turn.theirs header b { color: var(--danger); }
+.hpbar span b { color: var(--gold-hi); font-weight: 700; margin-left: 2px; }
+.charts { display: grid; gap: 14px; margin-top: 14px; }
+.charts.two { grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); }
+.chart-set { display: grid; gap: 14px; align-content: start; }
+.chart h4 { margin: 0 0 6px; font: 600 14px var(--serif); color: var(--gold-hi); }
+.chart .muted { margin: 6px 0 0; font-size: 12px; }
+.bars { display: flex; align-items: stretch; gap: 4px; height: 150px; padding: 6px 6px 0; border: 1px solid var(--line-soft); border-radius: 9px; background: var(--field); }
+.bar { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 2px; }
+.bar i { display: block; width: 100%; max-width: 46px; min-height: 1px; border-radius: 4px 4px 0 0; background: linear-gradient(180deg, var(--gold-hi), var(--gold)); }
+.bar small { color: var(--muted); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.bar b { font: 600 11px var(--sans); color: var(--text); padding: 3px 0 5px; white-space: nowrap; }
+.review-note { margin-top: 10px; }
+.review-note textarea { width: 100%; resize: vertical; min-height: 44px; background: var(--field); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; font: 14px var(--sans); }
+.review-note textarea:focus { outline: none; border-color: var(--gold); }
+@media (max-width: 620px) {
+  .bar b { font-size: 9px; }
+  .sim-step, .sim-step.three { grid-template-columns: 1fr; }
+}
+
+/* ---------- build check: every entry leads to where it is settled ---------- */
+.issues button.issue, .issues button.issue-where { all: unset; cursor: pointer; }
+.issues button.issue-where { font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; }
+.issues button i { font-style: normal; color: var(--gold); opacity: .7; margin-left: 3px; }
+.issues button:hover, .issues button:focus-visible { color: var(--gold-hi); text-decoration: underline; text-underline-offset: 3px; }
+.issues button:hover i, .issues button:focus-visible i { opacity: 1; }
+.issues li.note button:hover { color: var(--text); }
+@keyframes lit { 0%, 60% { box-shadow: 0 0 0 2px var(--gold); } 100% { box-shadow: 0 0 0 2px transparent; } }
+.lit { animation: lit 1.8s ease-out; border-radius: 10px; }

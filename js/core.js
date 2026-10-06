@@ -2,7 +2,7 @@
 // The scripts are plain (not modules) so the planner also runs from a file opened directly; they share the global scope.
 'use strict';
 
-const APP_VERSION = '3.6';
+const APP_VERSION = '4.1';
 const STORE_KEY = 'bg3planner.v1';
 const PRESETS = window.BG3_PRESETS || [];
 const I18N = window.BG3_I18N || {};
@@ -190,11 +190,13 @@ function normalizeParty(src) {
   return p;
 }
 
-function fresh() {
-  const builds = PRESETS.length ? [Object.assign(normalizeBuild(clone(PRESETS[0])), { id: uid() })] : [blankBuild()];
+// A first visit starts with nothing in My builds: the ready-made builds are there to be copied, and none is
+// until whoever visits asks for it. `seed` puts the first of them in, for the test page to have something to work on.
+function fresh(seed) {
+  const builds = seed && PRESETS.length ? [Object.assign(normalizeBuild(clone(PRESETS[0])), { id: uid() })] : [];
   const party = blankParty(t('My party'));
-  party.members[0] = { char: builds[0].creation.origin || '', buildId: builds[0].id };
-  return hydrate({ builds, parties: [party] });
+  if (builds[0]) party.members[0] = { char: builds[0].creation.origin || '', buildId: builds[0].id };
+  return hydrate(Object.assign({ builds, parties: [party] }, seed ? {} : { ui: { tab: 'hub' } }));
 }
 function hydrate(s) {
   const st = { builds: (s.builds || []).map(normalizeBuild), parties: (s.parties || []).map(normalizeParty),
@@ -207,7 +209,7 @@ function hydrate(s) {
   return st;
 }
 function load() {
-  if (window.BG3_TEST) return fresh();  // the test page never reads or writes saved data
+  if (window.BG3_TEST) return fresh(true);  // the test page never reads or writes saved data
   try {
     const raw = localStorage.getItem(STORE_KEY);
     const s = raw && JSON.parse(raw);

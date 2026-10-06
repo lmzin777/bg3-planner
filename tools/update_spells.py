@@ -182,6 +182,8 @@ def main():
             "at": bool(field(w, "attack roll").strip()),
             "dm": ", ".join(damage),
             "vr": [[a, b] for a, b, _ in options],
+            # a save DC the notes say is fixed, whoever casts it: [what it is for, DC, ability when named]
+            "fd": [[x.strip(), int(n), ab[:3].upper()] for x, n, ab in re.findall(r"DC for ([^.;]*?) is fixed at (\d+)(?: \((\w+)\))?", clean(field(w, "notes")) + "; " + clean(field(w, "bugs")))],
             "tg": short(clean(field(w, "targets")), 120),
             "rc": clean(field(w, "recharge")).capitalize(),
             "cn": conds,
@@ -211,6 +213,7 @@ def main():
           "// n name · p wiki page when it differs · i picture (path under bg3.wiki/w/images/) · lv level (0 = cantrip) · sc school\n"
           "// a action cost · rg range · ao area of effect · du duration · co concentration · ri ritual · sv saving throw · os on a save\n"
           "// at attack roll · dm damage · vr [option, damage] when the damage depends on the option chosen · tg who it targets\n"
+          "// fd save DCs the wiki's notes give as fixed: [what for, DC, ability]\n"
           "// rc recharge · cn conditions as [name, duration, save] · ar area created · sm summon\n"
           "// d description · xd more description · hl at higher levels · vb verbal component · sb can be learned from a scroll\n"
           "// cl classes · lr [who learns it, class level] · ft feats and features that grant it · it items that grant it\n"
