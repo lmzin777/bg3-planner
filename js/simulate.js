@@ -251,15 +251,18 @@ function elixirFx(stats) {
 
 // Arcane Acuity (+1 to spell attack rolls and to the spell save DC for each turn of it left, 10 at most; a turn
 // goes at the start of each turn and two with every hit taken): what keeps it up (the Elixir of Battlemage's Power:
-// never below 3) and what adds turns to it, read from the gear ("Whenever you deal damage with a weapon attack, you
-// gain Arcane Acuity for 2 turns").
+// never below 3) and what adds turns to it, read from the gear: damage with a weapon attack, Fire or Thunder damage,
+// a hit with a spell that uses a weapon. Two turns each time: the text of some items leaves the number out, and
+// the pages of their passives give it (Thunderous Acuity "applies 2 turns", Battlemage's Power lasts 2).
 function acuityOf(stats) {
   const c = stats.build && CONSUMABLE_BY_NAME.get(norm(stats.build.elixir));
-  const out = { floor: Number((/(\d) stacks of Arcane Acuity/i.exec(c ? c.x : '') || [])[1]) || 0, weapon: 0, fire: 0 };
+  const out = { floor: Number((/(\d) stacks of Arcane Acuity/i.exec(c ? c.x : '') || [])[1]) || 0, weapon: 0, fire: 0, thunder: 0, smite: 0 };
   Object.values(stats.worn || {}).forEach((it) => effectTexts(it).forEach((text) => {
-    const m = /deal (Fire )?damage( with a weapon attack)?, you gain Arcane Acuity for (\d) turns/i.exec(text);
-    if (m && m[2]) out.weapon = Math.max(out.weapon, Number(m[3]));
-    else if (m && m[1]) out.fire = Math.max(out.fire, Number(m[3]));
+    if (!/Arcane Acuity/.test(text)) return;
+    const turns = Number((/Arcane Acuity for (\d) turns/i.exec(text) || [])[1]) || 2;
+    const kind = /damage with a weapon attack/i.test(text) ? 'weapon' : /deals? Fire damage/i.test(text) ? 'fire' : /deals? Thunder damage/i.test(text) ? 'thunder'
+      : /hit a target with a spell or cantrip that uses a weapon/i.test(text) ? 'smite' : '';
+    if (kind) out[kind] = Math.max(out[kind], turns);
   }));
   return out;
 }
@@ -333,7 +336,7 @@ function foeMove(act, e, slotWanted) {
   // the condition it leaves is kept when it is one the test plays, with the +2 of the mode on a save DC of its own
   const cd = act.cd && condFx(act.cd[0]) ? { name: act.cd[0], turns: act.cd[1] || 2, sv: act.cd[2] || '', dc: act.cd[3] ? act.cd[3] + (idx > 0 ? 2 : 0) : 0 } : null;
   return { label: act.n, kind: act.k, melee: !!act.m, bonus: (act.b || 0) + (act.k === 'a' ? up : 0), dc: (act.dc || 0) + (act.k === 's' ? up : 0), sv: act.sv || '', os: act.os == null ? 0 : act.os, hits,
-    slot, spell: s ? s.lv : -1, uses: act.u || 0, parts: act.w || [], up, guess: act.g || '', waits: !!act.c, cd, om: act.om || 0, legend: !!act.lg, as: act.as || '' };
+    slot, spell: s ? s.lv : -1, uses: act.u || 0, parts: act.w || [], up, guess: act.g || '', waits: !!act.c, cd, om: act.om || 0, legend: !!act.lg, as: act.as || '', tr: act.tr || '' };
 }
 // What an enemy answers a hit with, once a round, in the difficulty chosen: its reactions and, in Honour mode, its
 // Legendary Actions.
@@ -547,12 +550,13 @@ function standUp(fight, hp) { Object.assign(fight, { hp: Math.max(1, hp), down: 
 const encWon = (enc) => enc.foes.every((f) => f.dead);
 const encLost = (enc) => enc.fights.every((f) => f.down);
 const encOver = (enc) => encWon(enc) || encLost(enc);
-// Initiative (the wiki's Initiative page): a d4 plus the bonus, highest first; a build before an enemy on a tie.
+// Initiative (the wiki's Initiative page): a d4 plus the bonus, highest first; on a tie, the higher Dexterity score
+// (and a build before an enemy when that is a tie too).
 function rollInitiative(enc) {
-  const all = [...enc.sides.map((s, i) => ({ kind: 'side', i, bonus: s.initiative || 0, name: s.name })),
-    ...enc.foes.map((f, i) => { const e = f.target && f.target.enemy; return { kind: 'foe', i, bonus: e ? (e.in != null ? e.in : Math.floor((e.ab.dex - 10) / 2)) : 0, name: f.name || t('The enemy') }; })];
+  const all = [...enc.sides.map((s, i) => ({ kind: 'side', i, bonus: s.initiative || 0, dex: ((s.stats || {}).scores || {}).dex || 10, name: s.name })),
+    ...enc.foes.map((f, i) => { const e = f.target && f.target.enemy; return { kind: 'foe', i, bonus: e ? (e.in != null ? e.in : Math.floor((e.ab.dex - 10) / 2)) : 0, dex: e ? e.ab.dex : 10, name: f.name || t('The enemy') }; })];
   if (enc.opts.first === 'roll') all.forEach((x) => { x.roll = rollDie(4); x.total = x.roll + x.bonus; });
-  const rank = (x) => (enc.opts.first === 'roll' ? x.total * 2 + (x.kind === 'side' ? 1 : 0) : (x.kind === 'side') === (enc.opts.first !== 'foes') ? 1 : 0);
+  const rank = (x) => (enc.opts.first === 'roll' ? x.total * 1000 + x.dex * 2 + (x.kind === 'side' ? 1 : 0) : (x.kind === 'side') === (enc.opts.first !== 'foes') ? 1 : 0);
   enc.init = all.slice().sort((x, y) => rank(y) - rank(x));
   return enc.init.map((x) => [x.kind, x.i]);
 }
@@ -642,7 +646,10 @@ function turnTools(enc, i, out) {
     if (lines.some((l) => l.kind === 'attack')) R.attacked = true;
     const dmg = lines.reduce((a, l) => a + (l.damage || 0), 0);
     // Fire damage dealt keeps Arcane Acuity up, with the gear that says so
-    if (left && side.acu.fire && lines.some((l) => l.damage > 0 && /\bFire\b/.test(l.text || ''))) fight.acuity = Math.min(10, (fight.acuity || 0) + side.acu.fire);
+    if (left) ['Fire', 'Thunder'].forEach((type) => {
+      const turns = side.acu[type.toLowerCase()];
+      if (turns && lines.some((l) => l.damage > 0 && new RegExp('\\b' + type + '\\b').test(l.text || ''))) fight.acuity = Math.min(10, (fight.acuity || 0) + turns);
+    });
     if (!f) return;
     if (dmg > 0) {
       f.dealt += dmg;
@@ -650,7 +657,7 @@ function turnTools(enc, i, out) {
       f.conds = f.conds.filter((c) => !c.f.wake);
       if (f.dealt >= f.hp && !f.dead) { f.dead = enc.round || 1; R.kills++; note(t('{who} falls.', { who: f.name || t('The enemy') })); return; }
     }
-    if (!f.dead && left && !f.reacted && !f.surprised && !R.answering && (dmg > 0 || lines.some((l) => l.kind === 'attack')) && !condHas(f, 'nr') && !condHas(f, 'skip')) {
+    if (!f.dead && left && !f.reacted && !f.surprised && !R.answering && (dmg > 0 || lines.some((l) => l.kind === 'attack')) && !condHas(f, 'nr') && !condHas(f, 'skip') && !f.conds.some((c) => /Restrained/.test(c.name))) {
       const rx = (f.move.rx || []).filter((a) => !a.uses || ((f.used || {})[a.label] || 0) < a.uses);
       const act = rx.find((a) => a.melee === !!near) || rx[0];
       if (act) {
@@ -986,6 +993,8 @@ function buildTurn(enc, i) {
       }
       land(dealt, f, false);
       if (hits.length) T.spend(T.mods(f, false), f);
+      // a hit with a spell that uses a weapon keeps Arcane Acuity up, with the gloves that say so
+      if (left && side.acu.smite && r.weapon && hits.some((l) => l.hit)) fight.acuity = Math.min(10, (fight.acuity || 0) + side.acu.smite);
       first = false;
     });
     return true;
@@ -1179,7 +1188,8 @@ function buildTurn(enc, i) {
       return;
     }
     const part = kind === 'main' || kind === 'blood' ? v.plan.parts[0] : v.plan.parts.find((x) => x.spends === (kind === 'surge' ? 'Action Surge' : 'Haste'));
-    if (part) swing(Object.assign({}, part, kind === 'blood' ? { how: 'Elixir of Bloodlust' } : {}, less ? { n: Math.max(0, part.n - less) } : {}));
+    // (in Honour mode only Action Surge lets an action on top use Extra Attack: the one of Bloodlust is one attack)
+    if (part) swing(Object.assign({}, part, kind === 'blood' ? { how: 'Elixir of Bloodlust', n: honourMode() ? 1 : part.n } : {}, less ? { n: Math.max(0, part.n - less) } : {}));
   };
   const meleeRow = () => ((view().st.attacks || {}).rows || []).find((r) => r.slot === 'meleeMain' && !r.thrown);
   // Commander's Strike: one attack of the Attack action, the bonus action and a Superiority Die, for an ally to make
@@ -1384,16 +1394,17 @@ function foeTurn(enc, j) {
   }
   // damage that waits for the enemy to move: once when it moves at all (Booming Blade), or for every 1.5 m it
   // walks through an area (Spike Growth; half the distance where the area is Difficult Terrain)
+  const stuck = idle || condHas(f, 'still');  // Frightened, Restrained, held: it cannot move
   if (!f.dead) enc.fights.forEach((fight, k) => {
     if (!fight.left) return;
     const mine = (e) => e.kind === 'later' && (!e.foe || e.foe === f);
     const sink = turnTools(enc, k, out);
     fight.effects.filter((e) => mine(e) && e.later.some((p) => p.when === 'moves')).forEach((e) => {
-      if (move.steps > 0 && !idle) { const dealt = rollLater(e, 'moves'); dealt.forEach((l) => { l.how = t('when it moves'); }); sink.R.answering = true; sink.land(dealt, f, false); sink.R.answering = false; }
+      if (move.steps > 0 && !stuck) { const dealt = rollLater(e, 'moves'); dealt.forEach((l) => { l.how = t('when it moves'); }); sink.R.answering = true; sink.land(dealt, f, false); sink.R.answering = false; }
       sink.drop([e]);
     });
     fight.effects.filter((e) => mine(e) && e.later.some((p) => p.when === 'walks')).forEach((e) => {
-      const walked = idle ? 0 : e.later.some((p) => p.halved) ? Math.floor(move.steps / 2) : move.steps;
+      const walked = stuck ? 0 : e.later.some((p) => p.halved) ? Math.floor(move.steps / 2) : move.steps;
       for (let s = 0; s < walked && !f.dead; s++) { const dealt = rollLater(e, 'walks'); dealt.forEach((l) => { l.how = t('1.5 m walked'); }); sink.R.answering = true; sink.land(dealt, f, false); sink.R.answering = false; }
     });
   });

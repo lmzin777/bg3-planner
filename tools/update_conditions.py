@@ -49,7 +49,7 @@ def main():
           "//   · tk start: counts down at the start of a turn · src 1: counts down on the turn of whoever caused it\n"
           "//   · rep the save repeated each turn to shake it off (same: the one that let it in) · wake 1: taking damage ends it\n"
           "//   · ally 1: the Advantage is only for the allies of whoever caused it · once 1: spent by the next attack\n"
-          "//   · guard 1: melee attacks against it have Disadvantage\n"
+          "//   · guard 1: melee attacks against it have Disadvantage · still 1: it cannot move\n"
           f"window.BG3_CONDITIONS_DATE = {json.dumps(time.strftime('%Y-%m-%d'))};\n"
           "window.BG3_CONDITIONS = {\n" + body + "\n};\n")
     io.open(OUT, "w", encoding="utf-8", newline="\n").write(js)

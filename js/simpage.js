@@ -254,8 +254,9 @@ function simTabBuild(ctx, b) {
       ${ctx.side.heal && ctx.side.heal.kind === 'potion' ? `<div class="field ac-field"><span>${t('Potions carried')}</span>${stepper(ctx.side.potions, 'data-ui="simPotions" data-v="2"', 0, 10)}</div>` : ''}</div>
       ${team.on ? `<p class="muted">${t('A healing spell also goes to whoever of the party is at half its hit points or less.')}</p>` : ''}` : ''}
     <p class="muted">${t('Hit points {hp} · Armour Class {ac} · Initiative {i}', { hp: ctx.side.hp, ac: ctx.side.ac, i: signed(ctx.side.initiative) })}${ctx.side.wary ? ' · ' + t('cannot be Surprised') : ''}${
-      ctx.side.acu.floor || ctx.side.acu.weapon || ctx.side.acu.fire ? ' · Arcane Acuity: ' + [ctx.side.acu.floor ? t('never below {n}', { n: ctx.side.acu.floor }) : '', ctx.side.acu.weapon ? t('+{n} with a weapon hit', { n: ctx.side.acu.weapon }) : '',
-        ctx.side.acu.fire ? t('+{n} with Fire damage', { n: ctx.side.acu.fire }) : ''].filter(Boolean).join(', ') : ''}${
+      Object.values(ctx.side.acu).some(Boolean) ? ' · Arcane Acuity: ' + [ctx.side.acu.floor ? t('never below {n}', { n: ctx.side.acu.floor }) : '', ctx.side.acu.weapon ? t('+{n} with a weapon hit', { n: ctx.side.acu.weapon }) : '',
+        ctx.side.acu.fire ? t('+{n} with Fire damage', { n: ctx.side.acu.fire }) : '', ctx.side.acu.thunder ? t('+{n} with Thunder damage', { n: ctx.side.acu.thunder }) : '',
+        ctx.side.acu.smite ? t('+{n} with a hit of a spell that uses a weapon', { n: ctx.side.acu.smite }) : ''].filter(Boolean).join(', ') : ''}${
       ctx.side.resist.always.size ? ' · ' + t('Resistances of the build: {list}.', { list: esc([...ctx.side.resist.always].join(', ')) }) : ''}</p>` : ''}
   </section>`;
 }
@@ -313,7 +314,7 @@ function simTabEnemy(ctx) {
     ${target.enemy ? `<h3 class="group">${t('What it answers a hit with')}</h3>
     <div class="stat-tools"><div class="field"><span>${t('Reactions and Legendary Actions')}</span><button class="btn tiny${state.ui.foeReacts === false ? '' : ' gold'}" data-act="foe-reacts">${state.ui.foeReacts === false ? t('Not used') : t('Used, once a round')}</button></div></div>
     ${answers.length ? `<p class="enemy-line">${answers.map((m) => `${esc(m.label)}${m.legend ? ' (Legendary Action)' : ''}: ${m.hits.map(comps).filter(Boolean).map(esc).join(' · ') || t('no damage')}. ${howOf(m)}${m.om ? ', ' + t('half the damage on a miss') : ''}${esc(condOf(m))}${m.as ? '. ' + t('With the numbers of {a}', { a: esc(m.as) }) : ''}${
-      m.waits ? '. ' + t('its page says it is not there every turn') : ''}.`).join('<br>')}</p>` : `<p class="muted">${t('Its page gives nothing the test can use here, in this difficulty.')}</p>`}` : ''}
+      m.waits ? '. ' + t('its page says it is not there every turn') : ''}.${m.tr ? ' <em>' + esc(m.tr) + '</em>' : ''}`).join('<br>')}</p>` : `<p class="muted">${t('Its page gives nothing the test can use here, in this difficulty.')}</p>`}` : ''}
     <h3 class="group">${t('How the fight starts')}</h3>
     <div class="stat-tools">
       <div><span class="lbl">${t('Who acts first')}</span>${pickButtons('simFirst', state.ui.simFirst || 'roll', [['roll', t('Initiative, rolled')], ['party', ctx.sides.length > 1 ? t('The party') : t('The build')], ['foes', t('The enemy')]])}</div>

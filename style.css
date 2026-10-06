@@ -995,3 +995,11 @@ button.chip:hover { border-color: var(--gold); color: var(--text); }
 .issues li.note button:hover { color: var(--text); }
 @keyframes lit { 0%, 60% { box-shadow: 0 0 0 2px var(--gold); } 100% { box-shadow: 0 0 0 2px transparent; } }
 .lit { animation: lit 1.8s ease-out; border-radius: 10px; }
+
+/* ---------- to check: what asks for a look, and what does not ---------- */
+.review-also { margin: 10px 0 4px; font: 700 10.5px var(--sans); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+.review-item ul.review-info { font-size: 13px; color: var(--muted); }
+.review-rest summary { cursor: pointer; font: 600 16px var(--serif); color: var(--gold-hi); }
+.review-rest[open] summary { margin-bottom: 12px; }
+.review-item.plain { padding: 10px 0; border-top: 1px solid var(--line-soft); }
+.review-item.plain h2 { font-size: 15px; }

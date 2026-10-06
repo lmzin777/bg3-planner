@@ -1241,8 +1241,13 @@
       'Armour Class 12 + 9: 11 + 5 misses twice, then against 15 it hits and no more duplicates are lost');
     // The temporary list of things to check by hand.
     const review = reviewItems();
-    ok(review.length > 20 && review.find((x) => x.key === 'enemy:The Netherbrain').points.some((p) => /set by hand/.test(p)) && review.find((x) => x.key === 'enemy:Sarevok Anchev').points.some((p) => /Sword of Chaos/.test(p)),
-      'every enemy with something worked out or left out is on it');
+    const asked = review.filter((x) => x.ask.length);
+    ok(review.length > 40 && asked.length > 15 && asked.length < 40 && review.find((x) => x.key === 'enemy:The Netherbrain').info.some((p) => /set by hand/.test(p))
+      && review.find((x) => x.key === 'enemy:Sarevok Anchev').ask.some((p) => /Sword of Chaos/.test(p)) && !review.find((x) => x.key === 'rule:initiative').ask.length,
+      'what the planner guessed asks for a look (Sarevok\'s sword); what the wiki settles does not (Initiative, the Netherbrain\'s page)');
+    eq([review.find((x) => x.key === 'rule:numbers').ask.length > 10, ENEMIES.find((e) => e.n === 'Cambion').acts.some((a) => /Trident/.test(a.n)), ENEMIES.find((e) => e.n === 'Animated Armour').acts.map((a) => a.gw && a.gw[0]),
+      ENEMIES.find((e) => e.n === 'Yurgir').rx.every((a) => /Hunted creature/.test(a.tr))], [true, true, ['Greatsword', 'Heavy Crossbow'], true],
+      'the guessed numbers in one entry; a weapon named another way on the page is found; what sets an answer off, in the words of its page');
     // Shield turns a hit into a miss when 5 more Armour Class is enough, and takes a level 1 slot and the reaction.
     const sw = made(Array(5).fill('Wizard'), { abilities: { str: 8, dex: 14, con: 14, int: 15, wis: 12, cha: 10 }, plus2: 'int', plus1: 'wis' }, { 1: 'Evocation School' }, {}, { 0: ['Cantrip: Fire Bolt', 'Spell: Shield'] });
     const warded = sideOf(finalStats(sw, 'act1'), 'caster', plain, steps([]));
@@ -1399,6 +1404,10 @@
     enc = newEncounter([sword()], [brute()], { first: 'roll' });
     encRound(enc);
     eq(enc.init.map((x) => [x.kind, x.total]), [['side', 5], ['foe', 3]], 'Initiative: d4 (3) + 2 for the build, + 0 for an enemy with no page');
+    // a tie goes to the higher Dexterity score: the rogue (17) before the fighter (14), though it comes second in the party
+    enc = newEncounter([Object.assign(sword(), { initiative: 4, name: 'Sword' }), Object.assign(sideOf(finalStats(rogue, 'act1'), 'melee', plain, steps([])), { initiative: 4, name: 'Rogue' })], [brute()], { first: 'roll' });
+    encRound(enc);
+    eq(enc.init.map((x) => x.name), ['Rogue', 'Sword', 'The enemy']);
     enc = newEncounter([sword()], [brute()], { first: 'party', surprise: 'foes' });
     eq([encRound(enc).entries.map((e) => e.lines.filter((l) => l.kind === 'foe').length), encRound(enc).entries.map((e) => e.lines.filter((l) => l.kind === 'foe').length)], [[0, 0], [0, 1]],
       'a Surprised enemy does nothing in the first round');
@@ -1458,7 +1467,10 @@
       simResources(Object.assign({}, holder.stats, { build: Object.assign({}, mage, { elixir: 'Elixir of Arcane Cultivation' }) })).slots[0] - simResources(holder.stats).slots[0]], [5, 10, 1]);
     enc = newEncounter([thirsty], [dummy(5, 'A'), dummy(100, 'B')], { first: 'party' });
     round = encRound(enc);
-    eq([round.entries[0].lines.length, enc.fights[0].temp], [4, 5], 'Bloodlust: a kill gives one more action, two attacks more, and 5 temporary hit points');
+    eq([round.entries[0].lines.length, enc.fights[0].temp], [3, 5], 'Bloodlust: a kill gives 5 temporary hit points and one more action, which in Honour mode is one attack');
+    state.ui.mode = 'balanced';
+    eq(encRound(newEncounter([sword()], [dummy(5, 'A'), dummy(100, 'B')], { first: 'party' })).entries[0].lines.length, 4, 'and outside Honour mode the two attacks of Extra Attack');
+    state.ui.mode = 'honour';
     fighter.elixir = '';
 
     // The manoeuvres that are not about one hit, and what a party does for its own.
@@ -2056,7 +2068,8 @@
     const note = q('.review-note textarea');
     note.value = 'seen in game';
     note.dispatchEvent(new Event('input', { bubbles: true }));
-    eq([state.ui.reviewNotes[note.dataset.review], all('.review-item').length > 80], ['seen in game', true]);
+    eq([state.ui.reviewNotes[note.dataset.review], all('.review-list > .review-item:not(.plain)').length > 20, all('.review-rest .review-item.plain').length > 5, all('.review-item:not(.plain)').every((x) => q('[data-act="review-toggle"]', x))],
+      ['seen in game', true, true, true], 'what asks for a look has a tick and a note; the rest is kept apart');
     ['scenes', 'scene', 'sceneName', 'reviewNotes', 'simFirst', 'simTab', 'help0'].forEach((k) => { delete state.ui[k]; });
     state.ui.target = '';
     state.ui.tab = 'builds';

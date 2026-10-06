@@ -44,7 +44,7 @@ ENEMIES = [
     (1, "Owlbear Mate"), (1, "Goblin Booyahg"), (1, "Goblin Tracker"), (1, "Worg"), (1, "Bugbear"), (1, "Gnoll Hunter"), (1, "Hyena"), (1, "Harpy"), (1, "Phase Spider"),
     (1, "Ettercap"), (1, "Intellect Devourer"), (1, "Mud Mephit"), (1, "Wood Woad"), (1, "Animated Armour"),
     (2, "Kar'niss"), (2, "Disciple Z'rell"), (2, "Mind Flayer"), (2, "Displacer Beast"), (2, "Meenlock"), (2, "Shadow"), (2, "Shadow Mastiff"), (2, "Shadow-Cursed Harper"),
-    (2, "Ghoul"), (2, "Ghast"), (2, "Death Shepherd"), (2, "Necromite"), (2, "Winged Horror"), (2, "Merregon Legionnaire"), (2, "Sister Hunna"), (2, "Skeleton"), (2, "Zombie"),
+    (2, "Ghoul"), (2, "Ghast"), (2, "Death Shepherd"), (2, "Necromite"), (2, "Winged Horror"), (2, "Merregon Legionnaire"), (2, "Sister Hunna"), (2, "Zombie"),
     (3, "Mystic Carrion"), (3, "Prelate Lir'i'c"), (3, "Dolor"), (3, "Cloaker"), (3, "Wraith"), (3, "Sahuagin"), (3, "Doppelganger"), (3, "Werewolf"), (3, "Cambion"),
     (3, "Vengeful Cambion"), (3, "Death's Head of Bhaal"), (3, "Black Gauntlet"), (3, "Fire Myrmidon"), (3, "Air Myrmidon"), (3, "Water Myrmidon"), (3, "Earth Myrmidon"),
 ]
@@ -126,8 +126,33 @@ def listed_actions(text):
             continue
         given = dict((k.strip().lower(), v.strip()) for k, _, v in (x.partition("=") for x in m.group(4).split("|") if "=" in x))
         name = m.group(3).strip()
+        # "main hand attack", "Fire bolt": the page of the action is titled with capitals
+        if name.lower() in ("main hand attack", "ranged attack"):
+            name = name.title()
+        # "Main Hand Attack|weapon=Trident": the same as item=
+        if given.get("weapon") and not given.get("item"):
+            given["item"] = given["weapon"]
         out.append((name, given, mode or ("t" if "tactician" in name.lower() else "")))
     return out
+
+
+def cased(name):
+    """ "Fire bolt" as the wiki titles its page: "Fire Bolt"."""
+    return " ".join(w if w.lower() in ("of", "the", "and", "with", "to", "in") and i else w[:1].upper() + w[1:] for i, w in enumerate(name.split(" ")))
+
+
+def combat_weapons(text):
+    """The items a page names in its Combat section, before the list of attacks: what the creature is armed with."""
+    m = re.search(r"^(=+)\s*Combat\s*=+\s*$", text or "", re.M)
+    if not m:
+        return []
+    rest = text[m.end():]
+    end = re.search(r"^=+\s*(?:Attacks and actions|Notable loot|Loot)\s*=+\s*$|^={1,%d}[^=]" % len(m.group(1)), rest, re.M)
+    return [x.strip() for x in ITEM.findall(rest[:end.start()] if end else rest)]
+
+
+def is_ranged(page):
+    return bool(re.search(r"bow", field(page, "type"), re.I))
 
 
 def loot_weapons(text):
@@ -196,6 +221,9 @@ def condition_flags(text):
     # Evasive Footwork: melee attacks against it are made with Disadvantage
     if re.search(r"disadvantage on melee attacks against", low):
         f["guard"] = 1
+    # it cannot move (Frightened, Restrained): what waits for it to move does not go off
+    if f and re.search(r"(?:cannot|can't|can not|unable to) move", low):
+        f["still"] = 1
     if f and re.search(r"removed by taking damage", low):
         f["wake"] = 1
     rep = re.search(r"at the (?:end|start) of (?:each|its|their) turn[^.;]*?(?:(" + ABILITY_WORD + r")|shake off|saving throw)", low)
@@ -219,6 +247,8 @@ class Maker:
     def __init__(self, box, scores, pb):
         self.box, self.scores, self.pb = box, scores, pb
         self.casting = ""
+        # the spellcasting ability its page gives; else the highest of the three, which is then a guess
+        self.casting_known = bool(self.ability(field(box, "casting ability")))
         self.casting = self.ability(field(box, "casting ability")) or max(("int", "wis", "cha"), key=lambda k: scores[k])
 
     def mod(self, key):
@@ -266,7 +296,7 @@ class Maker:
             return [name, number(get("condition" + n + " duration")) or 0, save if save in ABILITIES else "", (fixed or worked) if save in ABILITIES else 0]
         return None
 
-    def action(self, name, given, page, weapon, more, free=False, flags=None):
+    def action(self, name, given, page, weapon, more, free=False, flags=None, weapon_name=""):
         """One listed action as {n, k: a attack roll / s saving throw / h no roll, m: 1 melee, b or dc with its
         parts w, sv, os, hits, sl spell slot, u uses a fight, c: 1 when it is not there every turn}."""
         w = feature(page)
@@ -279,8 +309,11 @@ class Maker:
         if not acts and not bonus and not free:
             return None
         cond = self.condition(get, flags or {})
-        if name.startswith("Main Hand Attack") and weapon:
-            return self.weapon_attack(name + " (" + given.get("item", "") + ")", weapon, more)
+        if name.startswith(("Main Hand Attack", "Ranged Attack")) and weapon:
+            hit = self.weapon_attack(name + " (" + (weapon_name or given.get("item", "")) + ")", weapon, more)
+            if hit:
+                hit["_w"] = True
+            return hit
         # healing: what it gives itself back
         mend = [(clean(get("damage" + n)), clean(get("damage" + n + " type")) or clean(get("damage type"))) for n in ("", " 1")]
         mend = [DICE.match(text) for text, kind in mend if kind == "Healing"]
@@ -297,7 +330,7 @@ class Maker:
         reach, metres = clean(get("range")).lower(), number(get("range m"))
         spell = clean(field(w, "type")).lower() == "spell" or roll.endswith("spell") or "spell" in cost
         melee = roll.startswith("melee") or (roll == "yes" and (reach in ("melee", "weapon") or (metres is not None and metres <= 4)))
-        ability, comps, unknown, kept_by_line, sometimes = "", [], False, None, False
+        ability, comps, unknown, kept_by_line, sometimes, with_weapon = "", [], False, None, False, False
         for n in ("", " 1", " 2", " 3", " 4", " 5"):
             if (n == "" and "damage 1" in given) or (n == " 1" and "damage" in given and "damage 1" not in given):
                 continue
@@ -320,6 +353,7 @@ class Maker:
                 fine = clean(field(weapon, "finesse")).lower() in ("yes", "true")
                 ability = ability or self.ability("finesse" if fine else "strength")
                 comps.append([m.group(1), int(m.group(2) or 0) + self.mod(ability), clean(field(weapon, "damage type")), True])
+                with_weapon = True
                 continue
             m = DICE.match(text)
             if not m:
@@ -332,16 +366,24 @@ class Maker:
         if unknown or (not comps and not (cond and (roll or save in ABILITIES))):
             return None
         out = {"n": name + (" (" + given["item"] + ")" if given.get("item") else ""), "m": 1 if melee else 0}
+        if with_weapon:
+            out["_w"] = True
+        # "wf": the ability behind the number is not named by the page, it is the planner's rule
         if roll:
             if spell:
                 key = self.casting
+                if not self.casting_known:
+                    out["wf"] = 1
             elif ability:
                 key = ability
             elif roll.startswith("ranged") or not melee:
                 key = "dex"
+                out["wf"] = 1
             else:
                 key = "dex" if self.scores["dex"] > self.scores["str"] else "str"
-            enchant = (number(field(weapon, "enchantment")) or 0) if weapon else 0
+                out["wf"] = 1
+            # (the weapon's enchantment counts when the attack is made with it: its box names it, or its damage is the weapon's)
+            enchant = (number(field(weapon, "enchantment")) or 0) if weapon and (with_weapon or given.get("item")) else 0
             parts = [["Proficiency", self.pb], [key.upper(), self.mod(key)]] + ([["Enchantment", enchant]] if enchant else [])
             # a Multiattack, or the same blow written several times over, is one attack for each line; a line of a
             # Multiattack with no ability of its own and no weapon damage type rides on the attack before it
@@ -358,6 +400,8 @@ class Maker:
         elif save in ABILITIES:
             fixed = number(get("save dc")) if re.match(r"\s*\d+\s*$", get("save dc")) else None
             parts = [] if fixed else [["8", 8], ["Proficiency", self.pb], [self.casting.upper(), self.mod(self.casting)]]
+            if not fixed and not self.casting_known:
+                out["wf"] = 1
             said = clean(get("on save")).lower()
             out.update({"k": "s", "sv": save, "dc": fixed or sum(p[1] for p in parts), "w": parts,
                         "os": kept_by_line if kept_by_line is not None else 0.5 if "half" in said else 0 if "negat" in said else 1, "hits": [[c[:3] for c in comps]]})
@@ -419,9 +463,27 @@ def actions_of(name, pages, actions, items, box, scores, pb, flags):
     more = extra_attacks(passives)
     make = Maker(box, scores, pb)
     out, seen, unused = [], set(), []
-    for title, given, mode in listed_actions(text):
+    boxes = listed_actions(text)
+    # the weapon it holds: the one its Main Hand Attack names. Else one the page points at some other way, which is
+    # then said with the attack: the weapon a passive comes from, the only weapon of its loot, or the only melee
+    # weapon its Combat section names. For a Ranged Attack, the only ranged weapon the Combat section names.
+    named = next((g["item"] for t, g, _ in boxes if t.startswith("Main Hand Attack") and is_weapon(items.get(g.get("item", ""), ""))), "")
+    held = [x.strip() for x in re.findall(r"@\s*([^,;]+)", passives) if is_weapon(items.get(x.strip(), ""))]
+    loot = [x for x in dict.fromkeys(loot_weapons(pages.get(name) or "") + loot_weapons(pages.get(name + "/Combat") or "")) if is_weapon(items.get(x, ""))]
+    armed_with = [x for x in dict.fromkeys(combat_weapons(pages.get(name) or "") + combat_weapons(pages.get(name + "/Combat") or "")) if is_weapon(items.get(x, ""))]
+    near = [x for x in armed_with if not is_ranged(items[x])]
+    far = [x for x in armed_with if is_ranged(items[x])]
+    guess, guess_why = (held[0], "the weapon one of its passives comes from") if held else (near[0], "the only melee weapon its Combat section names") if len(near) == 1 else \
+        (loot[0], "the only weapon in its loot") if len(loot) == 1 else ("", "")
+    for title, given, mode in boxes:
         page = feature(actions.get(title, ""))
-        act = make.action(title, given, actions.get(title, ""), items.get(given.get("item", ""), ""), more, flags=flags)
+        own = given.get("item", "") if is_weapon(items.get(given.get("item", ""), "")) else ""
+        ranged_box = title.startswith("Ranged Attack")
+        wname = own or (far[0] if ranged_box and len(far) == 1 else "" if ranged_box else named or guess)
+        act = make.action(title, given, actions.get(title, ""), items.get(wname, "") if wname else items.get(given.get("item", ""), ""), more, flags=flags, weapon_name=wname)
+        if act and act.pop("_w", False) and not own and wname != named:
+            # the page does not name the weapon of this attack: the one used, and why
+            act["gw"] = [wname, "the only ranged weapon its Combat section names" if ranged_box else guess_why]
         if act and act["n"] not in seen:
             seen.add(act["n"])
             if mode:
@@ -447,8 +509,6 @@ def actions_of(name, pages, actions, items, box, scores, pb, flags):
     if not any(a["n"].startswith("Main Hand Attack") for a in out):
         # no Main Hand Attack listed: the weapon a passive of the infobox comes from; else, for a creature with no
         # melee attack of its own that is always there, the only weapon in its loot
-        held = [x.strip() for x in re.findall(r"@\s*([^,;]+)", passives) if is_weapon(items.get(x.strip(), ""))]
-        loot = [x for x in dict.fromkeys(loot_weapons(pages.get(name) or "") + loot_weapons(pages.get(name + "/Combat") or "")) if is_weapon(items.get(x, ""))]
         armed = any(a["k"] == "a" and a["m"] and not a.get("_spell") and not a.get("c") and not a.get("q") for a in out)
         weapon, why = (held[0], "its page lists no Main Hand Attack: this is the weapon one of its passives comes from") if held else \
             (loot[0], "its page lists no Main Hand Attack: this is the only weapon in its loot") if len(loot) == 1 and not armed else ("", "")
@@ -504,6 +564,14 @@ def actions_of(name, pages, actions, items, box, scores, pb, flags):
         if legendary:
             act["md"] = "h"
             act["lg"] = 1
+        # what sets it off, as the page of the Legendary Action says it; else as its own page does
+        passive = feature(actions.get("Legendary Action: " + re.sub(r"\s*\((?:melee|ranged)\)$", "", title), ""))
+        told = clean(field(passive, "description")) or clean(field(w, "description")) or clean(field(w, "summary"))
+        if told:
+            act["tr"] = told[:240]
+        # an answer that waits for something more than the hit ("after accumulating five…", "if its … are active")
+        if re.search(r"after accumulating|\bif (?:its|his|her|their) [^.]* (?:is|are) active", told, re.I):
+            act["c"] = 1
         same = lambda r: json.dumps([r["k"], r["hits"], r.get("cd")]) == json.dumps([act["k"], act["hits"], act.get("cd")])
         if any(same(r) for r in reacts):
             # the same answer listed twice (a melee and a ranged version): the Legendary Action stays
@@ -514,6 +582,7 @@ def actions_of(name, pages, actions, items, box, scores, pb, flags):
         unused.remove([title, why])
     for a in out + reacts:
         a.pop("_spell", None)
+        a.pop("_w", None)
     return out, unused, reacts
 
 
@@ -523,16 +592,22 @@ def main():
     pages = page_texts(set(titles) | {name + "/Combat" for name in titles} | {"Superheated (Condition)", "Mage Armour (Condition)"})
     listed = {name: listed_actions((pages.get(name + "/Combat") or "") + "\n= =\n" + (pages.get(name) or "")) for name in titles}
     actions = page_texts({a for v in listed.values() for a, _, _ in v})
+    # a box that names its action without the capitals of the page's title
+    lost = {a for v in listed.values() for a, _, _ in v if a not in actions}
+    again = page_texts({cased(a) for a in lost})
+    actions.update({a: again[cased(a)] for a in lost if cased(a) in again})
     wanted = {g["item"] for v in listed.values() for _, g, _ in v if g.get("item")}
     for name in titles:
         box = infobox(pages.get(name + "/Combat", "") or "", False) or infobox(pages.get(name, "") or "", False) or ""
         wanted |= {x.strip() for x in re.findall(r"@\s*([^,;]+)", clean(field(box, "passives")))}
         wanted |= set(loot_weapons(pages.get(name) or "")) | set(loot_weapons(pages.get(name + "/Combat") or ""))
+        wanted |= set(combat_weapons(pages.get(name) or "")) | set(combat_weapons(pages.get(name + "/Combat") or ""))
     items = page_texts(wanted)
     # Legendary Actions are named in the passives of Honour mode; a reaction may only name the action it sets off
     boxes = {name: infobox(pages.get(name + "/Combat", "") or "", False) or infobox(pages.get(name, "") or "", False) or "" for name in titles}
     legends = {x.strip() for box in boxes.values() for x in re.findall(r"Legendary Action: ([^,;@]+)", clean(field(box, "h passives")))}
     actions.update(page_texts(legends - set(actions)))
+    actions.update(page_texts({"Legendary Action: " + re.sub(r"\s*\((?:melee|ranged)\)$", "", a) for a in set(actions) | legends} - set(actions)))
     linked = {x for text in actions.values() for x in linked_actions(feature(text))}
     actions.update(page_texts(linked - set(actions)))
     # the conditions the actions leave: only those the damage test can use are kept
@@ -600,10 +675,10 @@ def main():
         print(f"  act {act} · {name}: level {e['lv']}, AC {e['ac']}, HP {e['hp']}, slots {e.get('rs')}, moves {e.get('mv')}")
         for a in e.get("acts", []):
             how = f"+{a['b']}" if a["k"] == "a" else f"{a['sv'].upper()} DC {a['dc']} (x{a['os']})" if a["k"] == "s" else "heals" if a["k"] == "e" else "no roll"
-            print("      ", a["n"], "|", how, "|", a["hits"], "|", {k: a[k] for k in ("sl", "u", "c", "m", "q", "md", "s", "x", "cd", "om") if a.get(k)}, "| worked out" if a.get("g") else "")
+            print("      ", a["n"], "|", how, "|", a["hits"], "|", {k: a[k] for k in ("sl", "u", "c", "m", "q", "md", "s", "x", "cd", "om", "wf", "gw") if a.get(k)}, "| worked out" if a.get("g") else "")
         for a in e.get("rx", []):
             how = f"+{a['b']}" if a["k"] == "a" else f"{a['sv'].upper()} DC {a['dc']} (x{a['os']})" if a["k"] == "s" else "no roll"
-            print("       answers with", a["n"], "|", how, "|", a["hits"], "|", {k: a[k] for k in ("c", "md", "cd", "om", "as") if a.get(k)})
+            print("       answers with", a["n"], "|", how, "|", a["hits"], "|", {k: a[k] for k in ("c", "md", "cd", "om", "as", "wf", "tr") if a.get(k)})
         if e.get("nu"):
             print("       not used:", e["nu"], "| extra attacks", e["ea"])
     if missing:
@@ -624,7 +699,9 @@ def main():
           "//   for each Extra Attack · cd the condition it leaves: [name, turns, save, DC] · om what a miss still deals\n"
           "// ea Extra Attacks in [Balanced, Tactician, Honour] · nu listed but not used: [name, why] · ty kind of creature\n"
           "// in Initiative bonus, when the page gives one · rx what answers a hit, once a round (lg 1: a Legendary Action;\n"
-          "//   as: the action whose numbers it borrows)\n"
+          "//   as: the action whose numbers it borrows; tr: what sets it off, in the words of its page)\n"
+          "//   wf 1 when the ability behind b or dc is the planner's rule and not named by the page\n"
+          "//   gw [weapon, why] when the page does not name the weapon the attack is made with\n"
           "window.BG3_ENEMIES = [\n" + body + "\n];\n")
     io.open(OUT, "w", encoding="utf-8", newline="\n").write(js)
     record("enemies")
