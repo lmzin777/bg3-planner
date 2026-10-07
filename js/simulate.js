@@ -183,7 +183,7 @@ function condStart(holder, note) {
 // it caused on others, and that count down on its turn, do so too. `saveOf(key)` gives the holder's bonus.
 function condEnd(holder, saveOf, note, others) {
   holder.conds = holder.conds.filter((c) => {
-    if (c.save && c.f.rep) {
+    if (c.save && (c.f.rep || c.rep)) {
       const d20 = rollD20(0);
       if (d20 + saveOf(c.save.key) >= c.save.dc) { note(t('{name} shaken off: {ab} save {roll} against DC {dc}.', { name: c.name, ab: c.save.key.toUpperCase(), roll: d20 + saveOf(c.save.key), dc: c.save.dc })); return false; }
     }
@@ -238,6 +238,8 @@ function coatFx(c) {
   if (save) out.save = { key: (save[1] || save[3]).toLowerCase().slice(0, 3), dc: Number(save[2] || save[4]) };
   const conds = (c.cs || []).filter((n) => condFx(n));
   if (conds.length) out.conds = conds;
+  // how long they last: so many turns, or (-1) until the save is passed, rolled again at the end of each turn
+  if (conds.length) { out.turns = c.ct > 0 ? c.ct : 2; out.until = c.ct < 0; }
   const later = /take (\d+d\d+) (\w+) damage at the end of their next turn/i.exec(x);
   if (later) out.later = [later[1], later[2]];
   const extra = /additional (\d+d\d+) (\w+) damage/i.exec(x);
@@ -344,6 +346,8 @@ function foeMove(act, e, slotWanted) {
   const cd = act.cd && condFx(act.cd[0]) ? { name: act.cd[0], turns: act.cd[1] || 2, sv: act.cd[2] || '', dc: act.cd[3] ? act.cd[3] + (idx > 0 ? 2 : 0) : 0 } : null;
   return { label: act.n, kind: act.k, melee: !!act.m, bonus: (act.b || 0) + (act.k === 'a' ? up : 0), dc: (act.dc || 0) + (act.k === 's' ? up : 0), sv: act.sv || '', os: act.os == null ? 0 : act.os, hits,
     slot, spell: s ? s.lv : -1, uses: act.u || 0, parts: act.w || [], up, guess: act.g || '', waits: !!act.c, cd, om: act.om || 0, legend: !!act.lg, as: act.as || '', tr: act.tr || '',
+    // gone once so much damage is dealt to it · an answer after so many hits · only while its temporary hit points last · to each piece of armour lost
+    ud: act.ud || 0, after: act.af || 0, temp: !!act.wt, piece: !!act.ev,
     // it catches everyone in an area; its damage is a range of its page read as dice
     area: !!act.ar || !!(s && (s.ao || s.ar)), gr: act.gr || '' };
 }
@@ -571,10 +575,15 @@ const newFight = (side, endless) => ({ turn: 0, left: endless ? null : sideResou
 // An enemy in a fight: what it does (`move`, as simFoe gives it), what is aimed at (`target`), its hit points
 // (Infinity when there are none to go by), the damage it took and the conditions on it.
 // `pv` are its passives in the difficulty chosen; `lr` and `li` the Legendary Resistances it has left.
+// `temp` are the temporary hit points of a standing condition, `floor` the damage under which a hit does nothing
+// while they last; `struck` counts the hits it took, for an answer that waits for so many; `gone` the pieces of
+// its armour that fell.
 const foeState = (move, target, hp) => {
   const pv = (target && target.pv) || {};
   return { move, target, name: (move && move.name) || (target && target.name) || '', hp: hp || Infinity, dealt: 0, conds: [], reacted: false, acted: false, dead: 0, inoc: {},
-    pv, lr: pv.lr || 0, li: pv.li || 0, parried: false, radiant: false };
+    pv, lr: pv.lr || 0, li: pv.li || 0, parried: false, radiant: false,
+    temp: (target && target.tp && target.tp.hp) || 0, floor: (target && target.tp && target.tp.min) || 0, tempName: (target && target.tp && target.tp.n) || '', struck: 0,
+    arm: (target && target.arm) || null, gone: 0 };
 };
 // A fight: the sides (builds) with a fight state each, the enemies, and how it is set up: who acts first ('roll',
 // 'party' or 'foes'), who is Surprised ('', 'party' or 'foes'), whom an enemy aims at ('random', 'first' or
@@ -702,6 +711,9 @@ function turnTools(enc, i, out) {
       if (hit) { const off = Math.min(f.pv.pr, hit.damage); f.parried = true; hit.damage -= off; hit.text += ' − ' + tenth(off) + ' (Githyanki Parry)'; }
     }
     if (f && lines.some((l) => l.damage > 0 && /\bRadiant\b/.test(l.text || ''))) f.radiant = true;
+    // temporary hit points of a standing condition (the Bulette's Diamond Scales): while they last, a hit of less
+    // than so much does nothing
+    if (f && f.temp > 0 && f.floor) lines.forEach((l) => { if (l.damage > 0 && l.damage < f.floor) { l.text += ' → 0 (' + f.tempName + ')'; l.damage = 0; } });
     const dmg = lines.reduce((a, l) => a + (l.damage || 0), 0);
     // Fire damage dealt keeps Arcane Acuity up, with the gear that says so
     if (left) ['Fire', 'Thunder'].forEach((type) => {
@@ -709,17 +721,32 @@ function turnTools(enc, i, out) {
       if (turns && lines.some((l) => l.damage > 0 && new RegExp('\\b' + type + '\\b').test(l.text || ''))) fight.acuity = Math.min(10, (fight.acuity || 0) + turns);
     });
     if (!f) return;
+    const free = () => !f.dead && left && !f.surprised && !R.answering && !condHas(f, 'nr') && !condHas(f, 'skip') && !f.conds.some((c) => /Restrained/.test(c.name));
     if (dmg > 0) {
-      f.dealt += dmg;
+      const soak = Math.min(f.temp, dmg);
+      if (soak) { f.temp -= soak; note(f.temp ? t('{name}: {n} temporary hit points left.', { name: f.tempName, n: tenth(f.temp) }) : t('{name} is gone: its temporary hit points are spent.', { name: f.tempName })); }
+      f.dealt += dmg - soak;
       fight.dealt += dmg;
       f.conds = f.conds.filter((c) => !c.f.wake);
       if (f.dealt >= f.hp && !f.dead) { f.dead = enc.round || 1; R.kills++; note(t('{who} falls.', { who: f.name || t('The enemy') })); return; }
+      // armour that is its hit points (Gerringothe Thorm's Coin Armour): a piece falls with every so much damage,
+      // and in Honour mode each one is answered, whatever else it answered this round, to whoever stands by it
+      while (f.arm && f.gone < Math.min(f.arm.n, Math.floor(f.dealt / f.arm.hp))) {
+        f.gone++;
+        note(t('A piece of its armour falls: {n} of {max} left.', { n: f.arm.n - f.gone, max: f.arm.n }));
+        const piece = (f.move.rx || []).find((a) => a.piece);
+        if (piece && free() && (near || side.front)) { R.answering = true; strike(piece, 0, f, true); R.answering = false; }
+      }
     }
-    if (!f.dead && left && !f.reacted && !f.surprised && !R.answering && (dmg > 0 || lines.some((l) => l.kind === 'attack')) && !condHas(f, 'nr') && !condHas(f, 'skip') && !f.conds.some((c) => /Restrained/.test(c.name))) {
-      const rx = (f.move.rx || []).filter((a) => !a.uses || ((f.used || {})[a.label] || 0) < a.uses);
+    // an answer that waits for so many hits (the Spectator's Paranoid Dreams): one for each that lands
+    const waits = (f.move.rx || []).some((a) => a.after);
+    if (waits) f.struck += lines.filter((l) => (l.kind === 'attack' && l.hit) || l.damage > 0).length;
+    if (free() && !f.reacted && (dmg > 0 || lines.some((l) => l.kind === 'attack'))) {
+      const rx = (f.move.rx || []).filter((a) => !a.piece && (!a.temp || f.temp > 0) && (!a.after || f.struck >= a.after) && (!a.uses || ((f.used || {})[a.label] || 0) < a.uses));
       const act = rx.find((a) => a.melee === !!near) || rx[0];
       if (act) {
         f.reacted = true;
+        if (act.after) f.struck = 0;
         R.answering = true;
         strike(act, 0, f, true);
         R.answering = false;
@@ -1231,7 +1258,11 @@ function buildTurn(enc, i) {
           if (coat.extra) all.push(saveLine(side.coat.name, save || { key: 'con', bonus: 0, dc: 0 }, { dice: coat.extra[0], flat: 0, type: coat.extra[1], f: typeFactor(f.target, coat.extra[1], true), kept: coat.kept }, thrown));
           else if (coat.later) all.push(saveLine(side.coat.name, save, { dice: coat.later[0], flat: 0, type: coat.later[1], f: typeFactor(f.target, coat.later[1], true), kept: 0 }, thrown));
           else if (save) all.push({ name: side.coat.name, kind: 'save', ab: save.key.toUpperCase(), d20: thrown.d20, auto: !!thrown.auto, legend: !!thrown.legend, bonus: save.bonus, against: save.dc, passed: thrown.passed, kept: 0, damage: 0, cond: true, text: thrown.passed ? '' : (coat.conds || []).join(', ') });
-          if (!thrown.passed) (coat.conds || []).filter((c) => !f.conds.some((y) => y.name === c)).forEach((c) => { const y = addCond(f, c, 2, fight, null); note(t('{who} is {cond} for {n} turn(s).', { who: f.name || t('The enemy'), cond: c, n: y.left })); });
+          if (!thrown.passed) (coat.conds || []).filter((c) => !f.conds.some((y) => y.name === c)).forEach((c) => {
+            const y = addCond(f, c, coat.until ? 99 : coat.turns, fight, coat.until && save ? { key: save.key, dc: save.dc } : null);
+            if (coat.until && save) { y.rep = true; note(t('{who} is {cond} until it passes a {ab} save against DC {dc}, rolled at the end of each of its turns.', { who: f.name || t('The enemy'), cond: c, ab: save.key.toUpperCase(), dc: save.dc })); }
+            else note(t('{who} is {cond} for {n} turn(s).', { who: f.name || t('The enemy'), cond: c, n: y.left }));
+          });
           else if (save) f.inoc[side.coat.name] = enc.round + 2;  // a passed save leaves it Inoculated for 2 turns
         }
       }
@@ -1470,12 +1501,14 @@ function foeTurn(enc, j) {
     // its action: the one chosen while its spell slot and its uses last, else the one it always has
     let act = move;
     let times = move.attacks;
+    // (an action is gone once so much damage is dealt to it: a Coin Whip, with the vambrace it comes from)
+    const open = (a) => !a.ud || f.dealt < a.ud;
     if (move.smart) {
       // nothing chosen: the strongest of its actions that it can pay for this turn
-      act = move.smart.find((a) => spend(a, true)) || null;
+      act = move.smart.find((a) => open(a) && spend(a, true)) || null;
       if (act) spend(act);
       times = act ? act.hits.length : 0;
-    } else if (times && !spend(move)) {
+    } else if (times && (!open(move) || !spend(move))) {
       act = move.fallback;
       times = act ? act.hits.length : 0;
       if (!f.out) { f.out = true; note(act ? t('{who} has no more of {a}: it goes on with {b}.', { who: f.name, a: move.label, b: act.label }) : t('{who} has no more of {a}.', { who: f.name, a: move.label })); }
@@ -1484,7 +1517,7 @@ function foeTurn(enc, j) {
     // its bonus action: the one chosen; else, with nothing chosen, it heals itself once it has lost that much, or
     // uses the strongest one it can pay for
     const sb = move.smartBonus;
-    const extra = sb ? (sb.heal && f.dealt >= sb.worth && spend(sb.heal, true) ? sb.heal : sb.hits.find((a) => spend(a, true)) || null) : move.extra;
+    const extra = sb ? (sb.heal && f.dealt >= sb.worth && spend(sb.heal, true) ? sb.heal : sb.hits.find((a) => open(a) && spend(a, true)) || null) : move.extra && open(move.extra) ? move.extra : null;
     if (!f.dead && vi >= 0 && extra && spend(extra)) blows(extra, extra.hits.length);
     if (vi >= 0) answer();
   }

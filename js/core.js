@@ -2,7 +2,7 @@
 // The scripts are plain (not modules) so the planner also runs from a file opened directly; they share the global scope.
 'use strict';
 
-const APP_VERSION = '4.6';
+const APP_VERSION = '4.7';
 const STORE_KEY = 'bg3planner.v1';
 const PRESETS = window.BG3_PRESETS || [];
 const I18N = window.BG3_I18N || {};
@@ -196,7 +196,7 @@ function fresh(seed) {
   const builds = seed && PRESETS.length ? [Object.assign(normalizeBuild(clone(PRESETS[0])), { id: uid() })] : [];
   const party = blankParty(t('My party'));
   if (builds[0]) party.members[0] = { char: builds[0].creation.origin || '', buildId: builds[0].id };
-  return hydrate(Object.assign({ builds, parties: [party] }, seed ? {} : { ui: { tab: 'home' } }));
+  return hydrate(Object.assign({ builds, parties: [party] }, seed ? {} : { ui: { tab: 'home', seenVersion: APP_VERSION } }));
 }
 function hydrate(s) {
   const st = { builds: (s.builds || []).map(normalizeBuild), parties: (s.parties || []).map(normalizeParty),

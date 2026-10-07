@@ -392,7 +392,7 @@ function simTabResult(ctx) {
   const mortal = enc.foes.some((f) => isFinite(f.hp));
   const strikes = enc.foes.some((f) => f.move.attacks || f.move.extra);
   const bar = (cls, share, text) => `<div class="hpbar${cls}"><i style="width:${Math.max(0, Math.min(100, share * 100)).toFixed(1)}%"></i><span>${text}</span></div>`;
-  const foeBars = enc.foes.filter((f) => isFinite(f.hp)).map((f) => bar(f.dead ? ' down' : '', 1 - f.dealt / f.hp, `${esc(f.name)} · ${t('{left} of {hp} hit points', { left: tenth(Math.max(0, f.hp - f.dealt)), hp: f.hp })}${f.conds.length ? ' · ' + condsText(f) : ''}`)).join('');
+  const foeBars = enc.foes.filter((f) => isFinite(f.hp)).map((f) => bar(f.dead ? ' down' : '', 1 - f.dealt / f.hp, `${esc(f.name)} · ${(f.temp > 0 ? tenth(f.temp) + ' ' + t('temporary') + ' + ' : '') + t('{left} of {hp} hit points', { left: tenth(Math.max(0, f.hp - f.dealt)), hp: f.hp })}${f.conds.length ? ' · ' + condsText(f) : ''}`)).join('');
   const fallen = (fight) => (fight.dead ? t('dead') : fight.death && fight.death.ok >= 3 ? t('Downed, Stable') : t('Downed: death saving throws {ok} passed, {bad} failed', { ok: (fight.death || {}).ok || 0, bad: (fight.death || {}).bad || 0 }));
   const sideBars = strikes || sides.length > 1 ? enc.fights.map((fight, i) => bar(' mine' + (fight.down ? ' down' : ''), fight.hp / sides[i].hp,
     `${esc(sides[i].name)} · ${fight.down ? fallen(fight) : t('{left} of {hp} hit points', { left: tenth(Math.max(0, fight.hp)), hp: sides[i].hp })}${fight.temp > 0 ? ' + ' + tenth(fight.temp) : ''} · AC ${sides[i].ac}${fight.conds.length ? ' · ' + condsText(fight) : ''}`)).join('') : '';

@@ -41,7 +41,14 @@ const foePassives = (e) => { const mode = gameMode(); return (e && ((mode === 'h
 function enemyTarget(e) {
   const own = enemyOwn(e);
   const mod = (k) => Math.floor((own.ab[k] - 10) / 2);
-  return { name: e.n, enemy: e, ac: own.ac, ab: own.ab, saves: Object.fromEntries(ABILITY_KEYS.map((k) => [k, mod(k) + (e.sv.includes(k) ? e.pb : 0)])), res: own.res, pv: foePassives(e) };
+  return { name: e.n, enemy: e, ac: own.ac, ab: own.ab, saves: Object.fromEntries(ABILITY_KEYS.map((k) => [k, mod(k) + (e.sv.includes(k) ? e.pb : 0)])), res: own.res, pv: foePassives(e),
+    tp: enemyTemp(e), arm: e.arm || null };
+}
+// The temporary hit points a standing condition gives an enemy, in the difficulty it has that condition in
+// (the Bulette's Diamond Scales, in Honour mode): { n, hp, min }, or null.
+function enemyTemp(e) {
+  const at = { b: 0, t: 1, h: 2 };
+  return e && e.tp && MODES.findIndex(([k]) => k === gameMode()) >= at[e.tp.md] ? e.tp : null;
 }
 // Fiends and Undead take one more die from Divine Smite; the arrows of slaying only work on their own kind.
 const enemyIs = (target, kind) => !!(target && target.enemy && new RegExp('\\b' + kind, 'i').test(target.enemy.ty || ''));
@@ -524,8 +531,9 @@ function targetTools() {
       <div class="field ac-field"><span>${t('Its saving throws')}</span>${stepper(target.saves.str, 'data-ui="targetSave" data-v="3"', -3, 15)}</div>`}
     <div><span class="lbl" title="${t('In Honour mode, Extra Attack from Deepened Pact does not add to a class\'s Extra Attack, and the action Haste gives cannot use Extra Attack.')}">${t('Difficulty')}</span><div class="acts mini modes">${MODES.map(([k, label]) =>
       `<button class="${gameMode() === k ? 'on' : ''}" data-act="mode" data-k="${k}">${label}</button>`).join('')}</div></div>
-    ${e ? `<p class="enemy-line">${t('Act {n}', { n: e.act })} · ${t('level {n}', { n: e.lv })} · AC ${e.ac} · HP <b>${enemyHp(e)}</b> (${[e.hp.b + ' Balanced', e.hp.t ? e.hp.t + ' Tactician' : '', e.hp.h ? e.hp.h + ' Honour' : ''].filter(Boolean).join(' / ')}) · ${
-      ABILS.map(([k, short]) => short + ' ' + signed(target.saves[k])).join(' ')}${res.length ? ' · ' + esc(res.join(', ')) : ''}${passiveText(target.pv) ? ' · ' + esc(passiveText(target.pv)) : ''}${e.note ? `<br><em>${esc(e.note)}</em>` : ''}</p>` : ''}`;
+    ${e ? `<p class="enemy-line">${t('Act {n}', { n: e.act })} · ${t('level {n}', { n: e.lv })} · AC ${e.ac} · HP <b>${enemyHp(e)}</b>${target.tp ? ' + ' + t('{n} temporary ({name})', { n: target.tp.hp, name: target.tp.n }) : ''} (${[e.hp.b + ' Balanced', e.hp.t ? e.hp.t + ' Tactician' + (e.hpw ? '*' : '') : '', e.hp.h ? e.hp.h + ' Honour' : ''].filter(Boolean).join(' / ')}) · ${
+      ABILS.map(([k, short]) => short + ' ' + signed(target.saves[k])).join(' ')}${res.length ? ' · ' + esc(res.join(', ')) : ''}${passiveText(target.pv) ? ' · ' + esc(passiveText(target.pv)) : ''}${e.note ? `<br><em>${esc(e.note)}</em>` : ''}${e.hpw ? `<br><em>* ${t('Its page gives no Tactician hit points: Balanced × 1.3, as most pages that give both show.')}</em>` : ''}${
+      target.tp && target.tp.min ? `<br><em>${t('While the temporary hit points of {name} last, a hit of less than {n} damage does nothing to it.', { name: target.tp.n, n: target.tp.min })}</em>` : ''}</p>` : ''}`;
 }
 
 Object.assign(actions, {

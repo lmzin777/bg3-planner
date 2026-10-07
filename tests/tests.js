@@ -1250,15 +1250,26 @@
     [fight, rolledTurns] = fightOf(guarded, 3);
     eq(rolledTurns.map((x) => x.lines.filter((l) => l.kind === 'foe').map((l) => [l.against, l.hit])), [[[21, false], [18, false]], [[15, true], [15, true]], [[15, true], [15, true]]],
       'Armour Class 12 + 9: 11 + 5 misses twice, then against 15 it hits and no more duplicates are lost');
-    // The temporary list of things to check by hand.
+    // The list of what the planner worked out: nothing is left to tick, and each point says where it comes from.
     const review = reviewItems();
-    const asked = review.filter((x) => x.ask.length);
-    ok(review.length > 40 && asked.length > 15 && asked.length < 40 && review.find((x) => x.key === 'enemy:The Netherbrain').ask.some((p) => /20~200/.test(p))
-      && review.find((x) => x.key === 'enemy:Sarevok Anchev').ask.some((p) => /Sword of Chaos/.test(p)) && !review.find((x) => x.key === 'rule:initiative').ask.length,
-      'what the planner guessed asks for a look (Sarevok\'s sword); and a damage read from a range (the Netherbrain\'s orb); what the wiki settles does not (Initiative)');
-    eq([review.find((x) => x.key === 'rule:numbers').ask.length > 10, ENEMIES.find((e) => e.n === 'Cambion').acts.some((a) => /Trident/.test(a.n)), ENEMIES.find((e) => e.n === 'Animated Armour').acts.map((a) => a.gw && a.gw[0]),
-      ENEMIES.find((e) => e.n === 'Yurgir').rx.every((a) => /Hunted creature/.test(a.tr))], [true, true, ['Greatsword', 'Heavy Crossbow'], true],
-      'the guessed numbers in one entry; a weapon named another way on the page is found; what sets an answer off, in the words of its page');
+    const told = (key) => review.find((x) => x.key === key).info;
+    ok(review.length > 40 && !review.some((x) => x.ask.length) && reviewLeft() === 0 && told('enemy:The Netherbrain').some((p) => /20~200/.test(p))
+      && told('enemy:Sarevok Anchev').some((p) => /Sword of Chaos/.test(p)) && told('rule:initiative').length > 1,
+      'what the planner worked out is told (Sarevok\'s sword; a damage read from a range, the Netherbrain\'s orb), with nothing left to check');
+    eq([told('rule:numbers').length > 10, told('rule:numbers').some((p) => /^Owlbear Mate: .*Crushing Flight DC 6 \(8 \+ Proficiency 2 \+ INT -4\).*page of Owlbear/.test(p)),
+      ENEMIES.find((e) => e.n === 'Cambion').acts.some((a) => /Trident/.test(a.n)), ENEMIES.find((e) => e.n === 'Animated Armour').acts.map((a) => a.gw && a.gw[0]),
+      ENEMIES.find((e) => e.n === 'Yurgir').rx.every((a) => /Hunted creature/.test(a.tr))], [true, true, true, ['Greatsword', 'Heavy Crossbow'], true],
+      'the numbers worked out in one entry, each with its parts and where the ability comes from; a weapon named another way on the page is found; what sets an answer off, in the words of its page');
+    // The spellcasting ability, when a page gives none: the page of its kind, its class, the game's fallback, its best.
+    const cast = (n) => ENEMIES.find((e) => e.n === n).ca;
+    eq([cast('Owlbear Mate'), cast('Black Gauntlet'), cast('Fire Myrmidon'), cast('Auntie Ethel'), cast('Lorroakan'), cast('Owlbear')],
+      [['int', 'kin', 'Owlbear'], ['wis', 'class', 'Cleric'], ['int', 'default', 'Elemental'], ['cha', 'best', ''], ['int', 'class', 'Wizard'], undefined]);
+    const number = (n, a) => { const x = ENEMIES.find((e) => e.n === n).acts.find((y) => y.n.startsWith(a)); return x.k === 'a' ? x.b : x.dc; };
+    eq([number('Fire Myrmidon', 'Cinderous Swipe'), number('Minotaur', 'Charge'), number('Goblin Booyahg', 'Topple'), number('Steel Watcher Titan', 'Launch Protocol: Bola'), number('Black Gauntlet', 'Blight')], [11, 6, 1, 2, 14],
+      'DC 11 as the wiki works it out for a myrmidon (8 + 4 − 1); a charge by Strength; a staff by Strength; a construct by Intelligence; a cleric by Wisdom');
+    // Hit points: Tactician worked out where a page gives none, and armour that is hit points.
+    eq(['Mud Mephit', 'Fire Myrmidon', 'Owlbear Mate', 'Gerringothe Thorm', 'Bulette'].map((n) => { const e = ENEMIES.find((x) => x.n === n); return [e.hp.b, e.hp.t, !!e.hpw]; }),
+      [[18, 23, true], [123, 159, true], [118, 153, true], [606, 607, false], [125, 162, false]]);
     // Shield turns a hit into a miss when 5 more Armour Class is enough, and takes a level 1 slot and the reaction.
     const sw = made(Array(5).fill('Wizard'), { abilities: { str: 8, dex: 14, con: 14, int: 15, wis: 12, cha: 10 }, plus2: 'int', plus1: 'wis' }, { 1: 'Evocation School' }, {}, { 0: ['Cantrip: Fire Bolt', 'Spell: Shield'] });
     const warded = sideOf(finalStats(sw, 'act1'), 'caster', plain, steps([]));
@@ -1466,7 +1477,9 @@
     const item = (n) => CONSUMABLE_BY_NAME.get(norm(n));
     eq([arrowFx(item('Arrow of Fire')), arrowFx(item('Arrow of Undead Slaying')), arrowFx(item('Smokepowder Arrow')).save, arrowFx(item('Arrow of Darkness'))],
       [{ extra: ['2d4', 'Fire'], save: { key: 'dex', dc: 12 }, kept: 0 }, { double: 'Undead' }, { key: 'dex', dc: 15 }, null]);
-    eq([coatFx(item('Drow Poison')), coatFx(item('Diluted Oil of Sharpness')).attack, coatFx(item('Wyvern Toxin')).later], [{ save: { key: 'con', dc: 13 }, conds: ['Poisoned', 'Sleeping'] }, 1, ['1d8', 'Poison']]);
+    eq([coatFx(item('Drow Poison')), coatFx(item('Diluted Oil of Sharpness')).attack, coatFx(item('Wyvern Toxin')).later], [{ save: { key: 'con', dc: 13 }, conds: ['Poisoned', 'Sleeping'], turns: 2, until: true }, 1, ['1d8', 'Poison']]);
+    eq(['Basic Poison', 'Malice', 'Oil of Freezing', "Thisobald's Brewed-Up Bellyglummer"].map((n) => [coatFx(item(n)).until, coatFx(item(n)).turns]), [[true, 2], [true, 2], [false, 2], [true, 2]],
+      'what a poison leaves lasts until the save is passed; the frost of an oil, its 2 turns');
     const archer = made(Array(5).fill('Ranger'), dex, {}, { rangedMain: 'Longbow' });
     const bow = sideOf(finalStats(archer, 'act1'), 'ranged', plain, steps([]));
     bow.arrow = { name: 'Arrow of Fire', fx: arrowFx(item('Arrow of Fire')), n: 1 };
@@ -1575,6 +1588,55 @@
     round = encRound(enc);
     eq([round.entries[0].lines[0].how.indexOf(lor.smart[0].label) === 0, enc.foes[0].slots[lor.smart[0].slot] === slotsBefore[lor.smart[0].slot] - 1], [true, true], 'and it takes the slot');
     state.ui.mode = 'honour';
+    // What a fight changes along the way, as the pages give it. The Bulette of Honour mode starts with the 100
+    // temporary hit points of Diamond Scales: while they last a hit under 15 does nothing and a hit is answered with
+    // Shredding Scales, once a round; with them gone, the answer is gone too.
+    const easy = (n) => Object.assign(enemyTarget(by(n)), { ac: 5 });
+    const bulette = (more) => { const tg = easy('Bulette'); return Object.assign(foeState(simFoe(tg, true), tg, enemyHp(by('Bulette'))), more); };
+    eq([bulette().temp, bulette().floor, inMode('tactician', () => bulette().temp), bulette().move.rx.map((a) => [a.label, a.temp])], [100, 15, 0, [['Shredding Scales', true]]]);
+    const hitsOn = (r) => r.entries.flatMap((x) => x.lines).filter((l) => l.kind !== 'foe' && ((l.kind === 'attack' && l.hit) || l.damage > 0));
+    const answersOf = (r, name) => r.entries.flatMap((x) => x.lines).filter((l) => l.kind === 'foe' && l.how.indexOf(name) === 0).length;
+    let shark = bulette({ floor: 1000 });
+    round = encRound(newEncounter([sword()], [shark], { first: 'party' }));
+    eq([hitsOn(round).length > 0, round.entries[0].lines.filter((l) => l.kind === 'attack' && l.hit).every((l) => l.damage === 0 && /Diamond Scales/.test(l.text)), shark.temp, shark.dealt, answersOf(round, 'Shredding Scales')],
+      [true, true, 100, 0, 1], 'a hit under the mark does nothing to it; hit, it answers once in the round');
+    shark = bulette({ floor: 0, temp: 3 });
+    round = encRound(newEncounter([sword()], [shark], { first: 'party' }));
+    eq([shark.temp, shark.dealt > 0, answersOf(round, 'Shredding Scales')], [0, true, 0], 'the temporary hit points go first, and the answer goes with them');
+    // The Spectator answers with Ocular Nightmare only after five hits taken, and counts again from there.
+    const eye = foeState(simFoe(easy('Spectator'), true), easy('Spectator'), 5000);
+    enc = newEncounter([sword()], [eye], { first: 'party' });
+    let hitsTaken = 0;
+    let nightmares = 0;
+    let early = false;
+    for (let k = 0; k < 5; k++) { round = encRound(enc); const before = hitsTaken; hitsTaken += hitsOn(round).length; nightmares += answersOf(round, 'Ocular Nightmare'); early = early || (hitsTaken < 5 && nightmares > 0) || (before === hitsTaken && answersOf(round, 'Ocular Nightmare') > 0); }
+    eq([eye.move.rx.map((x) => x.after), hitsTaken >= 5, nightmares, eye.struck, early], [[5], true, Math.floor(hitsTaken / 5), hitsTaken % 5, false], 'one for every five hits, and none before');
+    // Gerringothe Thorm: her Coin Armour is her hit points. A piece falls with every 100 damage dealt to her: with the
+    // first her Left Coin Whip is gone, with the second the Right one. In Honour mode each piece that falls is
+    // answered with Sublimation, on whoever stands by her.
+    const toll = foeState(simFoe(easy('Gerringothe Thorm'), true), easy('Gerringothe Thorm'), enemyHp(by('Gerringothe Thorm')));
+    eq([toll.hp, toll.arm, toll.move.smartBonus.hits.map((x) => [x.label, x.ud]), toll.move.rx.map((x) => [x.label, x.piece, x.cd.name])],
+      [607, { n: 6, hp: 100 }, [['Left Coin Whip', 100], ['Right Coin Whip', 200]], [['Sublimation', true, 'Turned to Gold']]]);
+    // (against a build that stays up, so that her bonus action is there to be seen)
+    const tank = () => Object.assign(sword(), { hp: 5000 });
+    const whole = foeState(simFoe(easy('Gerringothe Thorm'), true), easy('Gerringothe Thorm'), enemyHp(by('Gerringothe Thorm')));
+    round = encRound(newEncounter([tank()], [whole], { first: 'foes' }));
+    eq([answersOf(round, 'Left Coin Whip'), answersOf(round, 'Right Coin Whip')], [1, 0], 'with all her armour on, the left whip');
+    toll.dealt = 99;
+    round = encRound(newEncounter([tank()], [toll], { first: 'party' }));
+    eq([toll.gone, answersOf(round, 'Sublimation'), answersOf(round, 'Left Coin Whip'), toll.dealt < 200 ? answersOf(round, 'Right Coin Whip') : 1], [1, 1, 0, 1],
+      'the first piece falls: Sublimation answers it, and the whip she has left is the right one');
+    eq(inMode('balanced', () => { const tg = easy('Gerringothe Thorm'); return [enemyHp(by('Gerringothe Thorm')), simFoe(tg, true).rx.length]; }), [606, 0], 'no Sublimation outside Honour mode');
+    // What a poison leaves lasts until the save is passed, rolled again at the end of each turn of whoever has it.
+    const sick = { conds: [] };
+    Object.assign(addCond(sick, 'Poisoned', 99, null, { key: 'con', dc: 11 }), { rep: true });
+    simRandom = () => 0;
+    condEnd(sick, () => 0, () => {}, []);
+    const stillSick = sick.conds.length;
+    simRandom = () => 0.999;
+    condEnd(sick, () => 0, () => {}, []);
+    simRandom = () => 0.5;
+    eq([stillSick, sick.conds.length], [1, 0], 'a 1 keeps it, a 20 ends it');
     // The level the build fights at, set on the page of the test.
     state.ui.simLevel = 4;
     const young = simSide(fighter, 'act1', plain);
@@ -1907,6 +1969,18 @@
     ok(CONSUMABLES.filter((c) => c.t === 'Elixir').length > 30, 'elixirs collected');
   });
 
+  test('the page of updates starts with the version that is running', () => {
+    eq([UPDATES[0][0], UPDATES.every(([v, date, title, list]) => /^\d\.[\dx]+$/.test(v) && /^\d{4}-\d\d-\d\d$/.test(date) && title && list.length > 0)], [APP_VERSION, true],
+      'a new version adds its entry at the top');
+    const page = renderUpdates();
+    ok(UPDATES.every(([v]) => page.includes('<b>v' + v + '</b>')) && /class="card upd now"/.test(page) && (page.match(/class="card upd now"/g) || []).length === 1, 'every version is listed, the one that is running marked');
+    const saved = state.ui.lang;
+    state.ui.lang = 'pt-BR';
+    const texts = UPDATES.flatMap(([, , title, list]) => [title, ...list]);
+    eq(texts.filter((x) => t(x) === x), [], 'every line has its translation');
+    state.ui.lang = saved;
+  });
+
   test('a newer version of the site is announced, with the way to load it', () => {
     eq([['4.6', '4.5'], ['4.10', '4.9'], ['5.0', '4.12'], ['4.5', '4.5'], ['4.4', '4.5'], ['', '4.5'], ['4.5.1', '4.5']].map(([a, b]) => versionNewer(a, b)), [true, true, true, false, false, false, true]);
     updateNotice('99.0');
@@ -2156,13 +2230,16 @@
     await click(q('.pslot[data-act="scene-open"]'), 'scenario');
     await pick('Fighter test');
     eq([state.ui.target, state.ui.help0, state.ui.simFirst], ['', undefined, 'party'], 'the scenario brings its enemy back');
-    // the temporary list of things to check: a tick and a note for each entry
+    // the page of updates: marked as new in the menu until it is opened
+    delete state.ui.seenVersion;
+    render();
+    ok(q('#tabs [data-tab="updates"] .count.new'), 'new until seen');
+    await click(q('#tabs [data-tab="updates"]'), 'Updates');
+    eq([state.ui.tab, state.ui.seenVersion, !!q('#tabs [data-tab="updates"] .count'), all('.updates .upd').length], ['updates', APP_VERSION, false, UPDATES.length]);
+    // the list of things to check: nothing is left to tick, and what was worked out is laid open
     await click(q('#tabs [data-tab="review"]'), 'To check');
-    const note = q('.review-note textarea');
-    note.value = 'seen in game';
-    note.dispatchEvent(new Event('input', { bubbles: true }));
-    eq([state.ui.reviewNotes[note.dataset.review], all('.review-list > .review-item:not(.plain)').length > 20, all('.review-rest .review-item.plain').length > 5, all('.review-item:not(.plain)').every((x) => q('[data-act="review-toggle"]', x))],
-      ['seen in game', true, true, true], 'what asks for a look has a tick and a note; the rest is kept apart');
+    eq([!!q('.review .okline'), all('.review-list > .review-item:not(.plain)').length, q('.review-rest').open, all('.review-rest .review-item.plain').length > 40, !!q('.review-note textarea')],
+      [true, 0, true, true, false], 'every point is settled: the list of what was worked out is open, with nothing to tick');
     ['scenes', 'scene', 'sceneName', 'reviewNotes', 'simFirst', 'simTab', 'help0'].forEach((k) => { delete state.ui[k]; });
     state.ui.target = '';
     state.ui.tab = 'builds';
@@ -2174,7 +2251,7 @@
     state.builds = [];
     state.ui.buildId = '';
     state.ui.wizard = '';
-    for (const tab of ['home', 'hub', 'builds', 'party', 'presets', 'damage', 'review', 'items', 'spells']) {
+    for (const tab of ['home', 'hub', 'builds', 'party', 'presets', 'damage', 'review', 'updates', 'items', 'spells']) {
       state.ui.tab = tab;
       render();
       await wait(40);

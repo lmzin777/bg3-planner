@@ -8,6 +8,7 @@ Object.assign(actions, {
   tab(el) {
     state.ui.tab = el.dataset.tab;
     state.ui.fromParty = false;
+    if (el.dataset.tab === 'updates') state.ui.seenVersion = APP_VERSION;
     // an entry of the Items or Spells menu opens the list on just that slot or level; the group itself, on all of it
     const only = el.dataset.kind != null ? ['items', 'kind', el.dataset.kind] : el.dataset.lv != null ? ['spells', 'lv', el.dataset.lv ? [el.dataset.lv] : []] : null;
     if (only) {

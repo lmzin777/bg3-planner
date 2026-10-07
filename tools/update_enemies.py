@@ -15,10 +15,25 @@ and are worked out the way the game does it, with their parts kept so the planne
   attack bonus = proficiency bonus + ability modifier + the weapon's enchantment
   save DC      = 8 + proficiency bonus + spellcasting ability modifier (when the action says "caster")
 The ability is the one the action names; else Strength for melee (the higher of Strength and Dexterity with a
-Finesse weapon), Dexterity at range, and the spellcasting ability for spells.
+Finesse weapon, or with no weapon at all), Dexterity at range, and the spellcasting ability for spells.
+The spellcasting ability is the one the creature's infobox gives ("casting ability"). When it gives none, in this
+order: the one a page of the same creature gives (Owlbear for the Owlbear Mate); the one of the spellcasting
+class its page names, as in the tabletop rules (Wizard Intelligence, Cleric and Druid Wisdom, Paladin and
+Warlock Charisma); Intelligence for a Beast, a Construct, an Elemental or a Monstrosity, which is what the game
+falls back on (the wiki says so on the pages of Crushing Flight and of the myrmidons' actions); else the highest
+of Intelligence, Wisdom and Charisma, as the tabletop stat blocks of hags, mind flayers and undead lords do.
+An attack roll whose page names neither melee nor range (a charge) goes by the creature's casting ability too:
+that is the ability the game gives its natural attacks (Strength for a Minotaur, Dexterity for a Phase Spider).
 A creature whose page lists no Main Hand Attack gets one with the weapon its page names: the one a passive of
 its infobox comes from ("Crimson Weapon @ Crimson Mischief"), else the only weapon in its loot. Such an attack
 carries a note saying so.
+
+A page with no Tactician hit points gets them worked out: Balanced x 1.3, rounded down, which is what 64 of the
+75 pages that give both show (the wiki's Difficulty page: 67 becomes 87); bosses may have more, and theirs are on
+their pages.
+What a fight changes along the way is read too: an action that is gone once so much damage is dealt (the Coin
+Whips of Gerringothe Thorm), temporary hit points a standing condition gives and what holds while they last
+(the Bulette's Diamond Scales), an answer that waits for a number of hits (the Spectator's Ocular Nightmare).
 
 Difficulty: the infobox gives the hit points of Balanced, Tactician and Honour mode, and the passives of each. An
 action listed under a "Honour mode" heading of the page is marked as there only in that mode, and one whose name
@@ -49,6 +64,12 @@ ENEMIES = [
     (3, "Vengeful Cambion"), (3, "Death's Head of Bhaal"), (3, "Black Gauntlet"), (3, "Fire Myrmidon"), (3, "Air Myrmidon"), (3, "Water Myrmidon"), (3, "Earth Myrmidon"),
 ]
 ABILITIES = ("str", "dex", "con", "int", "wis", "cha")
+# the spellcasting ability of a class, as in the tabletop rules (the pages that give both agree: a Wizard goblin
+# Intelligence, Ketheric the Paladin Charisma, a Warlock disciple Charisma)
+CASTER_CLASS = {"wizard": "int", "cleric": "wis", "druid": "wis", "ranger": "wis", "monk": "wis", "paladin": "cha", "warlock": "cha", "sorcerer": "cha", "bard": "cha"}
+# a creature whose page gives no casting ability, and the page of its kind that does
+CASTING_KIN = {"Owlbear Mate": "Owlbear", "Vengeful Cambion": "Cambion"}
+NO_CASTERS = ("Beast", "Construct", "Elemental", "Monstrosity")
 TYPES = ("Slashing", "Piercing", "Bludgeoning", "Acid", "Cold", "Fire", "Force", "Lightning", "Necrotic", "Poison", "Psychic", "Radiant", "Thunder")
 
 
@@ -283,13 +304,14 @@ def is_weapon(page):
 class Maker:
     """Turns the actions of one enemy into numbers."""
 
-    def __init__(self, box, scores, pb):
+    def __init__(self, box, scores, pb, casting=None):
         self.box, self.scores, self.pb = box, scores, pb
         self.unarmed = None  # the damage of its Unarmed Strike, for the actions that say "unarmed"
         self.casting = ""
-        # the spellcasting ability its page gives; else the highest of the three, which is then a guess
+        # the spellcasting ability its page gives; else the one worked out for it (`casting`: [ability, why]),
+        # else the highest of the three
         self.casting_known = bool(self.ability(field(box, "casting ability")))
-        self.casting = self.ability(field(box, "casting ability")) or max(("int", "wis", "cha"), key=lambda k: scores[k])
+        self.casting = self.ability(field(box, "casting ability")) or (casting or [""])[0] or max(("int", "wis", "cha"), key=lambda k: scores[k])
 
     def mod(self, key):
         return (self.scores[key] - 10) // 2
@@ -435,11 +457,17 @@ class Maker:
                     out["wf"] = 1
             elif ability:
                 key = ability
-            elif roll.startswith("ranged") or not melee:
+            elif roll.startswith("ranged"):
                 key = "dex"
                 out["wf"] = 1
+            elif not melee:
+                # an attack roll with neither melee nor range named: the ability the game gives its natural attacks
+                key = self.casting if self.casting_known else "dex"
+                out["wf"] = 1
             else:
-                key = "dex" if self.scores["dex"] > self.scores["str"] else "str"
+                # with a weapon that is not Finesse, Strength; with no weapon, the higher of the two
+                fine = not weapon or clean(field(weapon, "finesse")).lower() in ("yes", "true")
+                key = ("dex" if self.scores["dex"] > self.scores["str"] else "str") if fine else "str"
                 out["wf"] = 1
             # (the weapon's enchantment counts when the attack is made with it: its box names it, or its damage is the weapon's)
             enchant = (number(field(weapon, "enchantment")) or 0) if weapon and (with_weapon or given.get("item")) else 0
@@ -474,6 +502,10 @@ class Maker:
             out["u"] = 4 if "four" in recharge else 2 if "twice" in recharge else 1
         if re.search(r"can only use", clean(field(w, "summary")), re.I) or sometimes:
             out["c"] = 1
+        # "…this action is removed after the first Grim Visage is killed or 100 damage is dealt to Gerringothe"
+        gone = re.search(r"action is removed after [^.]*?(\d+) damage is dealt", clean(field(w, "summary")), re.I)
+        if gone:
+            out["ud"] = int(gone.group(1))
         if cond:
             out["cd"] = cond
         if roll and "half" in clean(get("on miss")).lower():
@@ -514,13 +546,13 @@ def linked_actions(w):
     return out
 
 
-def actions_of(name, pages, actions, items, box, scores, pb, flags):
+def actions_of(name, pages, actions, items, box, scores, pb, flags, casting=None):
     """Everything the enemy can do to a character with its action or its bonus action, the one it does by default
     first, and what its page lists that the damage test does not use: (actions, [[name, why]])."""
     text = (pages.get(name + "/Combat") or "") + "\n= =\n" + (pages.get(name) or "")
     passives = clean(field(box, "passives"))
     more = extra_attacks(passives)
-    make = Maker(box, scores, pb)
+    make = Maker(box, scores, pb, casting)
     out, seen, unused = [], set(), []
     boxes = listed_actions(text)
     # its unarmed strike, for the actions whose damage is "unarmed"
@@ -588,7 +620,7 @@ def actions_of(name, pages, actions, items, box, scores, pb, flags):
     limited = lambda a: bool(a.get("c") or a.get("u") or a.get("sl") or a.get("md"))
     kept = {}
     for a in sorted(out, key=limited):
-        kept.setdefault(json.dumps([a["k"], a.get("b"), a.get("dc"), a.get("sv"), a["hits"], a.get("q"), a.get("md", "") if a.get("md") else ""]), a)
+        kept.setdefault(json.dumps([a["k"], a.get("b"), a.get("dc"), a.get("sv"), a["hits"], a.get("q"), a.get("md", "") if a.get("md") else "", a.get("ud", 0)]), a)
     out = [a for a in out if any(a is k for k in kept.values())]
     # the one it does turn after turn with its action: nothing that waits for a condition, runs out, takes a spell
     # slot or belongs to a harder mode. Its Multiattack, else the strongest attack roll, else the strongest left
@@ -612,7 +644,9 @@ def actions_of(name, pages, actions, items, box, scores, pb, flags):
         w = feature(page)
         said = clean(field(w, "summary")) + " " + clean(field(w, "description")) + " " + clean(field(w, "extra description"))
         legendary = why == "legendary" or bool(re.search(r"\{\{\s*HonourBanner|legendary (?:re)?action", page[:1500], re.I))
-        if why != "reaction" and not ANSWERS.search(said):
+        # one that answers the loss of a piece of armour, not a hit (Sublimation)
+        piece = bool(re.search(r"whenever a piece of \w+ \w+ armour is destroyed", said, re.I))
+        if why != "reaction" and not piece and not ANSWERS.search(said):
             continue
         act = make.action(title, {}, page, "", more, free=True, flags=flags)
         if not act and re.search(r"strike back|retaliat\w* with an attack", said, re.I):
@@ -637,8 +671,18 @@ def actions_of(name, pages, actions, items, box, scores, pb, flags):
         told = clean(field(passive, "description")) or clean(field(w, "description")) or clean(field(w, "summary"))
         if told:
             act["tr"] = told[:240]
-        # an answer that waits for something more than the hit ("after accumulating five…", "if its … are active")
-        if re.search(r"after accumulating|\bif (?:its|his|her|their) [^.]* (?:is|are) active", told, re.I):
+        # an answer that waits for something more than the hit, in a way the test can play: so many hits taken
+        # ("after accumulating five Paranoid Dreams"), a standing condition that goes with its temporary hit
+        # points ("if its Diamond Scales are active"), a piece of armour lost. Any other wait is only told ("c").
+        count = re.search(r"after accumulating (\w+)", told, re.I)
+        numbers = {"two": 2, "three": 3, "four": 4, "five": 5, "six": 6}
+        if piece:
+            act["ev"] = 1
+        elif count and (numbers.get(count.group(1).lower()) or number(count.group(1))):
+            act["af"] = numbers.get(count.group(1).lower()) or number(count.group(1))
+        elif re.search(r"\bif (?:its|his|her|their) [^.]* (?:is|are) active", told, re.I):
+            act["wt"] = 1
+        elif re.search(r"after accumulating", told, re.I):
             act["c"] = 1
         same = lambda r: json.dumps([r["k"], r["hits"], r.get("cd")]) == json.dumps([act["k"], act["hits"], act.get("cd")])
         if any(same(r) for r in reacts):
@@ -686,6 +730,9 @@ def main():
     listed_passives = {x for box in boxes.values() for k in ("passives", "t passives", "h passives") for x in names_of(field(box, k))}
     standing = {x for box in boxes.values() for k in ("conditions", "t conditions", "h conditions") for x in names_of(field(box, k)) if x.startswith("Legendary Resistance")}
     passive_pages = page_texts(listed_passives | standing | {x + " (Condition)" for x in standing})
+    # the conditions a creature starts a fight with, for what they give while they last
+    worn = {x for box in boxes.values() for k in ("conditions", "t conditions", "h conditions") for x in names_of(field(box, k)) if not x.startswith("Legendary")}
+    worn_pages = page_texts({x + " (Condition)" for x in worn})
     out, missing = [], []
     for act, name in ENEMIES:
         box = infobox(pages.get(name + "/Combat", "")) or infobox(pages.get(name, "")) or infobox(pages.get(name, ""), False)
@@ -736,11 +783,33 @@ def main():
             e["pvt"] = pvs[1]
         if pvs[2] != pvs[1]:
             e["pvh"] = pvs[2]
-        acts, unused, reacts = actions_of(name, pages, actions, items, box, scores, e["pb"], flags)
+        # the spellcasting ability, when the page gives none (see the top of this file)
+        casting = None
+        if not next((k for k in ABILITIES if clean(field(box, "casting ability")).lower().startswith(k)), ""):
+            kin = CASTING_KIN.get(name)
+            kin_key = next((k for k in ABILITIES if clean(field(boxes.get(kin, ""), "casting ability")).lower().startswith(k)), "") if kin else ""
+            cls = next((c for c in CASTER_CLASS if re.search(r"\b" + c + r"\b", field(box, "class") + " " + field(infobox(pages.get(name) or "", False) or "", "class"), re.I)), "")
+            best = max(("int", "wis", "cha"), key=lambda k: scores[k])
+            casting = [kin_key, "kin", kin] if kin_key else [CASTER_CLASS[cls], "class", cls.capitalize()] if cls else ["int", "default", e.get("ty", "")] if e.get("ty") in NO_CASTERS else [best, "best", ""]
+        # temporary hit points a standing condition gives, in the mode it is there, and what holds while they last
+        for mode, names in (("b", names_of(field(box, "conditions"))), ("t", names_of(field(box, "t conditions"))), ("h", names_of(field(box, "h conditions")))):
+            for cond in names:
+                said = worn_pages.get(cond + " (Condition)", "")
+                # ("This creature has 100 temporary hit points": not one that gives them for each of something, or later)
+                temp = re.search(r"this creature has \{\{\s*temp hp\s*\|\s*(\d+)", said, re.I)
+                if temp and not e.get("tp"):
+                    low = re.search(r"damage lower than (\d+) will not affect", clean(field(said, "effects")), re.I)
+                    e["tp"] = {"n": cond, "hp": int(temp.group(1)), "md": mode}
+                    if low:
+                        e["tp"]["min"] = int(low.group(1))
+        acts, unused, reacts = actions_of(name, pages, actions, items, box, scores, e["pb"], flags, casting)
+        # (kept with the enemy when one of its numbers goes by it)
+        if casting and any(a.get("wf") and any(p[0] == casting[0].upper() for p in a.get("w", [])) for a in acts + reacts):
+            e["ca"] = casting
         # with the ability scores of Tactician, the numbers of its actions are other
         if e.get("tm", {}).get("ab"):
             harder = dict(scores, **e["tm"]["ab"])
-            acts_t, _, reacts_t = actions_of(name, pages, actions, items, box, harder, e["pb"], flags)
+            acts_t, _, reacts_t = actions_of(name, pages, actions, items, box, harder, e["pb"], flags, casting)
             if acts_t != acts:
                 e["at"] = acts_t
             if reacts_t != reacts and reacts_t:
@@ -776,8 +845,13 @@ def main():
             pieces = len(re.findall(r"\bCoin (?:Cuirass|Cuisse|Helmet|Vambrace)", field(box, "conditions")))
             if not pieces or not re.search(r"100 maximum hit points per instance", field(box, "hp")):
                 raise SystemExit("Gerringothe Thorm's Coin Armour is no longer described the same way")
-            e["hp"] = {"b": e["hp"]["b"] + 100 * pieces}
-            e["note"] = f"With all {pieces} pieces of Coin Armour. She loses 100 hit points for each Visage killed."
+            e["hp"] = {k: v + 100 * pieces for k, v in e["hp"].items()}
+            e["arm"] = {"n": pieces, "hp": 100}
+            e["note"] = f"With all {pieces} pieces of Coin Armour: 100 hit points each. A piece is lost for each Visage killed, or for each 100 damage dealt to her."
+        if not e["hp"].get("t") and e["hp"].get("b"):
+            # no Tactician hit points on the page: Balanced x 1.3, rounded down
+            e["hp"]["t"] = e["hp"]["b"] * 13 // 10
+            e["hpw"] = 1
         print(f"  act {act} · {name}: level {e['lv']}, AC {e['ac']}, HP {e['hp']}, slots {e.get('rs')}, moves {e.get('mv')}")
         for a in e.get("acts", []):
             how = f"+{a['b']}" if a["k"] == "a" else f"{a['sv'].upper()} DC {a['dc']} (x{a['os']})" if a["k"] == "s" else "heals" if a["k"] == "e" else "no roll"
@@ -810,6 +884,11 @@ def main():
           "// in Initiative bonus, when the page gives one · rx what answers a hit, once a round (lg 1: a Legendary Action;\n"
           "//   as: the action whose numbers it borrows; tr: what sets it off, in the words of its page)\n"
           "//   wf 1 when the ability behind b or dc is the planner's rule and not named by the page\n"
+          "//   ud the damage dealt to it after which the action is gone · af the hits it takes before it answers with this\n"
+          "//   wt 1 an answer it has only while its temporary hit points last · ev 1 an answer to each piece of armour lost\n"
+          "// ca [ability, why, of what] its spellcasting ability when the page gives none · hpw 1 Tactician hit points worked out\n"
+          "// tp {n, hp, md, min} temporary hit points a standing condition gives, from the mode md up; min the damage under which a hit does nothing while they last\n"
+          "// arm {n, hp} pieces of armour, lost one for each so much damage dealt\n"
           "//   gw [weapon, why] when the page does not name the weapon the attack is made with · ar 1 it catches an area\n"
           "//   gr '20~200' when its damage is a range in the text, read as dice\n"
           "// xi Initiative on top of the Dexterity modifier · tm, hm what the page gives of its own for Tactician and Honour\n"

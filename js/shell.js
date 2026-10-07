@@ -26,7 +26,9 @@ function navHtml() {
       <div class="nav-menu">${entries.join('')}</div></div>`).join('')
     + `<button class="nav-top${tab === 'damage' ? ' on' : ''}" data-act="tab" data-tab="damage">${t('Damage test')}</button>`
     // temporary: the list of things to check by hand (js/review.js)
-    + `<button class="nav-top${tab === 'review' ? ' on' : ''}" data-act="tab" data-tab="review">${t('To check')}<i class="count">${reviewLeft()}</i></button>`;
+    + `<button class="nav-top${tab === 'review' ? ' on' : ''}" data-act="tab" data-tab="review">${t('To check')}${reviewLeft() ? `<i class="count">${reviewLeft()}</i>` : ''}</button>`
+    // what changed in each version (js/updates.js): marked until it is opened in the version that is running
+    + `<button class="nav-top${tab === 'updates' ? ' on' : ''}" data-act="tab" data-tab="updates">${t('Updates')}${state.ui.seenVersion !== APP_VERSION ? `<i class="count new">${t('new')}</i>` : ''}</button>`;
 }
 // a menu that was just used opens again once the pointer goes to another group or leaves the menu
 (() => {
@@ -49,7 +51,7 @@ function render() {
   $$('[data-i18n-title]').forEach((el) => { el.title = t(el.dataset.i18nTitle); });
   $('#tabs').innerHTML = navHtml();
   $$('#langs button').forEach((b) => b.classList.toggle('on', b.dataset.lang === state.ui.lang));
-  const views = { home: renderHome, hub: renderHub, party: renderParty, presets: renderPresets, items: renderItems, spells: renderSpells, damage: renderDamage, review: renderReview };
+  const views = { home: renderHome, hub: renderHub, party: renderParty, presets: renderPresets, items: renderItems, spells: renderSpells, damage: renderDamage, review: renderReview, updates: renderUpdates };
   $('#app').innerHTML = (views[state.ui.tab] || renderBuilds)();
   // the section menu sticks below the header, which is sticky itself on wide screens
   const top = $('.top');
