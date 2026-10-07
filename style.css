@@ -1102,3 +1102,12 @@ button.brand small { font: 400 11px var(--sans); letter-spacing: 0; color: var(-
 .li-where { font-size: 12px; color: var(--muted); }
 .list + .pslot { max-width: 420px; }
 .pick-row.custom { border-style: dashed; }
+
+/* ---------- the notice that a newer version of the site is out ---------- */
+.update-bar { position: fixed; right: 16px; bottom: 16px; z-index: 70; width: min(440px, calc(100vw - 32px)); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 8px; align-items: start;
+  padding: 14px; background: var(--panel); border: 1px solid var(--gold); border-radius: 10px; box-shadow: 0 10px 34px rgba(0, 0, 0, .55); }
+.update-bar[hidden] { display: none; }
+.update-bar p { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--muted); }
+.update-bar p b { display: block; margin-bottom: 2px; font: 700 15px var(--serif, inherit); color: var(--gold-hi); }
+.update-bar .btn { grid-column: 1 / -1; grid-row: 2; justify-self: start; }
+.update-bar .icon.x { grid-column: 2; grid-row: 1; width: 28px; height: 28px; }

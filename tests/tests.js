@@ -1907,6 +1907,19 @@
     ok(CONSUMABLES.filter((c) => c.t === 'Elixir').length > 30, 'elixirs collected');
   });
 
+  test('a newer version of the site is announced, with the way to load it', () => {
+    eq([['4.6', '4.5'], ['4.10', '4.9'], ['5.0', '4.12'], ['4.5', '4.5'], ['4.4', '4.5'], ['', '4.5'], ['4.5.1', '4.5']].map(([a, b]) => versionNewer(a, b)), [true, true, true, false, false, false, true]);
+    updateNotice('99.0');
+    const bar = document.querySelector('#update-bar');
+    ok(bar && !bar.hidden && bar.textContent.includes('99.0') && bar.textContent.includes(APP_VERSION) && bar.querySelector('[data-act="update-now"]'), 'the bar names both versions and has the button that updates');
+    actions['update-later'](bar.querySelector('[data-act="update-later"]'));
+    updateNotice('99.0');
+    ok(bar.hidden, 'left for later, the same version is not announced again on this visit');
+    updateNotice('99.1');
+    ok(!bar.hidden, 'a newer one is');
+    bar.remove();
+  });
+
   // ---------- translation ----------
   test('placeholders are filled and unknown strings fall back to English', () => {
     const lang = state.ui.lang;

@@ -1398,6 +1398,13 @@ window.BG3_I18N = {
     '— add or remove —': '— adicionar ou remover —',
     '— choose the slot and the item —': '— escolha o slot e o item —',
 
+    // the notice of a newer version
+    'The site was updated': 'O site foi atualizado',
+    'Version {v} is out; this page is still on {old}. Your builds and parties stay as they are.': 'A versão {v} já saiu; esta página ainda está na {old}. Suas builds e parties continuam como estão.',
+    'Click here to update': 'Clique aqui para atualizar',
+    'Updating…': 'Atualizando…',
+    'Later': 'Depois',
+
     // dialogs and toasts
     'Cancel': 'Cancelar',
     'Confirm': 'Confirmar',

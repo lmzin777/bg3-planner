@@ -1109,6 +1109,15 @@ button.brand small { font: 400 11px var(--sans); letter-spacing: 0; color: var(-
 .li-where { font-size: 12px; color: var(--muted); }
 .list + .pslot { max-width: 420px; }
 .pick-row.custom { border-style: dashed; }
+
+/* ---------- the notice that a newer version of the site is out ---------- */
+.update-bar { position: fixed; right: 16px; bottom: 16px; z-index: 70; width: min(440px, calc(100vw - 32px)); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 8px; align-items: start;
+  padding: 14px; background: var(--panel); border: 1px solid var(--gold); border-radius: 10px; box-shadow: 0 10px 34px rgba(0, 0, 0, .55); }
+.update-bar[hidden] { display: none; }
+.update-bar p { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--muted); }
+.update-bar p b { display: block; margin-bottom: 2px; font: 700 15px var(--serif, inherit); color: var(--gold-hi); }
+.update-bar .btn { grid-column: 1 / -1; grid-row: 2; justify-self: start; }
+.update-bar .icon.x { grid-column: 2; grid-row: 1; width: 28px; height: 28px; }
 </style>
 </head>
 <body>
@@ -2591,6 +2600,13 @@ window.BG3_I18N = {
     '{n} chosen': '{n} escolhidos',
     '— add or remove —': '— adicionar ou remover —',
     '— choose the slot and the item —': '— escolha o slot e o item —',
+
+    // the notice of a newer version
+    'The site was updated': 'O site foi atualizado',
+    'Version {v} is out; this page is still on {old}. Your builds and parties stay as they are.': 'A versão {v} já saiu; esta página ainda está na {old}. Suas builds e parties continuam como estão.',
+    'Click here to update': 'Clique aqui para atualizar',
+    'Updating…': 'Atualizando…',
+    'Later': 'Depois',
 
     // dialogs and toasts
     'Cancel': 'Cancelar',
@@ -12609,7 +12625,7 @@ window.BG3_DATA_DATES = {
 // The scripts are plain (not modules) so the planner also runs from a file opened directly; they share the global scope.
 'use strict';
 
-const APP_VERSION = '4.5';
+const APP_VERSION = '4.6';
 const STORE_KEY = 'bg3planner.v1';
 const PRESETS = window.BG3_PRESETS || [];
 const I18N = window.BG3_I18N || {};
@@ -20484,6 +20500,82 @@ Object.assign(actions, {
     return false;
   },
 });
+</script>
+  <script>
+// A notice when the site has a newer version than the page that is open. Now and then the page asks the server for
+// its version; when a newer one is out, a bar offers to load it. Nothing is lost by updating: everything is saved
+// in the browser as it is done.
+'use strict';
+
+const UPDATE_EVERY = 10 * 60 * 1000;  // how often an open page asks
+const UPDATE_GAP = 5 * 60 * 1000;     // and the least time between two questions, however often the page comes back into view
+let updateAsked = 0;                  // when the server was last asked
+let updateLater = '';                 // the version the visitor chose to leave for later
+
+// "4.10" is newer than "4.9": the versions are compared number by number.
+function versionNewer(a, b) {
+  const x = String(a).split('.').map(Number);
+  const y = String(b).split('.').map(Number);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+  }
+  return false;
+}
+function updateNotice(version) {
+  if (!version || version === updateLater) return;
+  let bar = $('#update-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'update-bar';
+    bar.className = 'update-bar';
+    bar.setAttribute('role', 'status');
+    document.body.appendChild(bar);
+  }
+  bar.innerHTML = `<p><b>${t('The site was updated')}</b>${t('Version {v} is out; this page is still on {old}. Your builds and parties stay as they are.', { v: esc(version), old: APP_VERSION })}</p>
+    <button class="btn primary" data-act="update-now">${t('Click here to update')}</button>
+    <button class="icon x" data-act="update-later" data-v="${esc(version)}" title="${t('Later')}">×</button>`;
+  bar.hidden = false;
+}
+// The version the server has now, read from the file that states it; nothing when it cannot be reached.
+async function updateVersion() {
+  const text = await (await fetch('js/core.js?now=' + Date.now(), { cache: 'no-store' })).text();
+  return (/APP_VERSION = '([\d.]+)'/.exec(text) || [])[1] || '';
+}
+async function updateCheck() {
+  if (location.protocol === 'file:' || window.BG3_TEST || document.hidden || Date.now() - updateAsked < UPDATE_GAP) return;
+  updateAsked = Date.now();
+  try {
+    const version = await updateVersion();
+    if (versionNewer(version, APP_VERSION)) updateNotice(version);
+  } catch (err) { /* offline: it is asked again later */ }
+}
+
+Object.assign(actions, {
+  async 'update-now'(el) {
+    el.disabled = true;
+    el.textContent = t('Updating…');
+    try {
+      // the page and every file it names are fetched again, past the copy the browser keeps, so that the reload finds the new ones
+      const html = await (await fetch(location.pathname, { cache: 'reload' })).text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const urls = Array.from(doc.querySelectorAll('script[src], link[rel="stylesheet"][href]')).map((x) => x.getAttribute('src') || x.getAttribute('href')).filter((u) => !/^(https?:)?\/\//.test(u));
+      await Promise.all(urls.map((u) => fetch(u, { cache: 'reload' }).catch(() => null)));
+    } catch (err) { /* the reload still tries */ }
+    location.reload();
+    return false;
+  },
+  'update-later'(el) {
+    updateLater = el.dataset.v;
+    $('#update-bar').hidden = true;
+    return false;
+  },
+});
+
+if (!window.BG3_TEST && location.protocol !== 'file:') {
+  setTimeout(updateCheck, 4000);
+  setInterval(updateCheck, UPDATE_EVERY);
+  document.addEventListener('visibilitychange', updateCheck);
+}
 </script>
   <script>
 // Actions behind every button, the event listeners, and the first render. Loaded last.
