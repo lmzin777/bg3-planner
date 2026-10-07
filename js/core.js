@@ -2,7 +2,7 @@
 // The scripts are plain (not modules) so the planner also runs from a file opened directly; they share the global scope.
 'use strict';
 
-const APP_VERSION = '4.4';
+const APP_VERSION = '4.5';
 const STORE_KEY = 'bg3planner.v1';
 const PRESETS = window.BG3_PRESETS || [];
 const I18N = window.BG3_I18N || {};
@@ -160,7 +160,7 @@ function normalizeBuild(src) {
     b.gear[k].alts = Array.isArray(a.alts) ? a.alts.map((x) => ({ slot: x.slot || 'head', name: x.name || '', where: x.where || '', note: x.note || '' })) : [];
   });
   ['setup', 'consumables'].forEach((k) => {
-    b[k] = Array.isArray(s[k]) ? s[k].map((x) => ({ name: x.name || '', note: x.note || '' })) : [];
+    b[k] = Array.isArray(s[k]) ? s[k].map((x) => ({ name: String(x.name || '').trim(), note: x.note || '' })).filter((x) => x.name) : [];
   });
   if (s.permanent && typeof s.permanent === 'object') {
     Object.keys(s.permanent).forEach((k) => { const v = s.permanent[k]; if (v && v.on) b.permanent[k] = { on: true, ab: v.ab || '', extra: !!v.extra, got: !!v.got }; });

@@ -61,16 +61,3 @@ async function wikiItem(name) {
     desc: cut(f('description'), 240),
   };
 }
-let suggestTimer = 0;
-const suggestCache = {};
-function suggest(el) {
-  const q = norm(el.value);
-  clearTimeout(suggestTimer);
-  if (q.length < 3) return;
-  suggestTimer = setTimeout(async () => {
-    try {
-      const list = suggestCache[q] || (suggestCache[q] = await wikiSuggest(q));
-      $('#dl-wiki').innerHTML = list.map((x) => `<option value="${esc(x)}">`).join('');
-    } catch (err) { /* offline: the field keeps working as free text */ }
-  }, 220);
-}

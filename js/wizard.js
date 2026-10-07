@@ -1,6 +1,7 @@
-// Step-by-step character creation, in the order of the game's own screen: origin, race, subrace, class,
-// subclass, background, abilities, skills, the choices of level 1, and a summary. It edits the same build
-// the full planner shows; leaving it at any point keeps what was chosen.
+// Step by step, two walks that are never mixed. The creation of the character, as on the game's own screen:
+// origin, race, subrace, class, subclass, the choices of level 1, background, abilities, skills, and a summary
+// that leads to the Build Planner. And, from the Build Planner once the character is made, one step for each
+// level from 2 to 12. Both edit the same build the full planner shows; leaving at any point keeps what was chosen.
 'use strict';
 
 // [key, title, hint, applies(b)]
@@ -10,17 +11,16 @@ const WIZ_STEPS = [
   ['subrace', 'Subrace', 'What the subrace adds on top of the race.', (b) => (RACES[b.creation.race] || []).length > 0],
   ['class', 'Class', 'The class of level 1. It decides the saving throws, the starting proficiencies and the skill list.', () => true],
   ['subclass', 'Subclass', 'This class chooses its subclass at level 1.', (b) => (CLASS_DATA[startingClass(b)] || {}).subclassLevel === 1],
+  ['level1', 'Level 1 choices', 'What the class chooses at level 1: fighting style, cantrips, spells and the like.', (b) => !!startingClass(b)],
   ['background', 'Background', 'The background grants two skills.', () => true],
   ['abilities', 'Abilities', 'Spend 27 points, then give +2 to one ability and +1 to another.', () => true],
   ['skills', 'Skills', 'Skills granted by the choices so far are locked on; pick the rest from the class list.', () => true],
-  ['level1', 'Level 1 choices', 'What the class chooses at level 1: fighting style, cantrips, spells and the like.', (b) => !!startingClass(b)],
-  ['done', 'Summary', 'What is set and what is still open. Gear, consumables and notes are planned in the Build Planner.', () => true],
+  ['done', 'Summary', 'What is set and what is still open. The levels after the first, gear, consumables and notes are planned in the Build Planner.', () => true],
 ];
-// Creation first, then one step per level from 2 to 12 (keys "lv:2" … "lv:12"), then the summary.
-function wizSteps(b) {
-  const creation = WIZ_STEPS.filter((s) => s[3](b));
-  const levels = startingClass(b) ? Array.from({ length: 11 }, (x, k) => ['lv:' + (k + 2), 'Level {n}', 'What this level gives and what it asks you to choose.', null, k + 2]) : [];
-  return [...creation.slice(0, -1), ...levels, creation[creation.length - 1]];
+// The steps of the creation; or, with `levels`, one step for each level from 2 to 12 (keys "lv:2" … "lv:12").
+function wizSteps(b, levels) {
+  if (levels) return Array.from({ length: 11 }, (x, k) => ['lv:' + (k + 2), 'Level {n}', 'What this level gives and what it asks you to choose.', null, k + 2]);
+  return WIZ_STEPS.filter((s) => s[3](b));
 }
 // Whether a step has what it asks for, to mark it in the step bar.
 function wizDone(b, key) {
@@ -104,13 +104,20 @@ function wizBody(b, key) {
       ${raceCantripField(b)}`;
   }
   if (key.startsWith('lv:')) return wizLevel(b, Number(key.slice(3)) - 1);
+  // the summary: what is set, and what of the creation is still open, each with the way back to its step
   const s = finalStats(b, 'act1');
+  const open = wizSteps(b).filter((x) => x[0] !== 'done' && !wizDone(b, x[0]));
+  const left = [...buildIssues(b).filter((x) => x.level === 'warn' && x.go.s === 'creation').map((x) => x.text), ...(startingClass(b) ? levelPending(b, 0) : [])];
   return `<label class="field"><span>${t('Build name')}</span><input type="text" data-path="name" value="${esc(b.name)}"></label>
     <dl class="wiz-sum">${[[t('Origin'), c.origin], [t('Race'), raceText(c)], [t('Class'), splitText(b)], [t('Background'), c.background],
       [t('Abilities'), abilLine(b)], [t('Skills'), [...Object.keys(skillState(b).granted), ...skillState(b).chosen].join(', ')],
       [t('Hit points'), s.level ? s.hp : ''], [t('Armour Class'), s.level ? s.ac.act1 : '']].filter((x) => String(x[1]).trim())
       .map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
-    <div id="check-live" class="check">${checkLive(b)}</div>`;
+    ${open.length ? `<h3 class="group">${t('Still open in the creation')}</h3>
+      <div class="lib-row wiz-open">${open.map((x) => `<button class="chip" data-act="wiz-go" data-s="${x[0]}">${t(x[1])} →</button>`).join('')}</div>
+      ${left.length ? `<ul class="wiz-left">${left.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}`
+    : `<p class="okline">${t('Everything of the creation is chosen.')}</p>`}
+    <p class="muted">${t('The levels from 2 to 12 are chosen in the Build Planner, in "Level progression": "Level up step by step" walks through them one at a time. Gear, consumables and notes are there too.')}</p>`;
 }
 
 // One level of the character: its class, what it gives (with the description of each feature), what it
@@ -137,22 +144,22 @@ function wizLevel(b, i) {
 }
 
 function wizardView(b) {
-  const steps = wizSteps(b);
-  let i = steps.findIndex((s) => s[0] === state.ui.wizard);
-  if (i < 0) i = 0;
   // levels go in order: the step of a level stays shut while a level before it has something to choose
   const open = firstOpenLevel(b);
+  const asked = String(state.ui.wizard || '');
+  // the walk through the levels, asked for from the Build Planner: only once level 1 is all chosen; until then, the
+  // creation it still belongs to
+  const levels = asked.startsWith('lv:') && !!startingClass(b) && open !== 0;
+  const steps = wizSteps(b, levels);
+  let i = steps.findIndex((s) => s[0] === asked);
+  if (i < 0) i = asked.startsWith('lv:') ? Math.max(0, steps.findIndex((s) => ['class', 'subclass', 'level1'].includes(s[0]) && !wizDone(b, s[0]))) : 0;
   const shut = (s) => !!s && !!s[4] && open >= 0 && s[4] - 1 > open;
   const shutHint = ` disabled title="${t('Finish level {n} first', { n: open + 1 })}"`;
-  if (shut(steps[i])) {
-    const home = (open ? ['lv:' + (open + 1)] : ['level1', 'subclass', 'class']).map((k) => steps.findIndex((s) => s[0] === k)).find((k) => k >= 0);
-    i = home == null ? 0 : home;
-  }
+  if (shut(steps[i])) i = Math.max(0, steps.findIndex((s) => s[0] === 'lv:' + (open + 1)));
   const [key, title, hint, , n] = steps[i];
   const chip = (s, k) => `<button class="${k === i ? 'on' : ''}${wizDone(b, s[0]) && !shut(s) ? ' done' : ''}${s[4] ? ' lv' : ''}" data-act="wiz-go" data-s="${s[0]}"${shut(s) ? shutHint : ''}><i>${s[4] || (s[0] === 'done' ? '✓' : k + 1)}</i>${s[4] ? '' : t(s[1])}</button>`;
   return `<section class="card hero wiz">
-    <div class="wiz-bar">${steps.map((s, k) => (s[4] ? '' : chip(s, k))).join('')}</div>
-    ${steps.some((s) => s[4]) ? `<div class="wiz-bar levels-bar"><span class="lbl">${t('Levels')}</span>${steps.map((s, k) => (s[4] ? chip(s, k) : '')).join('')}</div>` : ''}
+    ${levels ? `<div class="wiz-bar levels-bar"><span class="lbl">${t('Levels')}</span>${steps.map(chip).join('')}</div>` : `<div class="wiz-bar">${steps.map(chip).join('')}</div>`}
     <h1>${t(title, { n })}</h1><p class="muted">${t(hint)}</p>
     ${wizBody(b, key)}
     <div class="modal-btns wiz-nav">

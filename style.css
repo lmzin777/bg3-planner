@@ -1063,3 +1063,42 @@ button.brand small { font: 400 11px var(--sans); letter-spacing: 0; color: var(-
 .home-list { grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr)); max-height: none; }
 .home-notes ul { margin: 0 0 10px; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
 @media (max-width: 620px) { .home-hero { padding: 22px 18px; } .home-hero h1 { font-size: 28px; } }
+
+/* the summary of the step by step: what of the creation is still open */
+.wiz-open { margin: 6px 0 4px; }
+.wiz-left { margin: 6px 0 10px; padding-left: 18px; display: grid; gap: 3px; font-size: 13px; color: var(--muted); }
+.wiz-bar.levels-bar { margin-top: 0; }
+
+/* ---------- an item is chosen from a list, with its picture: gear slots, alternatives, setup items, consumables ---------- */
+.with-btn > .pslot { flex: 1; min-width: 0; width: auto; }
+.slot .pslot b, .alt .pslot b { font-weight: 600; color: var(--rc, var(--text)); overflow-wrap: anywhere; }
+.slot.r- .pslot b { color: var(--text); }
+.slot.got .pslot b { text-decoration: line-through; text-decoration-color: var(--muted); }
+.slot .rar { padding: 0; font: 600 11px var(--sans); }
+.slot-fx { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--text); opacity: .88; }
+.slot-fx b { color: var(--muted); font-weight: 600; margin-right: 2px; }
+.alt { grid-template-columns: 150px minmax(0, 1fr) 32px; border-left: 3px solid var(--rc, var(--line)); }
+.alt > .slot-label { grid-column: 1; grid-row: 1; align-self: center; margin: 0; }
+.alt > .with-btn { grid-column: 2; grid-row: 1; }
+.alt > .icon.x { grid-column: 3; grid-row: 1; }
+.alt > .slot-fx, .alt > .alt-notes { grid-column: 1 / -1; }
+.alt-notes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.alt-new { max-width: 420px; }
+@media (max-width: 700px) {
+  .alt { grid-template-columns: minmax(0, 1fr) 32px; }
+  .alt > .icon.x { grid-column: 2; }
+  .alt > .with-btn { grid-column: 1 / -1; grid-row: 2; }
+  .alt-notes { grid-template-columns: minmax(0, 1fr); }
+}
+.li { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 8px; background: var(--panel-2); border: 1px solid var(--line-soft); border-left: 3px solid var(--rc, var(--line)); border-radius: 8px; }
+.li > textarea { grid-column: 1 / -1; grid-row: auto; }
+.li-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.li-head .pic.small { width: 34px; height: 34px; flex: none; }
+.li-name { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.li-name b { font-weight: 600; color: var(--rc, var(--text)); overflow-wrap: anywhere; }
+.li-name span { font-size: 12px; color: var(--muted); }
+.li-head .with-btn { flex: none; }
+.li-fx { display: block; margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--text); opacity: .88; }
+.li-where { font-size: 12px; color: var(--muted); }
+.list + .pslot { max-width: 420px; }
+.pick-row.custom { border-style: dashed; }

@@ -55,7 +55,12 @@ function pickerList() {
       ${effect ? `<small class="fx">${esc(effect)}</small>` : ''}<small>${esc(where)}</small></button>`;
   }).join('');
   $('#picker-count').textContent = t('{n} items', { n: list.length }) + (list.length > PICKER_MAX ? ' · ' + t('showing the first {n}, type to narrow it down', { n: PICKER_MAX }) : '');
-  $('#picker-list').innerHTML = rows || `<p class="muted">${ranked ? t('Nothing in this slot stands out for that goal. Try another goal or "All".') : t('No items match. Try turning off a filter.')}</p>`;
+  // a name the item list does not have can still go in the slot, as it is typed
+  const typed = picker.q.trim();
+  const custom = typed && !ITEM_BY_NAME.has(norm(typed))
+    ? `<button class="pick-row custom" data-act="picker-choose" data-custom="1" data-n="${esc(typed)}">${pic('', 'pic small')}<b>${esc(t('Use "{name}" as typed', { name: typed }))}</b>
+      <small class="fx">${t('It is not in the list: it goes in by its name, with no picture and no effect on the numbers.')}</small></button>` : '';
+  $('#picker-list').innerHTML = (rows || `<p class="muted">${ranked ? t('Nothing in this slot stands out for that goal. Try another goal or "All".') : t('No items match. Try turning off a filter.')}</p>`) + custom;
   $$('#picker-box [data-mode]').forEach((el) => el.classList.toggle('on', el.dataset.mode === picker.mode));
 }
 function openPicker(path, slot) {

@@ -120,8 +120,8 @@ function buildEditor(b) {
 
     ${sec('extras', () => `<section class="card">
       <div class="grid g2">
-        <div><h2>${t('Setup items')}</h2>${simpleList(b, 'setup', t('Item'), t('What it is for / where to get it'))}</div>
-        <div><h2>${t('Consumables')}</h2>${simpleList(b, 'consumables', t('Elixir, potion, arrow…'), t('Note'), 'consumable')}</div>
+        <div><h2>${t('Setup items')}</h2>${itemList(b, 'setup', t('What it is for'))}</div>
+        <div><h2>${t('Consumables')}</h2>${itemList(b, 'consumables', t('Note'))}</div>
       </div>
     </section>`)}
 
@@ -296,63 +296,81 @@ function skillsPicker(b) {
     <p class="muted">${t('The number is the bonus to checks with that skill at level 1: the ability modifier, plus the +2 proficiency bonus when you are proficient. Expertise is chosen in the level table, at the levels that grant it.')}</p>`;
 }
 
-const wikiButtons = (fillPath) =>
-  `<button class="icon txt" data-act="wiki-fill" data-fill="${fillPath}" title="${t('Fill from bg3.wiki')}">Wiki</button>
-   <button class="icon" data-act="wiki" title="${t('Open the wiki page')}">↗</button>`;
-const browseButton = (fillPath, slot) => (ITEMS.length
-  ? `<button class="icon txt" data-act="picker-open" data-fill="${fillPath}" data-slot="${slot}" title="${t('Browse the items this build can use in this slot')}">${t('Browse')}</button>` : '');
-// A name field. With a slot it suggests items of that slot from the local database while typing;
-// without one (setup items, consumables) it suggests page names from the wiki.
-const nameInput = (path, value, ph, cls, slot) => (slot && (slot !== 'consumable' || CONSUMABLES.length)
-  ? `<input type="text" class="${cls || ''}" autocomplete="off" data-suggest="${slot}" data-path="${path}" value="${esc(value)}" placeholder="${ph}">`
-  : `<input type="text" class="${cls || ''} wiki-name" list="dl-wiki" autocomplete="off" data-path="${path}" value="${esc(value)}" placeholder="${ph}">`);
+// What an item of the database does, in one text: its passives, or its description.
+const itemEffect = (it) => (it.ps || []).map((p) => p[1] || p[0]).join(' ') || it.x || '';
+const itemFound = (it) => [it.a ? t('Act {n}', { n: it.a }) : '', [it.l, it.h].filter(Boolean).join(' — ')].filter(Boolean).join(' · ');
+// The small buttons beside a chosen item: its page on the wiki and, for a name the database does not have, the
+// fill from the wiki. `more` is the button that takes it out.
+const itemTools = (path, name, known, more) =>
+  `${known ? '' : `<button class="icon txt" data-act="wiki-fill" data-fill="${path}" title="${t('Fill from bg3.wiki')}">Wiki</button>`}
+   <button class="icon" data-act="wiki" data-n="${esc(name)}" title="${t('Open the wiki page')}">↗</button>${more || ''}`;
+// What the chosen item is and does, under its button: nothing is cut from it.
+const itemFx = (it) => (it ? `<p class="slot-fx"><b>${esc([it.t, it.d].filter(Boolean).join(' · '))}</b>${itemEffect(it) ? ' ' + esc(itemEffect(it)) : ''}</p>` : '');
 
 function gearAct(b, act) {
   const g = b.gear[act];
   const idx = ACTS.findIndex(([k]) => k === act);
   const groups = SLOT_GROUPS.map(([title, slots]) =>
     `<h3 class="group">${t(title)}</h3><div class="slots">${slots.map(([k, label]) => slotCard(g.slots[k], `gear.${act}.slots.${k}`, label)).join('')}</div>`).join('');
-  const alts = g.alts.map((a, i) =>
-    `<div class="alt">
-      <select data-path="gear.${act}.alts.${i}.slot" data-rerender aria-label="${t('Slot')}">${SLOTS.map(([k, label]) => opt(k, t(label), a.slot)).join('')}</select>
-      <span class="with-btn">${nameInput(`gear.${act}.alts.${i}.name`, a.name, t('Item name'), '', a.slot)}${browseButton(`gear.${act}.alts.${i}`, a.slot)}${wikiButtons(`gear.${act}.alts.${i}`)}</span>
-      <textarea rows="1" data-path="gear.${act}.alts.${i}.where" placeholder="${t('Location — how to get it')}">${esc(a.where)}</textarea>
-      <textarea rows="1" data-path="gear.${act}.alts.${i}.note" placeholder="${t('When to use it')}">${esc(a.note)}</textarea>
+  const alts = g.alts.map((a, i) => {
+    const path = `gear.${act}.alts.${i}`;
+    const known = ITEM_BY_NAME.get(norm(a.name));
+    return `<div class="alt r-${known ? known.r : ''}">
+      <span class="slot-label">${t(SLOT_LABEL[a.slot] || '')}</span>
+      <span class="with-btn">${slotButton('picker-open', `data-fill="${path}" data-slot="${a.slot}"`, a.name, a.name ? pic(known ? known.i : '', 'pic small') : '')}${a.name ? itemTools(path, a.name, known) : ''}</span>
       <button class="icon x" data-act="alt-del" data-i="${i}" title="${t('Remove')}">×</button>
-    </div>`).join('');
+      ${itemFx(known)}
+      <div class="alt-notes"><textarea rows="1" data-path="${path}.where" placeholder="${t('Location — how to get it')}">${esc(a.where)}</textarea>
+        <textarea rows="1" data-path="${path}.note" placeholder="${t('When to use it')}">${esc(a.note)}</textarea></div>
+    </div>`;
+  }).join('');
   return `<div class="gear-tools">
       ${idx > 0 ? `<button class="btn tiny" data-act="gear-copy-prev">${t('Copy gear from {act}', { act: t(ACTS[idx - 1][1]) })}</button>` : ''}
       <button class="btn tiny" data-act="gear-clear">${t('Clear this act')}</button>
-      <span class="muted">${t('<em>Browse</em> lists the items this build can use in a slot. <em>Wiki</em> pulls rarity and location for a name you typed. "Where to find" uses the format <em>Location — how to get it</em>.')}</span>
+      <span class="muted">${t('Click a slot to see the items this build can use in it, each with its picture, what it does and what it changes in the numbers. "Where to find" uses the format <em>Location — how to get it</em>.')}</span>
     </div>
     ${groups}
     <h3 class="group">${t('Alternatives for this act')}</h3>
     <p class="muted">${t('Backup options for a slot: what to wear until you get the main item, or the swap for a variant of the build.')}</p>
-    <div class="alts">${alts || `<p class="muted">${t('No alternatives yet.')}</p>`}</div>
-    <button class="btn tiny" data-act="alt-add">${t('+ alternative')}</button>`;
+    <div class="alts">${alts}<div class="alt-new">${slotButton('alt-new-open', '', '', '', t('— choose the slot and the item —'))}</div></div>`;
 }
 
 function slotCard(s, path, label) {
+  const slot = path.split('.').pop();
   const known = ITEM_BY_NAME.get(norm(s.name));
-  return `<div class="slot r-${esc(s.rarity)}${s.got ? ' got' : ''}">
+  const rarity = known ? known.r : s.rarity;
+  const more = `<button class="icon x" data-act="slot-clear" data-fill="${path}" title="${t('Remove')}">×</button>`;
+  return `<div class="slot r-${esc(rarity)}${s.got ? ' got' : ''}">
     <div class="slot-head">
-      ${known ? pic(known.i, 'pic small') : ''}<span class="slot-label">${t(label)}</span>
-      <select class="rar" data-path="${path}.rarity" data-rerender aria-label="${t('Rarity')}">${RARITIES.map(([v, l]) => opt(v, t(l), s.rarity)).join('')}</select>
-      <label class="chk" title="${t('Tick once you have the item')}"><input type="checkbox" data-path="${path}.got" data-rerender${s.got ? ' checked' : ''}> ${t('obtained')}</label>
+      <span class="slot-label">${t(label)}</span>
+      ${rarity ? `<span class="rar">${esc(rarityLabel(rarity))}</span>` : ''}
+      ${s.name ? `<label class="chk" title="${t('Tick once you have the item')}"><input type="checkbox" data-path="${path}.got" data-rerender${s.got ? ' checked' : ''}> ${t('obtained')}</label>` : ''}
     </div>
-    <span class="with-btn">${nameInput(path + '.name', s.name, t('Item name'), 'item', path.split('.').pop())}${browseButton(path, path.split('.').pop())}${wikiButtons(path)}</span>
-    <textarea rows="1" data-path="${path}.where" placeholder="${t('Location — how to get it')}">${esc(s.where)}</textarea>
-    <textarea rows="1" data-path="${path}.note" placeholder="${t('Note (optional)')}">${esc(s.note)}</textarea>
+    <span class="with-btn">${slotButton('picker-open', `data-fill="${path}" data-slot="${slot}"`, s.name, s.name ? pic(known ? known.i : '', 'pic small') : '')}${s.name ? itemTools(path, s.name, known, more) : ''}</span>
+    ${itemFx(known)}
+    ${s.name || s.where || s.note ? `<textarea rows="1" data-path="${path}.where" placeholder="${t('Location — how to get it')}">${esc(s.where)}</textarea>
+    <textarea rows="1" data-path="${path}.note" placeholder="${t('Note (optional)')}">${esc(s.note)}</textarea>` : ''}
   </div>`;
 }
 
-function simpleList(b, key, phName, phNote, suggest) {
+// What the database says of a name of one of the two lists: an item, or a consumable.
+function listInfo(name, key) {
+  const c = CONSUMABLE_BY_NAME.get(norm(name));
+  const it = ITEM_BY_NAME.get(norm(name));
+  const item = () => it && { n: it.n, i: it.i, r: it.r, kind: [it.t, it.d].filter(Boolean).join(' · '), fx: itemEffect(it), where: itemFound(it) };
+  const cons = () => c && { n: c.n, i: c.i, r: c.r, kind: [c.t, c.du, c.uc].filter(Boolean).join(' · '), fx: c.x || '', where: c.h || '' };
+  return (key === 'consumables' ? cons() || item() : item() || cons()) || null;
+}
+// Setup items and consumables: what was chosen, each with its picture and what it does, and one button that opens
+// the list to choose from.
+function itemList(b, key, phNote) {
   const rows = b[key].map((x, i) => {
-    const known = suggest === 'consumable' ? CONSUMABLE_BY_NAME.get(norm(x.name)) : null;
-    return `<div class="li"><span class="with-btn">${nameInput(`${key}.${i}.name`, x.name, phName, '', suggest)}${wikiButtons(`${key}.${i}`)}</span>
-      <textarea rows="1" data-path="${key}.${i}.note" placeholder="${phNote}">${esc(x.note)}</textarea>
-      <button class="icon x" data-act="list-del" data-list="${key}" data-i="${i}" title="${t('Remove')}">×</button>
-      ${known ? `<p class="li-fx">${pic(known.i, 'pic small')}<span><b>${esc(known.t)}</b> · ${esc(known.x)}${known.du ? ' · ' + esc(known.du) : ''}</span></p>` : ''}</div>`;
+    const info = listInfo(x.name, key);
+    return `<div class="li r-${info ? info.r : ''}">
+      <div class="li-head">${pic(info ? info.i : '', 'pic small')}<div class="li-name"><b>${esc(x.name)}</b>${info && info.kind ? `<span>${esc(info.kind)}</span>` : ''}</div>
+        <span class="with-btn">${itemTools(`${key}.${i}`, x.name, info, `<button class="icon x" data-act="list-del" data-list="${key}" data-i="${i}" title="${t('Remove')}">×</button>`)}</span></div>
+      ${info && info.fx ? `<p class="li-fx">${esc(info.fx)}</p>` : ''}${info && info.where ? `<small class="li-where">${esc(info.where)}</small>` : ''}
+      <textarea rows="1" data-path="${key}.${i}.note" placeholder="${phNote}">${esc(x.note)}</textarea></div>`;
   }).join('');
-  return `<div class="list">${rows}</div><button class="btn tiny" data-act="list-add" data-list="${key}">${t('+ add')}</button>`;
+  return `<div class="list">${rows}</div>${slotButton('list-open', `data-list="${key}"`, '', '', b[key].length ? t('— add or remove —') : t('— choose —'))}`;
 }

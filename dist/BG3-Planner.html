@@ -1070,6 +1070,45 @@ button.brand small { font: 400 11px var(--sans); letter-spacing: 0; color: var(-
 .home-list { grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr)); max-height: none; }
 .home-notes ul { margin: 0 0 10px; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
 @media (max-width: 620px) { .home-hero { padding: 22px 18px; } .home-hero h1 { font-size: 28px; } }
+
+/* the summary of the step by step: what of the creation is still open */
+.wiz-open { margin: 6px 0 4px; }
+.wiz-left { margin: 6px 0 10px; padding-left: 18px; display: grid; gap: 3px; font-size: 13px; color: var(--muted); }
+.wiz-bar.levels-bar { margin-top: 0; }
+
+/* ---------- an item is chosen from a list, with its picture: gear slots, alternatives, setup items, consumables ---------- */
+.with-btn > .pslot { flex: 1; min-width: 0; width: auto; }
+.slot .pslot b, .alt .pslot b { font-weight: 600; color: var(--rc, var(--text)); overflow-wrap: anywhere; }
+.slot.r- .pslot b { color: var(--text); }
+.slot.got .pslot b { text-decoration: line-through; text-decoration-color: var(--muted); }
+.slot .rar { padding: 0; font: 600 11px var(--sans); }
+.slot-fx { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--text); opacity: .88; }
+.slot-fx b { color: var(--muted); font-weight: 600; margin-right: 2px; }
+.alt { grid-template-columns: 150px minmax(0, 1fr) 32px; border-left: 3px solid var(--rc, var(--line)); }
+.alt > .slot-label { grid-column: 1; grid-row: 1; align-self: center; margin: 0; }
+.alt > .with-btn { grid-column: 2; grid-row: 1; }
+.alt > .icon.x { grid-column: 3; grid-row: 1; }
+.alt > .slot-fx, .alt > .alt-notes { grid-column: 1 / -1; }
+.alt-notes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.alt-new { max-width: 420px; }
+@media (max-width: 700px) {
+  .alt { grid-template-columns: minmax(0, 1fr) 32px; }
+  .alt > .icon.x { grid-column: 2; }
+  .alt > .with-btn { grid-column: 1 / -1; grid-row: 2; }
+  .alt-notes { grid-template-columns: minmax(0, 1fr); }
+}
+.li { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 8px; background: var(--panel-2); border: 1px solid var(--line-soft); border-left: 3px solid var(--rc, var(--line)); border-radius: 8px; }
+.li > textarea { grid-column: 1 / -1; grid-row: auto; }
+.li-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.li-head .pic.small { width: 34px; height: 34px; flex: none; }
+.li-name { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.li-name b { font-weight: 600; color: var(--rc, var(--text)); overflow-wrap: anywhere; }
+.li-name span { font-size: 12px; color: var(--muted); }
+.li-head .with-btn { flex: none; }
+.li-fx { display: block; margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--text); opacity: .88; }
+.li-where { font-size: 12px; color: var(--muted); }
+.list + .pslot { max-width: 420px; }
+.pick-row.custom { border-style: dashed; }
 </style>
 </head>
 <body>
@@ -1144,7 +1183,6 @@ button.brand small { font: 400 11px var(--sans); letter-spacing: 0; color: var(-
   </div>
 
   <div class="toast" id="toast"></div>
-  <datalist id="dl-wiki"></datalist>
   <datalist id="dl-chars">
     <option value="Custom (Tav)"><option value="The Dark Urge"><option value="Astarion"><option value="Gale">
     <option value="Karlach"><option value="Lae'zel"><option value="Shadowheart"><option value="Wyll">
@@ -1865,7 +1903,6 @@ window.BG3_I18N = {
     'Variants and notes': 'Variantes e anotações',
     'Damage per turn': 'Dano por turno',
     'What this level gives and what it asks you to choose.': 'O que este nível dá e o que ele pede para escolher.',
-    'What is set and what is still open. Gear, consumables and notes are planned in the Build Planner.': 'O que já está definido e o que falta. Equipamento, consumíveis e anotações são planejados no Build Planner.',
 
     // short names in the section menu
     'Check': 'Verificação',
@@ -2534,6 +2571,26 @@ window.BG3_I18N = {
     '{n} of yours': '{n} suas',
     '{n} parties': '{n} parties',
     '{n} ready-made': '{n} prontas',
+
+    // step by step: the summary
+    'Everything of the creation is chosen.': 'Tudo da criação está escolhido.',
+    'Still open in the creation': 'Ainda em aberto na criação',
+    'The levels from 2 to 12 are chosen in the Build Planner, in "Level progression": "Level up step by step" walks through them one at a time. Gear, consumables and notes are there too.': 'Os níveis de 2 a 12 são escolhidos no Build Planner, em "Progressão de níveis": "Subir de nível passo a passo" passa por eles um de cada vez. Equipamento, consumíveis e notas também ficam lá.',
+    'What is set and what is still open. The levels after the first, gear, consumables and notes are planned in the Build Planner.': 'O que está definido e o que ainda falta. Os níveis depois do primeiro, equipamento, consumíveis e notas são planejados no Build Planner.',
+
+    // items chosen from a list
+    'Alternative for this act': 'Alternativa para este Act',
+    'Choose the slot; the items for it open next.': 'Escolha o slot; os itens dele abrem em seguida.',
+    'Chosen': 'Escolhidos',
+    'Click a slot to see the items this build can use in it, each with its picture, what it does and what it changes in the numbers. "Where to find" uses the format <em>Location — how to get it</em>.': 'Clique em um slot para ver os itens que esta build pode usar nele, cada um com a foto, o que faz e o que muda nos números. "Onde encontrar" usa o formato <em>Local — como obter</em>.',
+    'It is not in the list: it goes in by its name, with no picture and no effect on the numbers.': 'Não está na lista: entra só pelo nome, sem foto e sem efeito nos números.',
+    'Tick the elixirs, potions, coatings, arrows and grenades the build uses. A name that is not in the list can be typed in the search and added as it is.': 'Marque os elixirs, potions, coatings, arrows e grenades que a build usa. Um nome que não está na lista pode ser digitado na busca e adicionado como está.',
+    'Tick the items the build puts on or uses before a fight for what they leave behind. A name that is not in the list can be typed in the search and added as it is.': 'Marque os itens que a build equipa ou usa antes da luta pelo efeito que deixam. Um nome que não está na lista pode ser digitado na busca e adicionado como está.',
+    'Use "{name}" as typed': 'Usar "{name}" como digitado',
+    'What it is for': 'Para que serve',
+    '{n} chosen': '{n} escolhidos',
+    '— add or remove —': '— adicionar ou remover —',
+    '— choose the slot and the item —': '— escolha o slot e o item —',
 
     // dialogs and toasts
     'Cancel': 'Cancelar',
@@ -12552,7 +12609,7 @@ window.BG3_DATA_DATES = {
 // The scripts are plain (not modules) so the planner also runs from a file opened directly; they share the global scope.
 'use strict';
 
-const APP_VERSION = '4.4';
+const APP_VERSION = '4.5';
 const STORE_KEY = 'bg3planner.v1';
 const PRESETS = window.BG3_PRESETS || [];
 const I18N = window.BG3_I18N || {};
@@ -12710,7 +12767,7 @@ function normalizeBuild(src) {
     b.gear[k].alts = Array.isArray(a.alts) ? a.alts.map((x) => ({ slot: x.slot || 'head', name: x.name || '', where: x.where || '', note: x.note || '' })) : [];
   });
   ['setup', 'consumables'].forEach((k) => {
-    b[k] = Array.isArray(s[k]) ? s[k].map((x) => ({ name: x.name || '', note: x.note || '' })) : [];
+    b[k] = Array.isArray(s[k]) ? s[k].map((x) => ({ name: String(x.name || '').trim(), note: x.note || '' })).filter((x) => x.name) : [];
   });
   if (s.permanent && typeof s.permanent === 'object') {
     Object.keys(s.permanent).forEach((k) => { const v = s.permanent[k]; if (v && v.on) b.permanent[k] = { on: true, ab: v.ab || '', extra: !!v.extra, got: !!v.got }; });
@@ -12982,8 +13039,8 @@ function buildEditor(b) {
 
     ${sec('extras', () => `<section class="card">
       <div class="grid g2">
-        <div><h2>${t('Setup items')}</h2>${simpleList(b, 'setup', t('Item'), t('What it is for / where to get it'))}</div>
-        <div><h2>${t('Consumables')}</h2>${simpleList(b, 'consumables', t('Elixir, potion, arrow…'), t('Note'), 'consumable')}</div>
+        <div><h2>${t('Setup items')}</h2>${itemList(b, 'setup', t('What it is for'))}</div>
+        <div><h2>${t('Consumables')}</h2>${itemList(b, 'consumables', t('Note'))}</div>
       </div>
     </section>`)}
 
@@ -13158,65 +13215,83 @@ function skillsPicker(b) {
     <p class="muted">${t('The number is the bonus to checks with that skill at level 1: the ability modifier, plus the +2 proficiency bonus when you are proficient. Expertise is chosen in the level table, at the levels that grant it.')}</p>`;
 }
 
-const wikiButtons = (fillPath) =>
-  `<button class="icon txt" data-act="wiki-fill" data-fill="${fillPath}" title="${t('Fill from bg3.wiki')}">Wiki</button>
-   <button class="icon" data-act="wiki" title="${t('Open the wiki page')}">↗</button>`;
-const browseButton = (fillPath, slot) => (ITEMS.length
-  ? `<button class="icon txt" data-act="picker-open" data-fill="${fillPath}" data-slot="${slot}" title="${t('Browse the items this build can use in this slot')}">${t('Browse')}</button>` : '');
-// A name field. With a slot it suggests items of that slot from the local database while typing;
-// without one (setup items, consumables) it suggests page names from the wiki.
-const nameInput = (path, value, ph, cls, slot) => (slot && (slot !== 'consumable' || CONSUMABLES.length)
-  ? `<input type="text" class="${cls || ''}" autocomplete="off" data-suggest="${slot}" data-path="${path}" value="${esc(value)}" placeholder="${ph}">`
-  : `<input type="text" class="${cls || ''} wiki-name" list="dl-wiki" autocomplete="off" data-path="${path}" value="${esc(value)}" placeholder="${ph}">`);
+// What an item of the database does, in one text: its passives, or its description.
+const itemEffect = (it) => (it.ps || []).map((p) => p[1] || p[0]).join(' ') || it.x || '';
+const itemFound = (it) => [it.a ? t('Act {n}', { n: it.a }) : '', [it.l, it.h].filter(Boolean).join(' — ')].filter(Boolean).join(' · ');
+// The small buttons beside a chosen item: its page on the wiki and, for a name the database does not have, the
+// fill from the wiki. `more` is the button that takes it out.
+const itemTools = (path, name, known, more) =>
+  `${known ? '' : `<button class="icon txt" data-act="wiki-fill" data-fill="${path}" title="${t('Fill from bg3.wiki')}">Wiki</button>`}
+   <button class="icon" data-act="wiki" data-n="${esc(name)}" title="${t('Open the wiki page')}">↗</button>${more || ''}`;
+// What the chosen item is and does, under its button: nothing is cut from it.
+const itemFx = (it) => (it ? `<p class="slot-fx"><b>${esc([it.t, it.d].filter(Boolean).join(' · '))}</b>${itemEffect(it) ? ' ' + esc(itemEffect(it)) : ''}</p>` : '');
 
 function gearAct(b, act) {
   const g = b.gear[act];
   const idx = ACTS.findIndex(([k]) => k === act);
   const groups = SLOT_GROUPS.map(([title, slots]) =>
     `<h3 class="group">${t(title)}</h3><div class="slots">${slots.map(([k, label]) => slotCard(g.slots[k], `gear.${act}.slots.${k}`, label)).join('')}</div>`).join('');
-  const alts = g.alts.map((a, i) =>
-    `<div class="alt">
-      <select data-path="gear.${act}.alts.${i}.slot" data-rerender aria-label="${t('Slot')}">${SLOTS.map(([k, label]) => opt(k, t(label), a.slot)).join('')}</select>
-      <span class="with-btn">${nameInput(`gear.${act}.alts.${i}.name`, a.name, t('Item name'), '', a.slot)}${browseButton(`gear.${act}.alts.${i}`, a.slot)}${wikiButtons(`gear.${act}.alts.${i}`)}</span>
-      <textarea rows="1" data-path="gear.${act}.alts.${i}.where" placeholder="${t('Location — how to get it')}">${esc(a.where)}</textarea>
-      <textarea rows="1" data-path="gear.${act}.alts.${i}.note" placeholder="${t('When to use it')}">${esc(a.note)}</textarea>
+  const alts = g.alts.map((a, i) => {
+    const path = `gear.${act}.alts.${i}`;
+    const known = ITEM_BY_NAME.get(norm(a.name));
+    return `<div class="alt r-${known ? known.r : ''}">
+      <span class="slot-label">${t(SLOT_LABEL[a.slot] || '')}</span>
+      <span class="with-btn">${slotButton('picker-open', `data-fill="${path}" data-slot="${a.slot}"`, a.name, a.name ? pic(known ? known.i : '', 'pic small') : '')}${a.name ? itemTools(path, a.name, known) : ''}</span>
       <button class="icon x" data-act="alt-del" data-i="${i}" title="${t('Remove')}">×</button>
-    </div>`).join('');
+      ${itemFx(known)}
+      <div class="alt-notes"><textarea rows="1" data-path="${path}.where" placeholder="${t('Location — how to get it')}">${esc(a.where)}</textarea>
+        <textarea rows="1" data-path="${path}.note" placeholder="${t('When to use it')}">${esc(a.note)}</textarea></div>
+    </div>`;
+  }).join('');
   return `<div class="gear-tools">
       ${idx > 0 ? `<button class="btn tiny" data-act="gear-copy-prev">${t('Copy gear from {act}', { act: t(ACTS[idx - 1][1]) })}</button>` : ''}
       <button class="btn tiny" data-act="gear-clear">${t('Clear this act')}</button>
-      <span class="muted">${t('<em>Browse</em> lists the items this build can use in a slot. <em>Wiki</em> pulls rarity and location for a name you typed. "Where to find" uses the format <em>Location — how to get it</em>.')}</span>
+      <span class="muted">${t('Click a slot to see the items this build can use in it, each with its picture, what it does and what it changes in the numbers. "Where to find" uses the format <em>Location — how to get it</em>.')}</span>
     </div>
     ${groups}
     <h3 class="group">${t('Alternatives for this act')}</h3>
     <p class="muted">${t('Backup options for a slot: what to wear until you get the main item, or the swap for a variant of the build.')}</p>
-    <div class="alts">${alts || `<p class="muted">${t('No alternatives yet.')}</p>`}</div>
-    <button class="btn tiny" data-act="alt-add">${t('+ alternative')}</button>`;
+    <div class="alts">${alts}<div class="alt-new">${slotButton('alt-new-open', '', '', '', t('— choose the slot and the item —'))}</div></div>`;
 }
 
 function slotCard(s, path, label) {
+  const slot = path.split('.').pop();
   const known = ITEM_BY_NAME.get(norm(s.name));
-  return `<div class="slot r-${esc(s.rarity)}${s.got ? ' got' : ''}">
+  const rarity = known ? known.r : s.rarity;
+  const more = `<button class="icon x" data-act="slot-clear" data-fill="${path}" title="${t('Remove')}">×</button>`;
+  return `<div class="slot r-${esc(rarity)}${s.got ? ' got' : ''}">
     <div class="slot-head">
-      ${known ? pic(known.i, 'pic small') : ''}<span class="slot-label">${t(label)}</span>
-      <select class="rar" data-path="${path}.rarity" data-rerender aria-label="${t('Rarity')}">${RARITIES.map(([v, l]) => opt(v, t(l), s.rarity)).join('')}</select>
-      <label class="chk" title="${t('Tick once you have the item')}"><input type="checkbox" data-path="${path}.got" data-rerender${s.got ? ' checked' : ''}> ${t('obtained')}</label>
+      <span class="slot-label">${t(label)}</span>
+      ${rarity ? `<span class="rar">${esc(rarityLabel(rarity))}</span>` : ''}
+      ${s.name ? `<label class="chk" title="${t('Tick once you have the item')}"><input type="checkbox" data-path="${path}.got" data-rerender${s.got ? ' checked' : ''}> ${t('obtained')}</label>` : ''}
     </div>
-    <span class="with-btn">${nameInput(path + '.name', s.name, t('Item name'), 'item', path.split('.').pop())}${browseButton(path, path.split('.').pop())}${wikiButtons(path)}</span>
-    <textarea rows="1" data-path="${path}.where" placeholder="${t('Location — how to get it')}">${esc(s.where)}</textarea>
-    <textarea rows="1" data-path="${path}.note" placeholder="${t('Note (optional)')}">${esc(s.note)}</textarea>
+    <span class="with-btn">${slotButton('picker-open', `data-fill="${path}" data-slot="${slot}"`, s.name, s.name ? pic(known ? known.i : '', 'pic small') : '')}${s.name ? itemTools(path, s.name, known, more) : ''}</span>
+    ${itemFx(known)}
+    ${s.name || s.where || s.note ? `<textarea rows="1" data-path="${path}.where" placeholder="${t('Location — how to get it')}">${esc(s.where)}</textarea>
+    <textarea rows="1" data-path="${path}.note" placeholder="${t('Note (optional)')}">${esc(s.note)}</textarea>` : ''}
   </div>`;
 }
 
-function simpleList(b, key, phName, phNote, suggest) {
+// What the database says of a name of one of the two lists: an item, or a consumable.
+function listInfo(name, key) {
+  const c = CONSUMABLE_BY_NAME.get(norm(name));
+  const it = ITEM_BY_NAME.get(norm(name));
+  const item = () => it && { n: it.n, i: it.i, r: it.r, kind: [it.t, it.d].filter(Boolean).join(' · '), fx: itemEffect(it), where: itemFound(it) };
+  const cons = () => c && { n: c.n, i: c.i, r: c.r, kind: [c.t, c.du, c.uc].filter(Boolean).join(' · '), fx: c.x || '', where: c.h || '' };
+  return (key === 'consumables' ? cons() || item() : item() || cons()) || null;
+}
+// Setup items and consumables: what was chosen, each with its picture and what it does, and one button that opens
+// the list to choose from.
+function itemList(b, key, phNote) {
   const rows = b[key].map((x, i) => {
-    const known = suggest === 'consumable' ? CONSUMABLE_BY_NAME.get(norm(x.name)) : null;
-    return `<div class="li"><span class="with-btn">${nameInput(`${key}.${i}.name`, x.name, phName, '', suggest)}${wikiButtons(`${key}.${i}`)}</span>
-      <textarea rows="1" data-path="${key}.${i}.note" placeholder="${phNote}">${esc(x.note)}</textarea>
-      <button class="icon x" data-act="list-del" data-list="${key}" data-i="${i}" title="${t('Remove')}">×</button>
-      ${known ? `<p class="li-fx">${pic(known.i, 'pic small')}<span><b>${esc(known.t)}</b> · ${esc(known.x)}${known.du ? ' · ' + esc(known.du) : ''}</span></p>` : ''}</div>`;
+    const info = listInfo(x.name, key);
+    return `<div class="li r-${info ? info.r : ''}">
+      <div class="li-head">${pic(info ? info.i : '', 'pic small')}<div class="li-name"><b>${esc(x.name)}</b>${info && info.kind ? `<span>${esc(info.kind)}</span>` : ''}</div>
+        <span class="with-btn">${itemTools(`${key}.${i}`, x.name, info, `<button class="icon x" data-act="list-del" data-list="${key}" data-i="${i}" title="${t('Remove')}">×</button>`)}</span></div>
+      ${info && info.fx ? `<p class="li-fx">${esc(info.fx)}</p>` : ''}${info && info.where ? `<small class="li-where">${esc(info.where)}</small>` : ''}
+      <textarea rows="1" data-path="${key}.${i}.note" placeholder="${phNote}">${esc(x.note)}</textarea></div>`;
   }).join('');
-  return `<div class="list">${rows}</div><button class="btn tiny" data-act="list-add" data-list="${key}">${t('+ add')}</button>`;
+  return `<div class="list">${rows}</div>${slotButton('list-open', `data-list="${key}"`, '', '', b[key].length ? t('— add or remove —') : t('— choose —'))}`;
 }
 </script>
   <script>
@@ -13654,19 +13729,6 @@ async function wikiItem(name) {
     desc: cut(f('description'), 240),
   };
 }
-let suggestTimer = 0;
-const suggestCache = {};
-function suggest(el) {
-  const q = norm(el.value);
-  clearTimeout(suggestTimer);
-  if (q.length < 3) return;
-  suggestTimer = setTimeout(async () => {
-    try {
-      const list = suggestCache[q] || (suggestCache[q] = await wikiSuggest(q));
-      $('#dl-wiki').innerHTML = list.map((x) => `<option value="${esc(x)}">`).join('');
-    } catch (err) { /* offline: the field keeps working as free text */ }
-  }, 220);
-}
 </script>
   <script>
 // The printable sheet used to export a build as PDF.
@@ -13999,7 +14061,12 @@ function pickerList() {
       ${effect ? `<small class="fx">${esc(effect)}</small>` : ''}<small>${esc(where)}</small></button>`;
   }).join('');
   $('#picker-count').textContent = t('{n} items', { n: list.length }) + (list.length > PICKER_MAX ? ' · ' + t('showing the first {n}, type to narrow it down', { n: PICKER_MAX }) : '');
-  $('#picker-list').innerHTML = rows || `<p class="muted">${ranked ? t('Nothing in this slot stands out for that goal. Try another goal or "All".') : t('No items match. Try turning off a filter.')}</p>`;
+  // a name the item list does not have can still go in the slot, as it is typed
+  const typed = picker.q.trim();
+  const custom = typed && !ITEM_BY_NAME.has(norm(typed))
+    ? `<button class="pick-row custom" data-act="picker-choose" data-custom="1" data-n="${esc(typed)}">${pic('', 'pic small')}<b>${esc(t('Use "{name}" as typed', { name: typed }))}</b>
+      <small class="fx">${t('It is not in the list: it goes in by its name, with no picture and no effect on the numbers.')}</small></button>` : '';
+  $('#picker-list').innerHTML = (rows || `<p class="muted">${ranked ? t('Nothing in this slot stands out for that goal. Try another goal or "All".') : t('No items match. Try turning off a filter.')}</p>`) + custom;
   $$('#picker-box [data-mode]').forEach((el) => el.classList.toggle('on', el.dataset.mode === picker.mode));
 }
 function openPicker(path, slot) {
@@ -14288,79 +14355,6 @@ function renderSpells() {
     </div>
     <div class="lib-checks">${libCheck('conc', f.conc, t('Concentration'))}${libCheck('ritual', f.ritual, t('Ritual'))}</div>`);
 }
-</script>
-  <script>
-// Suggestions under an item field while typing: matching items from the local database for that slot.
-// Picking one fills the name, rarity and where to find it. The Browse button stays as the full list.
-'use strict';
-
-const SUGGEST_MAX = 8;
-const suggestBox = document.createElement('div');
-suggestBox.className = 'suggest';
-suggestBox.hidden = true;
-document.body.appendChild(suggestBox);
-let suggestFor = null;  // the input the box belongs to
-
-function suggestItems(slot, text) {
-  const q = norm(text);
-  if (q.length < 2) return [];
-  if (slot === 'consumable') {
-    return CONSUMABLES.filter((c) => norm(c.n).includes(q) && norm(c.n) !== q)
-      .sort((a, b) => (norm(b.n).startsWith(q) - norm(a.n).startsWith(q)) || a.n.localeCompare(b.n)).slice(0, SUGGEST_MAX);
-  }
-  const kinds = SLOT_KINDS[slot] || [];
-  return ITEMS.filter((it) => kinds.includes(it.s) && norm(it.n).includes(q) && norm(it.n) !== q)
-    // names that start with what was typed come first, then the rarer items
-    .sort((a, b) => (norm(b.n).startsWith(q) - norm(a.n).startsWith(q)) || RARITY_RANK[b.r] - RARITY_RANK[a.r] || a.n.localeCompare(b.n))
-    .slice(0, SUGGEST_MAX);
-}
-function hideSuggest() {
-  suggestBox.hidden = true;
-  suggestFor = null;
-}
-function showSuggest(input) {
-  const list = suggestItems(input.dataset.suggest, input.value);
-  if (!list.length) { hideSuggest(); return; }
-  suggestFor = input;
-  const consumable = input.dataset.suggest === 'consumable';
-  suggestBox.innerHTML = list.map((it, i) =>
-    `<button class="pick-row r-${it.r}${i === 0 ? ' first' : ''}" data-n="${esc(it.n)}">${pic(it.i, 'pic small')}<b>${esc(it.n)}</b>
-      <span>${esc([it.t, it.d].filter(Boolean).join(' · '))}</span>
-      <small>${esc(consumable ? it.x : [it.a ? t('Act {n}', { n: it.a }) : t('Any act'), it.l].filter(Boolean).join(' · '))}</small></button>`).join('')
-    + `<p class="muted">${t('Enter picks the first one · Esc closes')}</p>`;
-  const r = input.getBoundingClientRect();
-  suggestBox.style.left = Math.max(8, Math.min(r.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - 380)) + 'px';
-  suggestBox.style.top = (r.bottom + window.scrollY + 4) + 'px';
-  suggestBox.hidden = false;
-}
-function chooseSuggestion(name) {
-  const input = suggestFor;
-  const it = input && input.dataset.suggest === 'consumable' ? CONSUMABLE_BY_NAME.get(norm(name)) : ITEM_BY_NAME.get(norm(name));
-  hideSuggest();
-  if (!input || !it) return;
-  const obj = getPath(curBuild(), input.dataset.path.replace(/\.name$/, ''));
-  if (!obj) return;
-  obj.name = it.n;
-  if ('rarity' in obj) obj.rarity = it.r || '';
-  if ('where' in obj) obj.where = [it.l, it.h].filter(Boolean).join(' — ');
-  save();
-  render();
-}
-
-document.addEventListener('input', (e) => { if (e.target.dataset && e.target.dataset.suggest) showSuggest(e.target); });
-document.addEventListener('focusin', (e) => { if (e.target.dataset && e.target.dataset.suggest && e.target.value.trim()) showSuggest(e.target); });
-// mousedown rather than click, so the choice lands before the field loses focus
-suggestBox.addEventListener('mousedown', (e) => {
-  const row = e.target.closest('[data-n]');
-  if (row) { e.preventDefault(); chooseSuggestion(row.dataset.n); }
-});
-document.addEventListener('keydown', (e) => {
-  if (suggestBox.hidden || e.target !== suggestFor) return;
-  if (e.key === 'Escape') hideSuggest();
-  else if (e.key === 'Enter') { e.preventDefault(); chooseSuggestion($('[data-n]', suggestBox).dataset.n); }
-});
-document.addEventListener('focusout', (e) => { if (e.target === suggestFor) setTimeout(() => { if (document.activeElement !== suggestFor) hideSuggest(); }, 120); });
-window.addEventListener('resize', hideSuggest);
 </script>
   <script>
 // A general-purpose dialog, the backup export/import flow, and "add to build" from the Items and Spells tabs.
@@ -16169,24 +16163,32 @@ function preparedSlots(b) {
 
 // ---------- the chooser: a dialog that picks n options out of one or more lists ----------
 // dlg.parts = [{ label, n, min, options: [[name, description]], chosen: [], off: [names that cannot be taken] }]
+// A part can also be `free` (as many as wanted, so the count is only of what is chosen), have a `cap` on the rows
+// shown at once, and take a `custom` name: one typed in the search that is in none of its options.
 function chooserList() {
   const q = norm(dlg.q);
+  const typed = String(dlg.q || '').trim();
   return dlg.parts.map((p, i) => {
-    // an option is [name, description, facts, picture, group]; the last three are optional
+    // an option is [name, description, facts, picture, group, rarity]; the last four are optional
     let group = '';
-    const rows = p.options.filter(([n, d]) => !q || norm(n).includes(q) || norm(d).includes(q)).map(([n, d, facts, img, grp]) => {
+    const list = p.options.filter(([n, d]) => !q || norm(n).includes(q) || norm(d).includes(q));
+    const rows = (p.cap ? list.slice(0, p.cap) : list).map(([n, d, facts, img, grp, rar]) => {
       const off = (p.off || []).includes(n);
       const head = grp && grp !== group ? `<h5 class="choose-sub">${esc(grp)}</h5>` : '';
       group = grp || group;
-      return `${head}<button class="pick-row${off ? ' no' : ''}" data-act="choose-toggle" data-p="${i}" data-n="${esc(n)}"${off ? ' disabled' : ''}>
+      return `${head}<button class="pick-row${rar ? ' r-' + rar : ''}${off ? ' no' : ''}" data-act="choose-toggle" data-p="${i}" data-n="${esc(n)}"${off ? ' disabled' : ''}>
         ${img || ''}<b>${esc(n)}</b>${off ? `<span><em>${t('already chosen')}</em></span>` : facts ? `<span>${esc(facts)}</span>` : ''}${d ? `<small class="fx">${esc(d)}</small>` : ''}</button>`;
     }).join('');
+    const more = p.cap && list.length > p.cap ? `<p class="muted">${t('showing the first {n}, type to narrow it down', { n: p.cap })}</p>` : '';
+    const custom = p.custom && typed && !p.options.some(([n]) => norm(n) === q)
+      ? `<button class="pick-row custom" data-act="choose-toggle" data-p="${i}" data-n="${esc(typed)}" data-custom="1">${pic('', 'pic small')}<b>${esc(t('Use "{name}" as typed', { name: typed }))}</b>
+        <small class="fx">${t('It is not in the list: it goes in by its name, with no picture and no effect on the numbers.')}</small></button>` : '';
     return `<h4 class="choose-head">${esc(p.label)} <span data-count="${i}"></span></h4>
-      <div class="${p.options.every((o) => !o[1]) ? 'choose-grid' : ''}">${rows || `<p class="muted">${t('Nothing matches these filters.')}</p>`}</div>`;
+      <div class="${p.options.every((o) => !o[1]) ? 'choose-grid' : ''}">${rows + more + custom || `<p class="muted">${t('Nothing matches these filters.')}</p>`}</div>`;
   }).join('');
 }
 function chooserSync() {
-  dlg.parts.forEach((p, i) => { const el = $(`[data-count="${i}"]`); if (el) el.textContent = t('{n} of {max}', { n: p.chosen.length, max: p.n }); });
+  dlg.parts.forEach((p, i) => { const el = $(`[data-count="${i}"]`); if (el) el.textContent = p.free ? t('{n} chosen', { n: p.chosen.length }) : t('{n} of {max}', { n: p.chosen.length, max: p.n }); });
   $$('#dlg-list [data-act="choose-toggle"]').forEach((el) => el.classList.toggle('on', dlg.parts[+el.dataset.p].chosen.includes(el.dataset.n)));
   const ok = $('#choose-ok');
   if (ok) ok.disabled = !dlg.parts.every((p) => p.chosen.length >= (p.min == null ? p.n : p.min));
@@ -16482,6 +16484,8 @@ Object.assign(actions, {
   },
   'choose-toggle'(el) {
     const p = dlg.parts[+el.dataset.p];
+    // a name typed in: it becomes an option of the list, chosen
+    if (el.dataset.custom) { p.options.unshift([el.dataset.n, '', '', pic('', 'pic small'), t('Chosen'), '']); p.chosen.push(el.dataset.n); dlg.refresh(); return false; }
     const i = p.chosen.indexOf(el.dataset.n);
     if (i >= 0) p.chosen.splice(i, 1);
     else { if (p.chosen.length >= p.n) p.chosen.shift(); p.chosen.push(el.dataset.n); }
@@ -19853,9 +19857,10 @@ Object.assign(actions, {
 });
 </script>
   <script>
-// Step-by-step character creation, in the order of the game's own screen: origin, race, subrace, class,
-// subclass, background, abilities, skills, the choices of level 1, and a summary. It edits the same build
-// the full planner shows; leaving it at any point keeps what was chosen.
+// Step by step, two walks that are never mixed. The creation of the character, as on the game's own screen:
+// origin, race, subrace, class, subclass, the choices of level 1, background, abilities, skills, and a summary
+// that leads to the Build Planner. And, from the Build Planner once the character is made, one step for each
+// level from 2 to 12. Both edit the same build the full planner shows; leaving at any point keeps what was chosen.
 'use strict';
 
 // [key, title, hint, applies(b)]
@@ -19865,17 +19870,16 @@ const WIZ_STEPS = [
   ['subrace', 'Subrace', 'What the subrace adds on top of the race.', (b) => (RACES[b.creation.race] || []).length > 0],
   ['class', 'Class', 'The class of level 1. It decides the saving throws, the starting proficiencies and the skill list.', () => true],
   ['subclass', 'Subclass', 'This class chooses its subclass at level 1.', (b) => (CLASS_DATA[startingClass(b)] || {}).subclassLevel === 1],
+  ['level1', 'Level 1 choices', 'What the class chooses at level 1: fighting style, cantrips, spells and the like.', (b) => !!startingClass(b)],
   ['background', 'Background', 'The background grants two skills.', () => true],
   ['abilities', 'Abilities', 'Spend 27 points, then give +2 to one ability and +1 to another.', () => true],
   ['skills', 'Skills', 'Skills granted by the choices so far are locked on; pick the rest from the class list.', () => true],
-  ['level1', 'Level 1 choices', 'What the class chooses at level 1: fighting style, cantrips, spells and the like.', (b) => !!startingClass(b)],
-  ['done', 'Summary', 'What is set and what is still open. Gear, consumables and notes are planned in the Build Planner.', () => true],
+  ['done', 'Summary', 'What is set and what is still open. The levels after the first, gear, consumables and notes are planned in the Build Planner.', () => true],
 ];
-// Creation first, then one step per level from 2 to 12 (keys "lv:2" … "lv:12"), then the summary.
-function wizSteps(b) {
-  const creation = WIZ_STEPS.filter((s) => s[3](b));
-  const levels = startingClass(b) ? Array.from({ length: 11 }, (x, k) => ['lv:' + (k + 2), 'Level {n}', 'What this level gives and what it asks you to choose.', null, k + 2]) : [];
-  return [...creation.slice(0, -1), ...levels, creation[creation.length - 1]];
+// The steps of the creation; or, with `levels`, one step for each level from 2 to 12 (keys "lv:2" … "lv:12").
+function wizSteps(b, levels) {
+  if (levels) return Array.from({ length: 11 }, (x, k) => ['lv:' + (k + 2), 'Level {n}', 'What this level gives and what it asks you to choose.', null, k + 2]);
+  return WIZ_STEPS.filter((s) => s[3](b));
 }
 // Whether a step has what it asks for, to mark it in the step bar.
 function wizDone(b, key) {
@@ -19959,13 +19963,20 @@ function wizBody(b, key) {
       ${raceCantripField(b)}`;
   }
   if (key.startsWith('lv:')) return wizLevel(b, Number(key.slice(3)) - 1);
+  // the summary: what is set, and what of the creation is still open, each with the way back to its step
   const s = finalStats(b, 'act1');
+  const open = wizSteps(b).filter((x) => x[0] !== 'done' && !wizDone(b, x[0]));
+  const left = [...buildIssues(b).filter((x) => x.level === 'warn' && x.go.s === 'creation').map((x) => x.text), ...(startingClass(b) ? levelPending(b, 0) : [])];
   return `<label class="field"><span>${t('Build name')}</span><input type="text" data-path="name" value="${esc(b.name)}"></label>
     <dl class="wiz-sum">${[[t('Origin'), c.origin], [t('Race'), raceText(c)], [t('Class'), splitText(b)], [t('Background'), c.background],
       [t('Abilities'), abilLine(b)], [t('Skills'), [...Object.keys(skillState(b).granted), ...skillState(b).chosen].join(', ')],
       [t('Hit points'), s.level ? s.hp : ''], [t('Armour Class'), s.level ? s.ac.act1 : '']].filter((x) => String(x[1]).trim())
       .map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
-    <div id="check-live" class="check">${checkLive(b)}</div>`;
+    ${open.length ? `<h3 class="group">${t('Still open in the creation')}</h3>
+      <div class="lib-row wiz-open">${open.map((x) => `<button class="chip" data-act="wiz-go" data-s="${x[0]}">${t(x[1])} →</button>`).join('')}</div>
+      ${left.length ? `<ul class="wiz-left">${left.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}`
+    : `<p class="okline">${t('Everything of the creation is chosen.')}</p>`}
+    <p class="muted">${t('The levels from 2 to 12 are chosen in the Build Planner, in "Level progression": "Level up step by step" walks through them one at a time. Gear, consumables and notes are there too.')}</p>`;
 }
 
 // One level of the character: its class, what it gives (with the description of each feature), what it
@@ -19992,22 +20003,22 @@ function wizLevel(b, i) {
 }
 
 function wizardView(b) {
-  const steps = wizSteps(b);
-  let i = steps.findIndex((s) => s[0] === state.ui.wizard);
-  if (i < 0) i = 0;
   // levels go in order: the step of a level stays shut while a level before it has something to choose
   const open = firstOpenLevel(b);
+  const asked = String(state.ui.wizard || '');
+  // the walk through the levels, asked for from the Build Planner: only once level 1 is all chosen; until then, the
+  // creation it still belongs to
+  const levels = asked.startsWith('lv:') && !!startingClass(b) && open !== 0;
+  const steps = wizSteps(b, levels);
+  let i = steps.findIndex((s) => s[0] === asked);
+  if (i < 0) i = asked.startsWith('lv:') ? Math.max(0, steps.findIndex((s) => ['class', 'subclass', 'level1'].includes(s[0]) && !wizDone(b, s[0]))) : 0;
   const shut = (s) => !!s && !!s[4] && open >= 0 && s[4] - 1 > open;
   const shutHint = ` disabled title="${t('Finish level {n} first', { n: open + 1 })}"`;
-  if (shut(steps[i])) {
-    const home = (open ? ['lv:' + (open + 1)] : ['level1', 'subclass', 'class']).map((k) => steps.findIndex((s) => s[0] === k)).find((k) => k >= 0);
-    i = home == null ? 0 : home;
-  }
+  if (shut(steps[i])) i = Math.max(0, steps.findIndex((s) => s[0] === 'lv:' + (open + 1)));
   const [key, title, hint, , n] = steps[i];
   const chip = (s, k) => `<button class="${k === i ? 'on' : ''}${wizDone(b, s[0]) && !shut(s) ? ' done' : ''}${s[4] ? ' lv' : ''}" data-act="wiz-go" data-s="${s[0]}"${shut(s) ? shutHint : ''}><i>${s[4] || (s[0] === 'done' ? '✓' : k + 1)}</i>${s[4] ? '' : t(s[1])}</button>`;
   return `<section class="card hero wiz">
-    <div class="wiz-bar">${steps.map((s, k) => (s[4] ? '' : chip(s, k))).join('')}</div>
-    ${steps.some((s) => s[4]) ? `<div class="wiz-bar levels-bar"><span class="lbl">${t('Levels')}</span>${steps.map((s, k) => (s[4] ? chip(s, k) : '')).join('')}</div>` : ''}
+    ${levels ? `<div class="wiz-bar levels-bar"><span class="lbl">${t('Levels')}</span>${steps.map(chip).join('')}</div>` : `<div class="wiz-bar">${steps.map(chip).join('')}</div>`}
     <h1>${t(title, { n })}</h1><p class="muted">${t(hint)}</p>
     ${wizBody(b, key)}
     <div class="modal-btns wiz-nav">
@@ -20577,23 +20588,64 @@ Object.assign(actions, {
   'picker-close'() { closePicker(); return false; },
   'picker-mode'(el) { picker.mode = el.dataset.mode; pickerList(); return false; },
   'picker-choose'(el) {
-    const it = ITEMS.find((x) => x.n === el.dataset.n);
-    const obj = getPath(curBuild(), picker.path);
+    const b = curBuild();
+    const it = el.dataset.custom ? null : ITEMS.find((x) => x.n === el.dataset.n);
+    const { path, slot } = picker;
     closePicker();
-    if (!it || !obj) return false;
-    obj.name = it.n;
-    if ('rarity' in obj) obj.rarity = it.r;
-    if ('where' in obj) obj.where = [it.l, it.h].filter(Boolean).join(' — ');
+    if (!it && !el.dataset.custom) return false;
+    let obj = getPath(b, path);
+    // a new alternative is made by the item chosen for it
+    const alt = /^gear\.(\w+)\.alts\.\d+$/.exec(path);
+    if (!obj && alt) { obj = { slot, name: '', where: '', note: '' }; b.gear[alt[1]].alts.push(obj); }
+    if (!obj) return false;
+    const name = it ? it.n : el.dataset.n;
+    if ('got' in obj && obj.name !== name) obj.got = false;
+    obj.name = name;
+    if ('rarity' in obj) obj.rarity = it ? it.r : '';
+    if ('where' in obj) obj.where = it ? [it.l, it.h].filter(Boolean).join(' — ') : '';
+  },
+  'slot-clear'(el) { const obj = getPath(curBuild(), el.dataset.fill); if (obj) Object.assign(obj, blankSlot()); },
+  // a new alternative: the slot first, then the items of that slot
+  'alt-new-open'() {
+    const act = state.ui.act;
+    openChooser(t('Alternative for this act'), t('Choose the slot; the items for it open next.'),
+      [{ label: t('Slot'), n: 1, options: SLOTS.map(([k, label]) => [t(label), '']) }], (done) => {
+        const slot = (SLOTS.find(([k, label]) => t(label) === done[0].chosen[0]) || [])[0];
+        if (slot) openPicker(`gear.${act}.alts.${curBuild().gear[act].alts.length}`, slot);
+      });
+    return false;
+  },
+  // setup items and consumables: one list to tick from, with what is already chosen at the top
+  'list-open'(el) {
+    const b = curBuild();
+    const key = el.dataset.list;
+    const have = b[key].map((x) => x.name.trim()).filter(Boolean).map((n) => (listInfo(n, key) || { n }).n);
+    const mine = new Set(have.map(norm));
+    const kinds = key === 'consumables' ? ['Elixir', 'Potion', 'Coating', 'Arrow', 'Grenade'] : KINDS.map((k) => k[0]);
+    const all = key === 'consumables'
+      ? CONSUMABLES.slice().sort((x, y) => kinds.indexOf(x.t) - kinds.indexOf(y.t) || x.n.localeCompare(y.n))
+        .map((c) => [c.n, c.x || '', [c.du, c.uc].filter(Boolean).join(' · '), pic(c.i, 'pic small'), c.t + 's', c.r])
+      : ITEMS.slice().sort((x, y) => kinds.indexOf(x.s) - kinds.indexOf(y.s) || RARITY_RANK[y.r] - RARITY_RANK[x.r] || x.n.localeCompare(y.n))
+        .map((it) => [it.n, itemEffect(it), [it.t, it.d, it.a ? t('Act {n}', { n: it.a }) : ''].filter(Boolean).join(' · '), pic(it.i, 'pic small'), t((KINDS.find((k) => k[0] === it.s) || ['', ''])[1]), it.r]);
+    const chosen = have.map((n) => { const info = listInfo(n, key); const o = all.find((x) => x[0] === n); return o ? [o[0], o[1], o[2], o[3], t('Chosen'), o[5]] : [n, info ? info.fx : '', info ? info.kind : '', pic(info ? info.i : '', 'pic small'), t('Chosen'), info ? info.r : '']; });
+    const options = [...chosen, ...all.filter((x) => !mine.has(norm(x[0])))];
+    openChooser(t(key === 'consumables' ? 'Consumables' : 'Setup items'),
+      key === 'consumables' ? t('Tick the elixirs, potions, coatings, arrows and grenades the build uses. A name that is not in the list can be typed in the search and added as it is.')
+        : t('Tick the items the build puts on or uses before a fight for what they leave behind. A name that is not in the list can be typed in the search and added as it is.'),
+      [{ label: t(key === 'consumables' ? 'Consumables' : 'Items'), n: options.length + 99, min: 0, free: true, custom: true, cap: 150, options, chosen: have.slice() }], (done) => {
+        const old = new Map(b[key].map((x) => [norm(x.name), x]));
+        b[key] = done[0].chosen.map((n) => ({ name: n, note: old.has(norm(n)) ? old.get(norm(n)).note : '' }));
+      });
+    return false;
   },
   'open-source'() { const b = curBuild(); if (b && /^https?:\/\//i.test(b.source.trim())) window.open(b.source.trim(), '_blank', 'noopener'); return false; },
   wiki(el) {
-    const input = $('input[type="text"]', el.closest('.with-btn, .pick'));
-    if (input && input.value.trim()) window.open(wikiUrl(input.value), '_blank', 'noopener');
+    if (el.dataset.n) window.open(wikiUrl(el.dataset.n), '_blank', 'noopener');
     return false;
   },
   async 'wiki-fill'(el) {
     const obj = getPath(curBuild(), el.dataset.fill);
-    if (!obj || !obj.name.trim()) { toast(t('Type the item name first')); return false; }
+    if (!obj || !obj.name.trim()) return false;
     toast(t('Checking bg3.wiki…'));
     let info;
     try { info = await wikiItem(obj.name.trim()); } catch (err) { toast(t('Could not reach the wiki. Check your connection.')); return false; }
@@ -20698,13 +20750,7 @@ Object.assign(actions, {
     if (!(await ask(t('Clear every slot and alternative in this act?'), t('Clear act'), true))) return false;
     curBuild().gear[state.ui.act] = blankAct();
   },
-  'alt-add'() {
-    const a = curBuild().gear[state.ui.act].alts;
-    a.push({ slot: 'head', name: '', where: '', note: '' });
-    return { focus: `[data-path="gear.${state.ui.act}.alts.${a.length - 1}.name"]` };
-  },
   'alt-del'(el) { curBuild().gear[state.ui.act].alts.splice(+el.dataset.i, 1); },
-  'list-add'(el) { const k = el.dataset.list; curBuild()[k].push({ name: '', note: '' }); return { focus: `[data-path="${k}.${curBuild()[k].length - 1}.name"]` }; },
   'list-del'(el) { curBuild()[el.dataset.list].splice(+el.dataset.i, 1); },
   'back-party'() { state.ui.tab = 'party'; state.ui.fromParty = false; },
 
@@ -20805,7 +20851,6 @@ document.addEventListener('input', (e) => {
   setPath(target, el.dataset.path, value);
   if (!inParty && el.dataset.path.startsWith('creation.')) creationChanged(target, el.dataset.path, before);
   save();
-  if (el.classList.contains('wiki-name')) suggest(el);
   if (el.hasAttribute('data-rerender')) render();
   else refreshDerived();
 });

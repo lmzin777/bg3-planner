@@ -709,7 +709,6 @@ window.BG3_I18N = {
     'Variants and notes': 'Variantes e anotações',
     'Damage per turn': 'Dano por turno',
     'What this level gives and what it asks you to choose.': 'O que este nível dá e o que ele pede para escolher.',
-    'What is set and what is still open. Gear, consumables and notes are planned in the Build Planner.': 'O que já está definido e o que falta. Equipamento, consumíveis e anotações são planejados no Build Planner.',
 
     // short names in the section menu
     'Check': 'Verificação',
@@ -1378,6 +1377,26 @@ window.BG3_I18N = {
     '{n} of yours': '{n} suas',
     '{n} parties': '{n} parties',
     '{n} ready-made': '{n} prontas',
+
+    // step by step: the summary
+    'Everything of the creation is chosen.': 'Tudo da criação está escolhido.',
+    'Still open in the creation': 'Ainda em aberto na criação',
+    'The levels from 2 to 12 are chosen in the Build Planner, in "Level progression": "Level up step by step" walks through them one at a time. Gear, consumables and notes are there too.': 'Os níveis de 2 a 12 são escolhidos no Build Planner, em "Progressão de níveis": "Subir de nível passo a passo" passa por eles um de cada vez. Equipamento, consumíveis e notas também ficam lá.',
+    'What is set and what is still open. The levels after the first, gear, consumables and notes are planned in the Build Planner.': 'O que está definido e o que ainda falta. Os níveis depois do primeiro, equipamento, consumíveis e notas são planejados no Build Planner.',
+
+    // items chosen from a list
+    'Alternative for this act': 'Alternativa para este Act',
+    'Choose the slot; the items for it open next.': 'Escolha o slot; os itens dele abrem em seguida.',
+    'Chosen': 'Escolhidos',
+    'Click a slot to see the items this build can use in it, each with its picture, what it does and what it changes in the numbers. "Where to find" uses the format <em>Location — how to get it</em>.': 'Clique em um slot para ver os itens que esta build pode usar nele, cada um com a foto, o que faz e o que muda nos números. "Onde encontrar" usa o formato <em>Local — como obter</em>.',
+    'It is not in the list: it goes in by its name, with no picture and no effect on the numbers.': 'Não está na lista: entra só pelo nome, sem foto e sem efeito nos números.',
+    'Tick the elixirs, potions, coatings, arrows and grenades the build uses. A name that is not in the list can be typed in the search and added as it is.': 'Marque os elixirs, potions, coatings, arrows e grenades que a build usa. Um nome que não está na lista pode ser digitado na busca e adicionado como está.',
+    'Tick the items the build puts on or uses before a fight for what they leave behind. A name that is not in the list can be typed in the search and added as it is.': 'Marque os itens que a build equipa ou usa antes da luta pelo efeito que deixam. Um nome que não está na lista pode ser digitado na busca e adicionado como está.',
+    'Use "{name}" as typed': 'Usar "{name}" como digitado',
+    'What it is for': 'Para que serve',
+    '{n} chosen': '{n} escolhidos',
+    '— add or remove —': '— adicionar ou remover —',
+    '— choose the slot and the item —': '— escolha o slot e o item —',
 
     // dialogs and toasts
     'Cancel': 'Cancelar',

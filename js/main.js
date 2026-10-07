@@ -100,23 +100,64 @@ Object.assign(actions, {
   'picker-close'() { closePicker(); return false; },
   'picker-mode'(el) { picker.mode = el.dataset.mode; pickerList(); return false; },
   'picker-choose'(el) {
-    const it = ITEMS.find((x) => x.n === el.dataset.n);
-    const obj = getPath(curBuild(), picker.path);
+    const b = curBuild();
+    const it = el.dataset.custom ? null : ITEMS.find((x) => x.n === el.dataset.n);
+    const { path, slot } = picker;
     closePicker();
-    if (!it || !obj) return false;
-    obj.name = it.n;
-    if ('rarity' in obj) obj.rarity = it.r;
-    if ('where' in obj) obj.where = [it.l, it.h].filter(Boolean).join(' — ');
+    if (!it && !el.dataset.custom) return false;
+    let obj = getPath(b, path);
+    // a new alternative is made by the item chosen for it
+    const alt = /^gear\.(\w+)\.alts\.\d+$/.exec(path);
+    if (!obj && alt) { obj = { slot, name: '', where: '', note: '' }; b.gear[alt[1]].alts.push(obj); }
+    if (!obj) return false;
+    const name = it ? it.n : el.dataset.n;
+    if ('got' in obj && obj.name !== name) obj.got = false;
+    obj.name = name;
+    if ('rarity' in obj) obj.rarity = it ? it.r : '';
+    if ('where' in obj) obj.where = it ? [it.l, it.h].filter(Boolean).join(' — ') : '';
+  },
+  'slot-clear'(el) { const obj = getPath(curBuild(), el.dataset.fill); if (obj) Object.assign(obj, blankSlot()); },
+  // a new alternative: the slot first, then the items of that slot
+  'alt-new-open'() {
+    const act = state.ui.act;
+    openChooser(t('Alternative for this act'), t('Choose the slot; the items for it open next.'),
+      [{ label: t('Slot'), n: 1, options: SLOTS.map(([k, label]) => [t(label), '']) }], (done) => {
+        const slot = (SLOTS.find(([k, label]) => t(label) === done[0].chosen[0]) || [])[0];
+        if (slot) openPicker(`gear.${act}.alts.${curBuild().gear[act].alts.length}`, slot);
+      });
+    return false;
+  },
+  // setup items and consumables: one list to tick from, with what is already chosen at the top
+  'list-open'(el) {
+    const b = curBuild();
+    const key = el.dataset.list;
+    const have = b[key].map((x) => x.name.trim()).filter(Boolean).map((n) => (listInfo(n, key) || { n }).n);
+    const mine = new Set(have.map(norm));
+    const kinds = key === 'consumables' ? ['Elixir', 'Potion', 'Coating', 'Arrow', 'Grenade'] : KINDS.map((k) => k[0]);
+    const all = key === 'consumables'
+      ? CONSUMABLES.slice().sort((x, y) => kinds.indexOf(x.t) - kinds.indexOf(y.t) || x.n.localeCompare(y.n))
+        .map((c) => [c.n, c.x || '', [c.du, c.uc].filter(Boolean).join(' · '), pic(c.i, 'pic small'), c.t + 's', c.r])
+      : ITEMS.slice().sort((x, y) => kinds.indexOf(x.s) - kinds.indexOf(y.s) || RARITY_RANK[y.r] - RARITY_RANK[x.r] || x.n.localeCompare(y.n))
+        .map((it) => [it.n, itemEffect(it), [it.t, it.d, it.a ? t('Act {n}', { n: it.a }) : ''].filter(Boolean).join(' · '), pic(it.i, 'pic small'), t((KINDS.find((k) => k[0] === it.s) || ['', ''])[1]), it.r]);
+    const chosen = have.map((n) => { const info = listInfo(n, key); const o = all.find((x) => x[0] === n); return o ? [o[0], o[1], o[2], o[3], t('Chosen'), o[5]] : [n, info ? info.fx : '', info ? info.kind : '', pic(info ? info.i : '', 'pic small'), t('Chosen'), info ? info.r : '']; });
+    const options = [...chosen, ...all.filter((x) => !mine.has(norm(x[0])))];
+    openChooser(t(key === 'consumables' ? 'Consumables' : 'Setup items'),
+      key === 'consumables' ? t('Tick the elixirs, potions, coatings, arrows and grenades the build uses. A name that is not in the list can be typed in the search and added as it is.')
+        : t('Tick the items the build puts on or uses before a fight for what they leave behind. A name that is not in the list can be typed in the search and added as it is.'),
+      [{ label: t(key === 'consumables' ? 'Consumables' : 'Items'), n: options.length + 99, min: 0, free: true, custom: true, cap: 150, options, chosen: have.slice() }], (done) => {
+        const old = new Map(b[key].map((x) => [norm(x.name), x]));
+        b[key] = done[0].chosen.map((n) => ({ name: n, note: old.has(norm(n)) ? old.get(norm(n)).note : '' }));
+      });
+    return false;
   },
   'open-source'() { const b = curBuild(); if (b && /^https?:\/\//i.test(b.source.trim())) window.open(b.source.trim(), '_blank', 'noopener'); return false; },
   wiki(el) {
-    const input = $('input[type="text"]', el.closest('.with-btn, .pick'));
-    if (input && input.value.trim()) window.open(wikiUrl(input.value), '_blank', 'noopener');
+    if (el.dataset.n) window.open(wikiUrl(el.dataset.n), '_blank', 'noopener');
     return false;
   },
   async 'wiki-fill'(el) {
     const obj = getPath(curBuild(), el.dataset.fill);
-    if (!obj || !obj.name.trim()) { toast(t('Type the item name first')); return false; }
+    if (!obj || !obj.name.trim()) return false;
     toast(t('Checking bg3.wiki…'));
     let info;
     try { info = await wikiItem(obj.name.trim()); } catch (err) { toast(t('Could not reach the wiki. Check your connection.')); return false; }
@@ -221,13 +262,7 @@ Object.assign(actions, {
     if (!(await ask(t('Clear every slot and alternative in this act?'), t('Clear act'), true))) return false;
     curBuild().gear[state.ui.act] = blankAct();
   },
-  'alt-add'() {
-    const a = curBuild().gear[state.ui.act].alts;
-    a.push({ slot: 'head', name: '', where: '', note: '' });
-    return { focus: `[data-path="gear.${state.ui.act}.alts.${a.length - 1}.name"]` };
-  },
   'alt-del'(el) { curBuild().gear[state.ui.act].alts.splice(+el.dataset.i, 1); },
-  'list-add'(el) { const k = el.dataset.list; curBuild()[k].push({ name: '', note: '' }); return { focus: `[data-path="${k}.${curBuild()[k].length - 1}.name"]` }; },
   'list-del'(el) { curBuild()[el.dataset.list].splice(+el.dataset.i, 1); },
   'back-party'() { state.ui.tab = 'party'; state.ui.fromParty = false; },
 
@@ -328,7 +363,6 @@ document.addEventListener('input', (e) => {
   setPath(target, el.dataset.path, value);
   if (!inParty && el.dataset.path.startsWith('creation.')) creationChanged(target, el.dataset.path, before);
   save();
-  if (el.classList.contains('wiki-name')) suggest(el);
   if (el.hasAttribute('data-rerender')) render();
   else refreshDerived();
 });

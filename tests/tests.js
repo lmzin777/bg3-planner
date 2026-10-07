@@ -434,8 +434,8 @@
     eq(keys(b), ['origin', 'race', 'class', 'background', 'abilities', 'skills', 'done']);
     b.creation.race = 'Elf';
     b.levels[0].cls = 'Cleric';
-    eq(keys(b).filter((k) => !k.startsWith('lv:')), ['origin', 'race', 'subrace', 'class', 'subclass', 'background', 'abilities', 'skills', 'level1', 'done']);
-    eq(keys(b).filter((k) => k.startsWith('lv:')).length, 11, 'one step per level from 2 to 12');
+    eq(keys(b), ['origin', 'race', 'subrace', 'class', 'subclass', 'level1', 'background', 'abilities', 'skills', 'done'], 'the choices of level 1 come right after the class; the creation ends in the summary');
+    eq(wizSteps(b, true).map((s) => s[0]), [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => 'lv:' + n), 'the levels are a walk of their own, from the Build Planner');
     eq(['race', 'subrace', 'class', 'subclass', 'abilities'].map((k) => wizDone(b, k)), [true, false, true, false, false]);
     b.levels[0].sub = 'Life Domain';
     Object.assign(b.creation, { subrace: 'Wood Elf', abilities: { str: 13, dex: 10, con: 14, int: 8, wis: 15, cha: 12 }, plus2: 'wis', plus1: 'con' });
@@ -444,7 +444,13 @@
     ok(wizDone(b, 'level1'));
     ok(/Life Domain/.test(wizardView(b)) || true);
     state.ui.wizard = 'class';
-    ok(/wiz-card/.test(wizardView(b)) && /Hit points/.test(wizardView(b)), 'the class step renders its cards');
+    ok(/wiz-card/.test(wizardView(b)) && /Hit points/.test(wizardView(b)) && !/levels-bar/.test(wizardView(b)), 'the class step renders its cards, with no levels to go to yet');
+    state.ui.wizard = 'skills';
+    ok(/data-act="wiz-go" data-s="done"[^>]*>Next/.test(wizardView(b)), 'after the last step of the creation comes the summary');
+    state.ui.wizard = 'done';
+    const summary = wizardView(b);
+    ok(/Still open in the creation/.test(summary) && /class="chip" data-act="wiz-go" data-s="background"/.test(summary) && !/data-s="lv:2"/.test(summary) && /Open in the Build Planner/.test(summary),
+      'the summary says what of the creation is open, each with its way back, and leads to the Build Planner');
     state.ui.wizard = '';
   });
 
@@ -1892,13 +1898,12 @@
     eq(SPELLS.find((s) => s.n === 'Produce Flame: Hurl').og, 'other');
     Object.assign(f, saved);
   });
-  test('consumables are listed with the items and suggested by name', () => {
+  test('consumables are listed with the items', () => {
     const f = libState('items');
     const saved = clone(f);
     Object.assign(f, { q: 'hill giant', kind: 'consumable', type: '', tag: '', rar: [], act: '', build: '' });
     eq(libSorted('items').map((it) => it.n), ['Elixir of Hill Giant Strength']);
     Object.assign(f, saved);
-    eq(suggestItems('consumable', 'cloud gi').map((c) => c.n), ['Elixir of Cloud Giant Strength']);
     ok(CONSUMABLES.filter((c) => c.t === 'Elixir').length > 30, 'elixirs collected');
   });
 
@@ -2171,6 +2176,65 @@
     await click(q('.home-card [data-tab="items"]'), 'the items, from Home');
     eq([state.ui.tab, q('#tabs .nav-group.shut')], ['items', null], 'no menu is left shut by it');
     state.ui.tab = 'builds';
+  });
+
+  flow('items are chosen from a list with their pictures: gear slots, alternatives, setup items and consumables', async () => {
+    const b = build(['Fighter', 'Fighter']);
+    show(b);
+    state.ui.act = 'act1';
+    render();
+    const card = () => q('.slot .pslot[data-slot="head"]').closest('.slot');
+    eq([all('#sec-gear input[type="text"]').length, all('#sec-extras input[type="text"]').length, all('.slot .pslot[data-act="picker-open"]').length, !!q('[data-act="list-add"], [data-act="alt-add"]')],
+      [0, 0, SLOTS.length, false], 'no item is typed into a field: every slot is a button that opens the list');
+    await click(q('.slot .pslot[data-slot="head"]'), 'the Head slot');
+    const first = q('#picker-list .pick-row');
+    ok(first && q('img', first), 'the items of the slot, each with its picture');
+    const name = first.dataset.n;
+    await click(first, 'the first item');
+    const it = ITEM_BY_NAME.get(norm(name));
+    eq([b.gear.act1.slots.head.name, b.gear.act1.slots.head.rarity, !!q('.pslot img', card()), (q('.slot-fx', card()) || {}).textContent.includes(it.t)], [name, it.r, true, true], 'the slot shows the item, its picture and what it does');
+    // a name the list does not have goes in as it is typed
+    await click(q('.slot .pslot[data-slot="head"]'), 'the Head slot again');
+    q('#picker-box [data-picker="q"]').value = 'Helmet of Nowhere';
+    q('#picker-box [data-picker="q"]').dispatchEvent(new Event('input', { bubbles: true }));
+    await wait(60);
+    await click(q('#picker-list .pick-row.custom'), 'the typed name');
+    eq([b.gear.act1.slots.head.name, b.gear.act1.slots.head.rarity, !!q('[data-act="wiki-fill"]', card())], ['Helmet of Nowhere', '', true], 'and can be filled from the wiki');
+    await click(q('[data-act="slot-clear"]', card()), 'take it out');
+    eq(b.gear.act1.slots.head, blankSlot());
+    // an alternative: the slot, then the item
+    await click(q('.pslot[data-act="alt-new-open"]'), 'a new alternative');
+    await pick(t('Ring 1'));
+    const ring = q('#picker-list .pick-row');
+    await click(ring, 'a ring');
+    eq(b.gear.act1.alts.map((a) => [a.slot, a.name]), [['ring1', ring.dataset.n]]);
+    ok(q('.alt .pslot img') && q('.alt .slot-label'), 'the alternative shows its slot and the picture of the item');
+    // consumables: several at once, each kept with its note
+    b.consumables = [{ name: 'Elixir of Bloodlust', note: 'every long rest' }, { name: 'Bottle of Nothing', note: 'mine' }];
+    render();
+    ok(q('#sec-extras .li img') && /Elixir/.test(q('#sec-extras .li-head').textContent) && q('#sec-extras .li-fx'), 'a chosen consumable shows its picture, its kind and what it does');
+    await click(q('.pslot[data-act="list-open"][data-list="consumables"]'), 'the consumables');
+    eq([all('#dlg-list .pick-row.on').map((r) => r.dataset.n), all('#dlg-list .pick-row img').length > 100], [['Elixir of Bloodlust', 'Bottle of Nothing'], true], 'what is chosen comes first, ticked; the list has the pictures');
+    await pick('Elixir of Hill Giant Strength');
+    await pick('Bottle of Nothing');
+    await confirm();
+    eq(b.consumables, [{ name: 'Elixir of Bloodlust', note: 'every long rest' }, { name: 'Elixir of Hill Giant Strength', note: '' }]);
+    // setup items: from the items of the game, or a name typed in
+    await click(q('.pslot[data-act="list-open"][data-list="setup"]'), 'the setup items');
+    ok(all('#dlg-list .pick-row').length === 150 && /first 150/.test(q('#dlg-list').textContent), 'a long list shows its first rows and asks for a search');
+    q('#dialog [data-dlg="q"]').value = 'Resonance Stone';
+    q('#dialog [data-dlg="q"]').dispatchEvent(new Event('input', { bubbles: true }));
+    await wait(60);
+    await click(q('#dlg-list .pick-row.custom'), 'the typed name');
+    q('#dialog [data-dlg="q"]').value = 'Drakethroat';
+    q('#dialog [data-dlg="q"]').dispatchEvent(new Event('input', { bubbles: true }));
+    await wait(60);
+    await pick('Drakethroat Glaive');
+    await confirm();
+    eq(b.setup.map((x) => x.name), ['Resonance Stone', 'Drakethroat Glaive']);
+    await click(q('#sec-extras [data-act="list-del"][data-list="setup"]'), 'remove the first');
+    eq(b.setup.map((x) => x.name), ['Drakethroat Glaive']);
+    ok(q('#sec-extras .li img') && q('#sec-extras .li-where'), 'an item of the database shows its picture and where it is found');
   });
 
   flow('the build check leads to where each thing is settled', async () => {

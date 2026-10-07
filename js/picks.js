@@ -430,24 +430,32 @@ function preparedSlots(b) {
 
 // ---------- the chooser: a dialog that picks n options out of one or more lists ----------
 // dlg.parts = [{ label, n, min, options: [[name, description]], chosen: [], off: [names that cannot be taken] }]
+// A part can also be `free` (as many as wanted, so the count is only of what is chosen), have a `cap` on the rows
+// shown at once, and take a `custom` name: one typed in the search that is in none of its options.
 function chooserList() {
   const q = norm(dlg.q);
+  const typed = String(dlg.q || '').trim();
   return dlg.parts.map((p, i) => {
-    // an option is [name, description, facts, picture, group]; the last three are optional
+    // an option is [name, description, facts, picture, group, rarity]; the last four are optional
     let group = '';
-    const rows = p.options.filter(([n, d]) => !q || norm(n).includes(q) || norm(d).includes(q)).map(([n, d, facts, img, grp]) => {
+    const list = p.options.filter(([n, d]) => !q || norm(n).includes(q) || norm(d).includes(q));
+    const rows = (p.cap ? list.slice(0, p.cap) : list).map(([n, d, facts, img, grp, rar]) => {
       const off = (p.off || []).includes(n);
       const head = grp && grp !== group ? `<h5 class="choose-sub">${esc(grp)}</h5>` : '';
       group = grp || group;
-      return `${head}<button class="pick-row${off ? ' no' : ''}" data-act="choose-toggle" data-p="${i}" data-n="${esc(n)}"${off ? ' disabled' : ''}>
+      return `${head}<button class="pick-row${rar ? ' r-' + rar : ''}${off ? ' no' : ''}" data-act="choose-toggle" data-p="${i}" data-n="${esc(n)}"${off ? ' disabled' : ''}>
         ${img || ''}<b>${esc(n)}</b>${off ? `<span><em>${t('already chosen')}</em></span>` : facts ? `<span>${esc(facts)}</span>` : ''}${d ? `<small class="fx">${esc(d)}</small>` : ''}</button>`;
     }).join('');
+    const more = p.cap && list.length > p.cap ? `<p class="muted">${t('showing the first {n}, type to narrow it down', { n: p.cap })}</p>` : '';
+    const custom = p.custom && typed && !p.options.some(([n]) => norm(n) === q)
+      ? `<button class="pick-row custom" data-act="choose-toggle" data-p="${i}" data-n="${esc(typed)}" data-custom="1">${pic('', 'pic small')}<b>${esc(t('Use "{name}" as typed', { name: typed }))}</b>
+        <small class="fx">${t('It is not in the list: it goes in by its name, with no picture and no effect on the numbers.')}</small></button>` : '';
     return `<h4 class="choose-head">${esc(p.label)} <span data-count="${i}"></span></h4>
-      <div class="${p.options.every((o) => !o[1]) ? 'choose-grid' : ''}">${rows || `<p class="muted">${t('Nothing matches these filters.')}</p>`}</div>`;
+      <div class="${p.options.every((o) => !o[1]) ? 'choose-grid' : ''}">${rows + more + custom || `<p class="muted">${t('Nothing matches these filters.')}</p>`}</div>`;
   }).join('');
 }
 function chooserSync() {
-  dlg.parts.forEach((p, i) => { const el = $(`[data-count="${i}"]`); if (el) el.textContent = t('{n} of {max}', { n: p.chosen.length, max: p.n }); });
+  dlg.parts.forEach((p, i) => { const el = $(`[data-count="${i}"]`); if (el) el.textContent = p.free ? t('{n} chosen', { n: p.chosen.length }) : t('{n} of {max}', { n: p.chosen.length, max: p.n }); });
   $$('#dlg-list [data-act="choose-toggle"]').forEach((el) => el.classList.toggle('on', dlg.parts[+el.dataset.p].chosen.includes(el.dataset.n)));
   const ok = $('#choose-ok');
   if (ok) ok.disabled = !dlg.parts.every((p) => p.chosen.length >= (p.min == null ? p.n : p.min));
@@ -743,6 +751,8 @@ Object.assign(actions, {
   },
   'choose-toggle'(el) {
     const p = dlg.parts[+el.dataset.p];
+    // a name typed in: it becomes an option of the list, chosen
+    if (el.dataset.custom) { p.options.unshift([el.dataset.n, '', '', pic('', 'pic small'), t('Chosen'), '']); p.chosen.push(el.dataset.n); dlg.refresh(); return false; }
     const i = p.chosen.indexOf(el.dataset.n);
     if (i >= 0) p.chosen.splice(i, 1);
     else { if (p.chosen.length >= p.n) p.chosen.shift(); p.chosen.push(el.dataset.n); }
