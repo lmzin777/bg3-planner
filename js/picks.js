@@ -436,6 +436,14 @@ function chooserList() {
   const q = norm(dlg.q);
   const typed = String(dlg.q || '').trim();
   return dlg.parts.map((p, i) => {
+    // points to hand out: each option with what it has, between a − and a +
+    if (p.points) {
+      return `<h4 class="choose-head">${esc(p.label)} <span data-count="${i}"></span></h4>
+        <div class="pts-list">${p.options.map(([n]) => { const full = (ABILS.find((a) => a[1] === n) || [])[2] || n; return `<div class="pts-row" data-p="${i}" data-n="${esc(n)}">
+          <b>${esc(full)}</b><span class="muted">${full === n ? '' : esc(n)}</span><span class="pts-now"></span>
+          <span class="stepper"><button data-act="choose-step" data-p="${i}" data-n="${esc(n)}" data-d="-1" aria-label="${t('Decrease')}">−</button><b>0</b>
+            <button data-act="choose-step" data-p="${i}" data-n="${esc(n)}" data-d="1" aria-label="${t('Increase')}">+</button></span></div>`; }).join('')}</div>`;
+    }
     // an option is [name, description, facts, picture, group, rarity]; the last four are optional
     let group = '';
     const list = p.options.filter(([n, d]) => !q || norm(n).includes(q) || norm(d).includes(q));
@@ -454,11 +462,30 @@ function chooserList() {
       <div class="${p.options.every((o) => !o[1]) ? 'choose-grid' : ''}">${rows + more + custom || `<p class="muted">${t('Nothing matches these filters.')}</p>`}</div>`;
   }).join('');
 }
+// The points handed out in a part of that kind.
+const pointsSpent = (p) => Object.values(p.values || {}).reduce((a, x) => a + x, 0);
 function chooserSync() {
-  dlg.parts.forEach((p, i) => { const el = $(`[data-count="${i}"]`); if (el) el.textContent = p.free ? t('{n} chosen', { n: p.chosen.length }) : t('{n} of {max}', { n: p.chosen.length, max: p.n }); });
+  dlg.parts.forEach((p, i) => {
+    if (!p.points) return;
+    const spent = pointsSpent(p);
+    $$(`#dlg-list .pts-row[data-p="${i}"]`).forEach((row) => {
+      const now = (p.values || {})[row.dataset.n] || 0;
+      $('.stepper b', row).textContent = now ? '+' + now : '0';
+      row.classList.toggle('on', now > 0);
+      // the score it has and the one it gets; at the cap, no more
+      const has = p.base ? p.base[row.dataset.n] : null;
+      if (has != null) $('.pts-now', row).innerHTML = now ? `${has} → <b>${has + now}</b>` : has >= p.cap ? `${has} · ${t('the most a feat gives')}` : String(has);
+      $('[data-d="-1"]', row).disabled = now <= 0;
+      $('[data-d="1"]', row).disabled = spent >= p.points || (has != null && has + now >= p.cap);
+    });
+  });
+  // (a list that may be left empty says so, rather than "0 of 1")
+  dlg.parts.forEach((p, i) => { const el = $(`[data-count="${i}"]`); if (el) el.textContent = p.free ? t('{n} chosen', { n: p.chosen.length }) : p.optional && !p.chosen.length ? t('optional') : p.points ? t('{n} of {max}', { n: pointsSpent(p), max: p.points }) : t('{n} of {max}', { n: p.chosen.length, max: p.n }); });
   $$('#dlg-list [data-act="choose-toggle"]').forEach((el) => el.classList.toggle('on', dlg.parts[+el.dataset.p].chosen.includes(el.dataset.n)));
   const ok = $('#choose-ok');
-  if (ok) ok.disabled = !dlg.parts.every((p) => p.chosen.length >= (p.min == null ? p.n : p.min));
+  if (ok) ok.disabled = !dlg.parts.every((p) => (p.points ? pointsSpent(p) === p.points : p.chosen.length >= (p.min == null ? p.n : p.min)));
+  // with nothing chosen where nothing has to be, the button says what it does
+  if (ok) ok.textContent = dlg.parts.every((p) => p.optional && !p.chosen.length) ? t('Change nothing') : t('Confirm');
 }
 function openChooser(title, hint, parts, done) {
   dlg = { kind: 'choose', q: '', parts, done, refresh: () => { $('#dlg-list').innerHTML = chooserList(); chooserSync(); } };
@@ -476,8 +503,13 @@ function openChooser(title, hint, parts, done) {
 function featParts(name, desc, b) {
   const parts = [];
   const abilities = featAbilities(name, desc);
-  if (name === 'Ability Improvement') parts.push({ key: 'ability', label: t('Abilities: one for +2, or two for +1 each'), n: 2, min: 1, options: abilities.map((a) => [a, '']) });
-  else if (abilities.length > 1) parts.push({ key: 'ability', label: t('Ability that gets +1'), n: 1, options: abilities.map((a) => [a, '']) });
+  // the score of each ability before this feat, with the 20 that feats cannot go past
+  const cap = 20;
+  const got = featBonuses(b);
+  const base = Object.fromEntries(ABILS.map((a) => [a[1], Math.min(cap, finalOf(b, a[0]) + got[a[0]])]));
+  // (two points to hand out, each ability with its − and +: both on one, or one on each of two)
+  if (name === 'Ability Improvement') parts.push({ key: 'ability', label: t('Abilities: 2 points, both on one ability or one on each of two'), n: 2, min: 1, points: 2, values: {}, base, cap, options: abilities.map((a) => [a, '']) });
+  else if (abilities.length > 1) parts.push({ key: 'ability', label: t('Ability that gets +1'), n: 1, options: abilities.map((a) => [a, '', base[a] >= cap ? t('already at {n}', { n: cap }) : base[a] + ' → ' + (base[a] + 1)]) });
   const prof = proficiencies(b);
   const st = skillState(b);
   const known = new Set([...Object.keys(st.granted), ...st.chosen, ...pickedSkills(b)]);
@@ -713,9 +745,9 @@ Object.assign(actions, {
     const lists = levelSpellLists(b, level, sp);
     const row = (s) => spellRow(s, true);
     const olds = swapOlds(b, level, sp).map((n) => SPELL_BY_NAME.get(norm(n)) || { n, d: '', lv: 0 });
-    openChooser(`${x.cls} ${x.n} · ${t('Replace a known spell (optional)')}`, t('Choose both, or leave both empty to keep every spell.'), [
-      { label: t('Spell to forget'), n: 1, min: 0, options: olds.map((s) => (s.lv ? row(s) : [s.n, ''])), chosen: sp.swap.old ? [sp.swap.old] : [] },
-      { label: t('Spell to learn instead'), n: 1, min: 0, options: lists.reach.filter((s) => !sp.spell.includes(s.n)).map(row), chosen: sp.swap.name ? [sp.swap.name] : [] },
+    openChooser(`${x.cls} ${x.n} · ${t('Replace a known spell (optional)')}`, t('This is not needed to go on with the level. To swap, choose both; to keep every spell, leave both empty.'), [
+      { label: t('Spell to forget'), n: 1, min: 0, optional: true, options: olds.map((s) => (s.lv ? row(s) : [s.n, ''])), chosen: sp.swap.old ? [sp.swap.old] : [] },
+      { label: t('Spell to learn instead'), n: 1, min: 0, optional: true, options: lists.reach.filter((s) => !sp.spell.includes(s.n)).map(row), chosen: sp.swap.name ? [sp.swap.name] : [] },
     ], (done) => writeSlot(curBuild(), level, 'swap', [done[0].chosen[0] || '', done[1].chosen[0] || '']));
     return false;
   },
@@ -747,6 +779,19 @@ Object.assign(actions, {
     // start at the list of the slot that was clicked
     const head = $$('#dlg-list .choose-head')[Math.max(0, parts.findIndex((p) => p.key === el.dataset.k))];
     if (head && head !== $('#dlg-list .choose-head')) head.scrollIntoView({ block: 'start' });
+    return false;
+  },
+  // a point given to an option, or taken back: never under 0, never more than there are to hand out
+  'choose-step'(el) {
+    const p = dlg.parts[+el.dataset.p];
+    const v = p.values || (p.values = {});
+    const d = +el.dataset.d;
+    const now = v[el.dataset.n] || 0;
+    if ((d > 0 && (pointsSpent(p) >= p.points || (p.base && p.base[el.dataset.n] + now >= p.cap))) || (d < 0 && now <= 0)) return false;
+    v[el.dataset.n] = now + d;
+    // (what is chosen, as the rest reads it: one name for both points, or two names for one each)
+    p.chosen = p.options.map((o) => o[0]).filter((n) => v[n] > 0);
+    chooserSync();
     return false;
   },
   'choose-toggle'(el) {

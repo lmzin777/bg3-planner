@@ -830,8 +830,8 @@ button.chip:hover { border-color: var(--gold); color: var(--text); }
 #dlg-list > div:not(.choose-grid) { display: grid; gap: 4px; }
 #dlg-list .pick-row { width: 100%; }
 .lslot-row .pslot { flex: 1; }
-.lvl-cls small + .pslot { grid-column: 1 / -1; }
-.lvl-cls small + .pslot b { color: var(--gold-hi); font-weight: 600; font-size: 13px; }
+.lvl-cls .pslot ~ .pslot { grid-column: 1 / -1; }
+.lvl-cls .pslot ~ .pslot b { color: var(--gold-hi); font-weight: 600; font-size: 13px; }
 .race-cantrip { max-width: 460px; margin-top: 12px; }
 .pslot.off { cursor: default; opacity: .55; }
 .pslot.off:hover { border-color: var(--line); }
@@ -1120,3 +1120,80 @@ button.brand small { font: 400 11px var(--sans); letter-spacing: 0; color: var(-
 .upd.now h2 b { background: var(--gold); border-color: var(--gold); color: #1a130a; }
 .upd ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; }
 .nav-top i.count.new { background: var(--gold); border-color: var(--gold); color: #1a130a; font-weight: 700; }
+
+/* ---------- no build selected: the three ways to get one, two side by side and one under them ---------- */
+.card.empty > p { margin: 6px 0 0; color: var(--muted); }
+.start-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; max-width: 640px; margin: 22px auto 0; }
+.start-card { grid-column: span 2; cursor: pointer; display: grid; gap: 6px; align-content: start; padding: 16px 18px; text-align: left; font: inherit; color: var(--text);
+  background: var(--field); border: 1px solid var(--line); border-radius: 12px; transition: background-color .12s, border-color .12s, transform .12s; }
+.start-card.under { grid-column: 2 / span 2; }
+.start-card b { font: 600 16px var(--serif); color: var(--gold-hi); letter-spacing: .01em; }
+.start-card span { font-size: 13px; line-height: 1.45; color: var(--muted); }
+.start-card.main { border-color: var(--gold); background: linear-gradient(180deg, rgba(201, 164, 92, .22), rgba(201, 164, 92, .08)); }
+.start-card.main b { color: #fff3d6; }
+.start-card.main span { color: var(--text); opacity: .85; }
+.start-card:hover, .start-card:focus-visible { border-color: var(--gold); background: var(--hover); transform: translateY(-1px); }
+.start-card.main:hover, .start-card.main:focus-visible { background: linear-gradient(180deg, rgba(201, 164, 92, .34), rgba(201, 164, 92, .14)); }
+@media (max-width: 620px) { .start-grid { grid-template-columns: minmax(0, 1fr); } .start-card, .start-card.under { grid-column: 1; } }
+
+/* ---------- on a wide screen the Build check stays at the side of the build, and follows the page ---------- */
+@media (min-width: 1600px) {
+  main:has(.content > #sec-check) { max-width: 1740px; }
+  .content:has(> #sec-check) { position: relative; padding-right: 326px; }
+  .content > #sec-check { position: absolute; top: 0; right: 0; bottom: 0; width: 304px; }
+  .content > #sec-check > .check { position: sticky; top: calc(var(--top-h, 0px) + 14px); max-height: calc(100vh - var(--top-h, 0px) - 30px); overflow: auto; columns: auto; }
+  #sec-check .check-head { display: grid; gap: 4px; }
+  #sec-check .check-head > span { min-width: 0; }
+  #sec-check .issues { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  /* its entry in the menu of sections would lead nowhere: it is already in view */
+  .secnav button[data-s="check"] { display: none; }
+}
+
+/* ---------- a level row says at a glance which class it is and which level of that class ---------- */
+.lvl-cls { grid-template-columns: minmax(0, 1fr); }
+.lvl-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; font: 700 16px var(--serif); color: var(--gold-hi); letter-spacing: .01em; line-height: 1.25; padding: 4px 2px 0; }
+.lvl-title i { font: 700 11px var(--sans); font-style: normal; text-transform: uppercase; letter-spacing: .08em; color: #1a130a; background: var(--gold); border-radius: 999px; padding: 2px 9px; }
+
+/* the way back from a level: under its number, and not faded with a level that is shut */
+.lvl-n .lvl-del { display: block; width: 24px; height: 24px; margin: 4px auto 0; font: 400 14px var(--sans); line-height: 1; color: var(--muted); opacity: .75; }
+.lvl-n .lvl-del:hover, .lvl-n .lvl-del:focus-visible { opacity: 1; color: var(--danger); border-color: var(--danger); background: rgba(210, 96, 74, .14); }
+.lvl.locked .lvl-n { opacity: 1; }
+.lvl.locked .lvl-n { color: rgba(201, 164, 92, .4); }
+
+/* ---------- points handed out in a dialog (Ability Improvement): each option between a − and a + ---------- */
+.pts-list { display: grid; gap: 4px; }
+.pts-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 6px 8px 6px 12px; background: var(--field); border: 1px solid var(--line-soft); border-radius: 8px; }
+.pts-row > b { font-weight: 600; }
+.pts-row > .muted { font: 700 11px var(--sans); letter-spacing: .08em; }
+.pts-row.on { border-color: var(--gold); }
+.pts-row.on > b, .pts-row.on .stepper b { color: var(--gold-hi); }
+.pts-row .stepper { width: 112px; }
+.pts-row .stepper b { flex: 1; }
+.pts-row .stepper button { width: 34px; min-height: 34px; }
+
+/* ---------- the Build check as a button that follows the page, where it has no room at the side ---------- */
+.check-fab { position: fixed; right: 16px; bottom: 16px; z-index: 45; display: grid; justify-items: end; gap: 8px; pointer-events: none; }
+.check-fab > * { pointer-events: auto; }
+.check-fab-btn { cursor: pointer; display: inline-flex; align-items: center; gap: 10px; padding: 9px 12px 9px 16px; font: 600 14px var(--sans); color: var(--text);
+  background: var(--panel); border: 1px solid var(--gold); border-radius: 999px; box-shadow: 0 8px 26px rgba(0, 0, 0, .55); }
+.check-fab-btn b { min-width: 24px; height: 24px; padding: 0 7px; display: grid; place-items: center; border-radius: 999px; background: var(--danger); color: #1a0d09; font: 700 13px var(--sans); }
+.check-fab-btn.ok b { background: #5fae6b; }
+.check-fab-btn:hover, .check-fab-btn:focus-visible { background: var(--hover); color: var(--gold-hi); }
+.check-pop { width: min(380px, calc(100vw - 32px)); max-height: min(68vh, 560px); overflow: auto; border-color: var(--gold); box-shadow: 0 14px 40px rgba(0, 0, 0, .6); }
+.check-pop .check-head { display: grid; gap: 4px; }
+.check-pop .issues { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+@media (min-width: 1600px) { .check-fab { display: none; } }
+body:has(.check-fab) .update-bar { bottom: 70px; }
+body:has(.check-fab) .toast { bottom: 76px; }
+@media (min-width: 1600px) { body:has(.check-fab) .update-bar { bottom: 16px; } body:has(.check-fab) .toast { bottom: 26px; } }
+@media print { .check-fab { display: none; } }
+/* Ability Improvement: the score an ability has, and the one it gets */
+.pts-row { grid-template-columns: minmax(0, 1fr) auto auto auto; }
+.pts-now { min-width: 78px; text-align: right; font: 600 13px var(--sans); color: var(--muted); font-variant-numeric: tabular-nums; }
+.pts-now b { color: var(--gold-hi); }
+@media (max-width: 520px) {
+  .pts-row { grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; padding-left: 10px; }
+  .pts-row > .muted { display: none; }
+  .pts-now { min-width: 0; }
+  .pts-row .stepper { width: 104px; }
+}

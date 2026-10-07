@@ -26,13 +26,23 @@ function targetOf() {
   }
   return enemyTarget(e);
 }
+// What stands in an enemy's arena and counts for it (Raphael's Soul Pillars): how many are left, as set on the page
+// of the test; all of them when nothing is set.
+const pillarsLeft = (e) => (e && e.pil ? Math.max(0, Math.min(e.pil.n, state.ui.foePillars == null || state.ui.foePillars === '' ? e.pil.n : Number(state.ui.foePillars) || 0)) : 0);
 // What an enemy's page gives of its own for the difficulty chosen: { ac, ab, res } from Tactician up (tm), with
 // what it adds for Honour mode (hm) on top.
 function enemyOwn(e) {
   const mode = gameMode();
   const t = (mode !== 'balanced' && e.tm) || {};
   const h = (mode === 'honour' && e.hm) || {};
-  return { ac: h.ac || t.ac || e.ac, ab: Object.assign({}, e.ab, t.ab, h.ab), res: h.res || t.res || e.res || {} };
+  const own = { ac: h.ac || t.ac || e.ac, ab: Object.assign({}, e.ab, t.ab, h.ab), res: h.res || t.res || e.res || {} };
+  // what stands in its arena gives it Dexterity, and the Armour Class that comes with it (Raphael's Soul Pillars)
+  if (e.pil && e.pil.dex) {
+    const was = Math.floor((own.ab.dex - 10) / 2);
+    own.ab.dex += e.pil.dex * pillarsLeft(e);
+    own.ac += Math.floor((own.ab.dex - 10) / 2) - was;
+  }
+  return own;
 }
 // The passives of an enemy that change a fight, in the difficulty chosen (see enemies.js): Magic Resistance,
 // Evasion, Alert, what it regains each turn, Tenacity, a parry, Legendary Resistances.
@@ -42,7 +52,7 @@ function enemyTarget(e) {
   const own = enemyOwn(e);
   const mod = (k) => Math.floor((own.ab[k] - 10) / 2);
   return { name: e.n, enemy: e, ac: own.ac, ab: own.ab, saves: Object.fromEntries(ABILITY_KEYS.map((k) => [k, mod(k) + (e.sv.includes(k) ? e.pb : 0)])), res: own.res, pv: foePassives(e),
-    tp: enemyTemp(e), arm: e.arm || null };
+    tp: enemyTemp(e), arm: e.arm || null, pil: e.pil ? Object.assign({ left: pillarsLeft(e) }, e.pil) : null };
 }
 // The temporary hit points a standing condition gives an enemy, in the difficulty it has that condition in
 // (the Bulette's Diamond Scales, in Honour mode): { n, hp, min }, or null.
@@ -521,7 +531,7 @@ const resText = (e) => Object.keys(e.res || {}).map((k) => k + ' ' + ({ r: t('re
 // The passives of an enemy that the fight plays, as a line of text.
 const passiveText = (pv) => [pv.mr ? 'Magic Resistance' : '', pv.lr ? 'Legendary Resistance × ' + pv.lr : '', pv.li ? 'Legendary Resistance: Incapacitation × ' + pv.li : '', pv.ev ? 'Evasion' : '',
   pv.al ? 'Alert' : '', pv.rg ? 'Vampire Regeneration ' + pv.rg : '', pv.tn ? 'Tenacity' : '', pv.pr ? 'Githyanki Parry ' + pv.pr : ''].filter(Boolean).join(', ');
-// The enemy the numbers are measured against, chosen in Final numbers.
+// The enemy the numbers are measured against, and the difficulty: chosen in the Damage test.
 function targetTools() {
   const target = targetOf();
   const e = target.enemy;
@@ -531,8 +541,11 @@ function targetTools() {
       <div class="field ac-field"><span>${t('Its saving throws')}</span>${stepper(target.saves.str, 'data-ui="targetSave" data-v="3"', -3, 15)}</div>`}
     <div><span class="lbl" title="${t('In Honour mode, Extra Attack from Deepened Pact does not add to a class\'s Extra Attack, and the action Haste gives cannot use Extra Attack.')}">${t('Difficulty')}</span><div class="acts mini modes">${MODES.map(([k, label]) =>
       `<button class="${gameMode() === k ? 'on' : ''}" data-act="mode" data-k="${k}">${label}</button>`).join('')}</div></div>
-    ${e ? `<p class="enemy-line">${t('Act {n}', { n: e.act })} · ${t('level {n}', { n: e.lv })} · AC ${e.ac} · HP <b>${enemyHp(e)}</b>${target.tp ? ' + ' + t('{n} temporary ({name})', { n: target.tp.hp, name: target.tp.n }) : ''} (${[e.hp.b + ' Balanced', e.hp.t ? e.hp.t + ' Tactician' + (e.hpw ? '*' : '') : '', e.hp.h ? e.hp.h + ' Honour' : ''].filter(Boolean).join(' / ')}) · ${
+    ${e && e.pil ? `<div class="field ac-field"><span>${t('{name} standing', { name: e.pil.name })}</span>${stepper(target.pil.left, `data-ui="foePillars" data-v="${e.pil.n}"`, 0, e.pil.n)}</div>` : ''}
+    ${e ? `<p class="enemy-line">${t('Act {n}', { n: e.act })} · ${t('level {n}', { n: e.lv })} · AC ${target.ac} · HP <b>${enemyHp(e)}</b>${target.tp ? ' + ' + t('{n} temporary ({name})', { n: target.tp.hp, name: target.tp.n }) : ''} (${[e.hp.b + ' Balanced', e.hp.t ? e.hp.t + ' Tactician' + (e.hpw ? '*' : '') : '', e.hp.h ? e.hp.h + ' Honour' : ''].filter(Boolean).join(' / ')}) · ${
       ABILS.map(([k, short]) => short + ' ' + signed(target.saves[k])).join(' ')}${res.length ? ' · ' + esc(res.join(', ')) : ''}${passiveText(target.pv) ? ' · ' + esc(passiveText(target.pv)) : ''}${e.note ? `<br><em>${esc(e.note)}</em>` : ''}${e.hpw ? `<br><em>* ${t('Its page gives no Tactician hit points: Balanced × 1.3, as most pages that give both show.')}</em>` : ''}${
+      e.pil ? `<br><em>${t('Each of its {name} left standing gives it +{dex} Dexterity, with the Armour Class that follows, and {dice} {type} damage on each hit of its attacks; in Honour mode, one Legendary Action a round. Its page gives Armour Class {ac} with none of them.',
+        { name: e.pil.name, dex: e.pil.dex, dice: e.pil.dice, type: e.pil.type, ac: e.ac })}</em>` : ''}${
       target.tp && target.tp.min ? `<br><em>${t('While the temporary hit points of {name} last, a hit of less than {n} damage does nothing to it.', { name: target.tp.n, n: target.tp.min })}</em>` : ''}</p>` : ''}`;
 }
 

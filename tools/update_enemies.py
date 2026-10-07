@@ -17,7 +17,10 @@ and are worked out the way the game does it, with their parts kept so the planne
 The ability is the one the action names; else Strength for melee (the higher of Strength and Dexterity with a
 Finesse weapon, or with no weapon at all), Dexterity at range, and the spellcasting ability for spells.
 The spellcasting ability is the one the creature's infobox gives ("casting ability"). When it gives none, in this
-order: the one a page of the same creature gives (Owlbear for the Owlbear Mate); the one of the spellcasting
+order: the one the game's own data gives for the creature (its "stats" entry, named in the infobox, read at
+bg3.norbyte.dev, the browser of the game's files that the wiki links to; an entry with none of its own has the
+one of the entry it is built on); the one a page of the same creature gives (Owlbear for the Owlbear Mate); the
+one of the spellcasting
 class its page names, as in the tabletop rules (Wizard Intelligence, Cleric and Druid Wisdom, Paladin and
 Warlock Charisma); Intelligence for a Beast, a Construct, an Elemental or a Monstrosity, which is what the game
 falls back on (the wiki says so on the pages of Crushing Flight and of the myrmidons' actions); else the highest
@@ -40,7 +43,7 @@ action listed under a "Honour mode" heading of the page is marked as there only 
 says "tactician" from Tactician up. What a page lists but the damage test does not use (reactions, Legendary
 Actions, an attack with a weapon the page does not name) is kept by name, for the planner's list of things to check.
 """
-import io, json, os, re, sys
+import html, io, json, os, re, sys, time, urllib.parse, urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from update_items import clean, field, page_texts, record
@@ -70,6 +73,57 @@ CASTER_CLASS = {"wizard": "int", "cleric": "wis", "druid": "wis", "ranger": "wis
 # a creature whose page gives no casting ability, and the page of its kind that does
 CASTING_KIN = {"Owlbear Mate": "Owlbear", "Vengeful Cambion": "Cambion"}
 NO_CASTERS = ("Beast", "Construct", "Elemental", "Monstrosity")
+GAME_DATA = "https://bg3.norbyte.dev/search?q="
+# what was read is kept beside this script, so that a run asks the site only for what it does not have yet
+GAME_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "game_stats.json")
+_game_entries = json.load(io.open(GAME_CACHE, encoding="utf-8")) if os.path.exists(GAME_CACHE) else {}
+
+
+def game_entry(name):
+    """The text of a Character entry of the game's stats files, as bg3.norbyte.dev shows it; "" when it is not found."""
+    if name in _game_entries:
+        return _game_entries[name]
+    text = ""
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(GAME_DATA + urllib.parse.quote(name), headers={"User-Agent": "bg3-planner data tool (reads a few stats entries)"})
+            with urllib.request.urlopen(req, timeout=40) as r:
+                page = html.unescape(r.read().decode("utf-8", "replace"))
+            time.sleep(0.6)
+            # (an entry may be written more than once: the one of the game, and what a patch changes in it)
+            found = re.findall(r'new entry "' + re.escape(name) + r'"\s*\ntype "Character"(.*?)(?=</code>|new entry ")', page, re.S)
+            if found:
+                text = "\n".join(found)
+                break
+            if "search-result" in page or attempt == 2:
+                break  # the site answered, and has no such entry
+        except Exception as err:
+            print("  the game data could not be read for", name, "-", err)
+        time.sleep(2 * (attempt + 1))
+    if text:
+        _game_entries[name] = text
+        io.open(GAME_CACHE, "w", encoding="utf-8", newline="\n").write(json.dumps(_game_entries, ensure_ascii=False, indent=1, sort_keys=True))
+    return text
+
+
+def game_casting(stats):
+    """The SpellCastingAbility of a creature in the game's data, following the entries it is built on: (ability, entry)."""
+    # (the infobox may carry a comment after the name)
+    name = re.sub(r"<!--.*?-->", "", stats or "", flags=re.S).strip().split("\n")[0].strip()
+    for _ in range(8):
+        if not name:
+            break
+        text = game_entry(name)
+        m = re.search(r'data "SpellCastingAbility" "(\w+)"', text)
+        if m:
+            key = m.group(1).lower()[:3]
+            return (key, name) if key in ABILITIES else ("", "")
+        # (what it is built on; a patch's entry is "built on" the entry of the same name, which is no parent)
+        name = next((p for p in re.findall(r'using "([^"]+)"', text) if p != name), "")
+    return "", ""
+
+
+
 TYPES = ("Slashing", "Piercing", "Bludgeoning", "Acid", "Cold", "Fire", "Force", "Lightning", "Necrotic", "Poison", "Psychic", "Radiant", "Thunder")
 
 
@@ -393,6 +447,7 @@ class Maker:
         spell = clean(field(w, "type")).lower() == "spell" or roll.endswith("spell") or "spell" in cost
         melee = roll.startswith("melee") or (roll == "yes" and (reach in ("melee", "weapon") or (metres is not None and metres <= 4)))
         ability, comps, unknown, kept_by_line, sometimes, with_weapon = "", [], False, None, False, False
+        whens = {}  # the ally a part of the damage needs alive ("If Air Myrmidon is alive"), by its place among the parts
         for n in ("", " 1", " 2", " 3", " 4", " 5"):
             if (n == "" and "damage 1" in given) or (n == " 1" and "damage" in given and "damage 1" not in given):
                 continue
@@ -428,6 +483,9 @@ class Maker:
             m = DICE.match(text)
             if not m:
                 continue
+            alive = re.match(r"\s*if (.+?) is alive\s*$", clean(info), re.I)
+            if alive:
+                whens[len(comps)] = alive.group(1).strip()
             named = self.ability(m.group(3)) or self.ability(get("damage" + n + " modifier"))
             ability = ability or named
             comps.append([m.group(1), int(m.group(2) or 0) + (self.mod(named) if named else 0), "" if kind == "Weapon" else kind, bool(named)])
@@ -500,7 +558,12 @@ class Maker:
         recharge = clean(get("recharge")).lower()
         if recharge and not re.search(r"turn|round", recharge):
             out["u"] = 4 if "four" in recharge else 2 if "twice" in recharge else 1
-        if re.search(r"can only use", clean(field(w, "summary")), re.I) or sometimes:
+        if whens and len(whens) == len(comps):
+            # every part hangs on an ally: the test plays it part by part, and it is no longer only "told"
+            out["al"] = [whens[k] for k in range(len(comps))]
+            if re.search(r"an additional\s+reaction", clean(field(w, "summary")), re.I):
+                out["rr"] = 1
+        elif re.search(r"can only use", clean(field(w, "summary")), re.I) or sometimes:
             out["c"] = 1
         # "…this action is removed after the first Grim Visage is killed or 100 damage is dealt to Gerringothe"
         gone = re.search(r"action is removed after [^.]*?(\d+) damage is dealt", clean(field(w, "summary")), re.I)
@@ -786,11 +849,16 @@ def main():
         # the spellcasting ability, when the page gives none (see the top of this file)
         casting = None
         if not next((k for k in ABILITIES if clean(field(box, "casting ability")).lower().startswith(k)), ""):
+            # (the name of its entry, as the infobox writes it; the game's own names have no spaces)
+            entry = (field(box, "stats") or field(infobox(pages.get(name) or "", False) or "", "stats")).strip()
+            game_key, game_name = game_casting(entry)
+            if not game_key and " " in entry:
+                game_key, game_name = game_casting(entry.replace(" ", "_"))
             kin = CASTING_KIN.get(name)
             kin_key = next((k for k in ABILITIES if clean(field(boxes.get(kin, ""), "casting ability")).lower().startswith(k)), "") if kin else ""
             cls = next((c for c in CASTER_CLASS if re.search(r"\b" + c + r"\b", field(box, "class") + " " + field(infobox(pages.get(name) or "", False) or "", "class"), re.I)), "")
             best = max(("int", "wis", "cha"), key=lambda k: scores[k])
-            casting = [kin_key, "kin", kin] if kin_key else [CASTER_CLASS[cls], "class", cls.capitalize()] if cls else ["int", "default", e.get("ty", "")] if e.get("ty") in NO_CASTERS else [best, "best", ""]
+            casting = [game_key, "game", game_name] if game_key else [kin_key, "kin", kin] if kin_key else [CASTER_CLASS[cls], "class", cls.capitalize()] if cls else ["int", "default", e.get("ty", "")] if e.get("ty") in NO_CASTERS else [best, "best", ""]
         # temporary hit points a standing condition gives, in the mode it is there, and what holds while they last
         for mode, names in (("b", names_of(field(box, "conditions"))), ("t", names_of(field(box, "t conditions"))), ("h", names_of(field(box, "h conditions")))):
             for cond in names:
@@ -848,6 +916,13 @@ def main():
             e["hp"] = {k: v + 100 * pieces for k, v in e["hp"].items()}
             e["arm"] = {"n": pieces, "hp": 100}
             e["note"] = f"With all {pieces} pieces of Coin Armour: 100 hit points each. A piece is lost for each Visage killed, or for each 100 damage dealt to her."
+        if name == "Raphael":
+            # the four Soul Pillars of his arena: what each one standing gives him, and his Legendary Actions of a round
+            fight = pages.get(name + "/Combat", "")
+            each = re.search(r"Soul Pillar gives Raphael:\s*\*\s*An additional \{\{DamageText\|(\d+d\d+)\|(\w+)\}\} damage and a \+(\d+) bonus to Dexterity", fight)
+            if not each or not re.search(r"four \[\[Pillar of Souls\|Soul Pillars\]\]", fight) or not re.search(r"as many times per round as there are remaining Soul Pillars", fight):
+                raise SystemExit("Raphael's Soul Pillars are no longer described the same way")
+            e["pil"] = {"n": 4, "name": "Soul Pillars", "dice": each.group(1), "type": each.group(2), "dex": int(each.group(3)), "lg": 1}
         if not e["hp"].get("t") and e["hp"].get("b"):
             # no Tactician hit points on the page: Balanced x 1.3, rounded down
             e["hp"]["t"] = e["hp"]["b"] * 13 // 10
@@ -889,6 +964,9 @@ def main():
           "// ca [ability, why, of what] its spellcasting ability when the page gives none · hpw 1 Tactician hit points worked out\n"
           "// tp {n, hp, md, min} temporary hit points a standing condition gives, from the mode md up; min the damage under which a hit does nothing while they last\n"
           "// arm {n, hp} pieces of armour, lost one for each so much damage dealt\n"
+          "//   al the ally each part of its damage needs alive · rr 1 one more answer a round for each of those allies alive\n"
+          "// pil {n, name, dice, type, dex, lg} things standing in its arena (Raphael's Soul Pillars): each gives that damage on its\n"
+          "//   attacks and that much Dexterity; lg 1 as many Legendary Actions a round as there are standing\n"
           "//   gw [weapon, why] when the page does not name the weapon the attack is made with · ar 1 it catches an area\n"
           "//   gr '20~200' when its damage is a range in the text, read as dice\n"
           "// xi Initiative on top of the Dexterity modifier · tm, hm what the page gives of its own for Tactician and Honour\n"

@@ -1,9 +1,7 @@
-// Things to check by hand: where the wiki did not say enough about an enemy or a rule and the planner filled
-// something in or guessed. Each entry can be ticked off and has a field for what was seen in the game; the ticks
-// and the notes are kept with the rest of what the browser saves. What comes from the wiki as it is, or is a choice
-// of the test with nothing to verify, is kept apart, at the end, and asks for no tick.
-// A temporary page, there to be gone through one by one. To take it out: remove this file from index.html, and
-// the "review" entries from navHtml() and render() in js/shell.js.
+// How the Damage test works: what it takes from the wiki as it is, what it works out where a page does not say
+// enough (with where each rule comes from), and how it plays a fight. One entry for each rule and for each enemy
+// that has something of its own. It began as a list of things to check by hand; every point of it was settled, and
+// what is left is the explanation. Reached from the Damage test.
 'use strict';
 
 // "2d8 + 5 Slashing · 1d10 + 5 Piercing": one group for each attack of the action.
@@ -18,7 +16,7 @@ const UNUSED = [
 ];
 // Where the spellcasting ability of an enemy was taken from, when its page gives none: [ability, why, of what].
 const castingWhy = ([key, why, of]) => t('Spellcasting ability {ab}: {why}.', { ab: key.toUpperCase(), why:
-  why === 'kin' ? t('the one on the page of {x}', { x: of }) : why === 'class' ? t('the one of its class, {x}', { x: of })
+  why === 'game' ? t('from the game\'s own data, entry {x}', { x: of }) : why === 'kin' ? t('the one on the page of {x}', { x: of }) : why === 'class' ? t('the one of its class, {x}', { x: of })
     : why === 'default' ? t('what the game falls back on, for a {x}', { x: of }) : t('its highest of Intelligence, Wisdom and Charisma') });
 // Every entry: { key, title, sub, link, ask: what to check in the game, info: what needs no checking }.
 function reviewItems() {
@@ -31,7 +29,7 @@ function reviewItems() {
       t('The wiki says how an attack roll is made (d20 + ability modifier + proficiency bonus, and the weapon\'s enchantment) and how a save DC is (8 + proficiency bonus + ability modifier), but not the attack bonus of each enemy. The planner works it out from the enemy\'s page: its proficiency bonus, its ability scores, its weapon.'),
       t('A save DC written on the action\'s page is used as it is.'),
       t('When the page of an action does not name the ability it goes by: Strength in melee with a weapon that is not Finesse; the higher of Strength and Dexterity with a Finesse weapon, or with none; Dexterity at range. An attack roll that names neither melee nor range (a charge) goes by the creature\'s casting ability, which is the ability the game gives its natural attacks.'),
-      t('For a spell or a "caster" DC, the spellcasting ability of the creature\'s page. When the page gives none, in this order: the one a page of the same creature gives; the one of the class its page names, as in the tabletop rules (Wizard Intelligence, Cleric and Druid Wisdom, Paladin and Warlock Charisma); Intelligence for a Beast, a Construct, an Elemental or a Monstrosity, which is what the game falls back on (the wiki says so on the pages of Crushing Flight and of the myrmidons\' actions); else the highest of Intelligence, Wisdom and Charisma, as the tabletop stat blocks of hags, mind flayers and undead lords do.'),
+      t('For a spell or a "caster" DC, the spellcasting ability of the creature\'s page. When the page gives none, in this order: the one the game\'s own data gives the creature (its stats entry, named in the infobox, read at bg3.norbyte.dev, the browser of the game\'s files that the wiki links to); the one a page of the same creature gives; the one of the class its page names, as in the tabletop rules (Wizard Intelligence, Cleric and Druid Wisdom, Paladin and Warlock Charisma); Intelligence for a Beast, a Construct, an Elemental or a Monstrosity, which is what the game falls back on (the wiki says so on the pages of Crushing Flight and of the myrmidons\' actions); else the highest of Intelligence, Wisdom and Charisma, as the tabletop stat blocks of hags, mind flayers and undead lords do.'),
       // (one line for each enemy a number was worked out for, with what its spellcasting ability was taken from)
       ...ENEMIES.map((e) => [e, [...(e.acts || []), ...(e.rx || [])].filter((a) => a.wf && !a.g)]).filter(([, list]) => list.length).map(([e, list]) => e.n + ': ' + list.map(parts).join('; ') + '.' + (e.ca ? ' ' + castingWhy(e.ca) : ''))] },
     { key: 'rule:honour', title: t('What Honour mode changes for an enemy'), ask: [], info: [
@@ -56,7 +54,7 @@ function reviewItems() {
       t('Its passives are played as their pages give them: Magic Resistance (Advantage on saves against spells), Evasion, Alert (never Surprised), Vampire Regeneration (unless Radiant damage reached it), Tenacity, Githyanki Parry (once a round).'),
       t('Legendary Resistance adds 10 to a failed save when that turns it into a passed one, three times; the general one not on a natural 1 or 20 (its page\'s bug note), "Incapacitation" only against what takes actions away.'),
       t('It answers a hit once a round. A Legendary Action is used once a round and comes back at the start of the next, and not by a creature that is Stunned, incapacitated or Restrained (the wiki\'s Legendary action page). What sets each one off is given under its enemy, in the words of its page.'),
-      t('That page names three exceptions. One is played: Gerringothe Thorm answers once for each piece of armour destroyed. Two are not: W\'wargaz may use his twice a round, Raphael once for each soul pillar left.'),
+      t('That page names three exceptions. Two are played: Gerringothe Thorm answers once for each piece of armour destroyed, and Raphael once for each Soul Pillar left standing, as many as the page of the test says. The third is not: W\'wargaz\'s is the summoning of a Mind-Claw, twice a round, and the test plays no summons.'),
       t('A cantrip or spell the planner has in its own list deals the damage of the enemy\'s level and of the slot chosen. Its other spells deal the damage written on their page.')] },
     { key: 'rule:initiative', title: t('Initiative and Surprise'), ask: [], info: [
       t('Initiative is a d4 plus the bonus; on a tie, the higher Dexterity score goes first (the wiki\'s Initiative page). For an enemy, the bonus its page gives, else its Dexterity modifier.'),
@@ -98,6 +96,7 @@ function reviewItems() {
         // what it waits for, when the test plays that
         + (a.wt && e.tp ? ' ' + t('It has it only while the temporary hit points of {name} last.', { name: e.tp.n }) : '')
         + (a.af ? ' ' + t('It waits for {n} hits taken, and counts again once it is used.', { n: a.af }) : '')
+        + (a.al ? ' ' + t('Each part of it is there while its ally lives ({list}), and each of them alive gives one more answer a round. With those allies set as helpers, the test follows which are alive; with none of them in the fight, it is played as the fight starts, with all of them.', { list: a.al.join(', ') }) : '')
         + (a.ev ? ' ' + t('Not a hit: each piece of armour that falls sets it off, on whoever stands next to it, as often as pieces fall.') : '');
       // to check: one whose numbers are borrowed from its own attack, or that waits for more than the hit
       if (/^Main Hand Attack/.test(a.as || '')) info.push(text + ' ' + t('The page gives it no numbers: one attack of {a} is rolled.', { a: a.as }));
@@ -108,52 +107,25 @@ function reviewItems() {
     if (e.hpw) info.push(t('No Tactician hit points on its page: Balanced × 1.3, rounded down, gives {n}.', { n: e.hp.t }));
     if (e.tp) info.push(t('From {mode} mode up it starts with {name}: {n} temporary hit points.', { mode: { b: 'Balanced', t: 'Tactician', h: 'Honour' }[e.tp.md], name: e.tp.n, n: e.tp.hp })
       + (e.tp.min ? ' ' + t('While they last, a hit of less than {n} damage does nothing to it.', { n: e.tp.min }) : ''));
+    if (e.pil) info.push(t('Its arena has {n} {name}. Each one left standing gives it +{dex} Dexterity, with the Armour Class that follows, and {dice} {type} damage on each hit of its attacks; in Honour mode, one Legendary Action a round. How many stand is set on the page of the test; the fight starts with all of them.',
+      { n: e.pil.n, name: e.pil.name, dex: e.pil.dex, dice: e.pil.dice, type: e.pil.type }));
     acts.filter((a) => a.ud).forEach((a) => info.push(t('{a} is gone once {n} damage is dealt to it, as its page says.', { a: a.n, n: a.ud })));
     if (ask.length || info.length) items.push({ key: 'enemy:' + e.n, title: e.n, sub: t('Act {n}', { n: e.act }) + (e.ty ? ' · ' + e.ty : ''), link: wikiLink(e.n.replace(/ \(.*\)$/, '')), ask, info });
   });
   return items;
 }
-const reviewLeft = () => { const done = state.ui.reviewed || {}; return reviewItems().filter((x) => x.ask.length && !done[x.key]).length; };
 function renderReview() {
   const all = reviewItems();
-  const items = all.filter((x) => x.ask.length);
-  const rest = all.filter((x) => !x.ask.length);
-  const done = state.ui.reviewed || {};
-  const notes = state.ui.reviewNotes || {};
-  const left = items.filter((x) => !done[x.key]).length;
-  const written = all.filter((x) => String(notes[x.key] || '').trim()).length;
-  const head = (x, button) => `<header><div><h2>${esc(x.title)}</h2>${x.sub ? `<span class="muted">${esc(x.sub)}</span>` : ''}</div>
-    ${x.link ? `<a class="icon" href="${x.link}" target="_blank" rel="noopener" title="${t('Open the wiki page')}">↗</a>` : ''}${button}</header>`;
+  const head = (x) => `<header><div><h2>${esc(x.title)}</h2>${x.sub ? `<span class="muted">${esc(x.sub)}</span>` : ''}</div>
+    ${x.link ? `<a class="icon" href="${x.link}" target="_blank" rel="noopener" title="${t('Open the wiki page')}">↗</a>` : ''}</header>`;
+  const entry = (x) => `<article class="review-item plain">${head(x)}<ul class="review-info">${[...x.ask, ...x.info].map((p) => `<li>${esc(p)}</li>`).join('')}</ul></article>`;
+  const rules = all.filter((x) => x.key.startsWith('rule:'));
+  const foes = all.filter((x) => !x.key.startsWith('rule:'));
   return `<div class="content wide review">
-    <section class="card hero"><h1>${t('To check')}</h1>
-      ${items.length ? '' : `<p class="okline">${t('Nothing is left to check: every point was gone through, and each was settled by the wiki or by a rule that is written out below, with where it comes from.')}</p>`}
-      <p class="muted"${items.length ? '' : ' hidden'}>${t('Where the wiki did not say enough and the planner guessed. Go through them one by one against the game, and tick each off; write what you saw where it differs. The ticks and the notes stay in this browser. What comes from the wiki as it is, or is a choice of the test, is at the end and asks for nothing. This page is temporary.')}</p>
-      ${items.length ? `<p class="points"><b>${t('{n} of {total} checked', { n: items.length - left, total: items.length })}</b> · ${t('{n} with a note', { n: written })}</p>
-      <div class="row-btns"><button class="btn" data-act="review-copy"${written ? '' : ' disabled'}>${t('Copy my notes')}</button></div>` : ''}</section>
-    <div class="review-list">${items.map((x) => `<article class="card review-item${done[x.key] ? ' done' : ''}">
-      ${head(x, `<button class="btn tiny${done[x.key] ? ' gold' : ''}" data-act="review-toggle" data-k="${esc(x.key)}">${done[x.key] ? t('Checked') : t('Mark as checked')}</button>`)}
-      <ul>${x.ask.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>
-      ${x.info.length ? `<p class="review-also">${t('From the wiki or a choice of the test, with nothing to check:')}</p><ul class="review-info">${x.info.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>` : ''}
-      <label class="field review-note"><span>${t('What I saw in the game')}</span><textarea rows="2" data-review="${esc(x.key)}" placeholder="${t('The right number, or what is different')}">${esc(notes[x.key] || '')}</textarea></label></article>`).join('')}</div>
-    <details class="card review-rest"${items.length ? '' : ' open'}><summary>${t('Nothing to check: what the test takes from the wiki as it is, and how it plays ({n})', { n: rest.length })}</summary>
-      <div class="review-list">${rest.map((x) => `<article class="review-item plain">${head(x, '')}<ul class="review-info">${x.info.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></article>`).join('')}</div></details>
+    <section class="card hero"><h1>${t('How the Damage test works')}</h1>
+      <p class="muted">${t('What the test takes from bg3.wiki as it is, what it works out where a page does not say enough, with where each rule comes from, and how it plays a fight. First the rules, then each enemy that has something of its own.')}</p>
+      <div class="row-btns"><button class="btn primary" data-act="tab" data-tab="damage">${t('← Back to the Damage test')}</button></div></section>
+    <section class="card"><h2>${t('The rules')}</h2><div class="review-list">${rules.map(entry).join('')}</div></section>
+    <section class="card"><h2>${t('Enemy by enemy ({n})', { n: foes.length })}</h2><div class="review-list">${foes.map(entry).join('')}</div></section>
   </div>`;
 }
-// A note is typed: it is kept as it is written, without drawing the page again.
-document.addEventListener('input', (e) => {
-  const el = e.target;
-  if (!el.dataset || !el.dataset.review) return;
-  (state.ui.reviewNotes || (state.ui.reviewNotes = {}))[el.dataset.review] = el.value;
-  save();
-});
-
-Object.assign(actions, {
-  'review-toggle'(el) { const done = state.ui.reviewed || (state.ui.reviewed = {}); done[el.dataset.k] = !done[el.dataset.k]; },
-  // every note with the entry it belongs to, as text to paste somewhere else
-  async 'review-copy'() {
-    const notes = state.ui.reviewNotes || {};
-    const text = reviewItems().filter((x) => String(notes[x.key] || '').trim()).map((x) => x.title + ': ' + String(notes[x.key]).trim()).join('\n');
-    toast((await copyText(text)) ? t('Notes copied') : t('Could not copy the notes'));
-    return false;
-  },
-});

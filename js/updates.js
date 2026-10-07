@@ -5,6 +5,23 @@
 
 // [version, date, what it was about, [what changed]]
 const UPDATES = [
+  ['4.9', '2026-10-07', 'Undo, a Build check that follows the page, and enemies read from the game\'s own data', [
+    'Any change to a build can be taken back, one after the other: "Undo the last change" beside the build, or Ctrl+Z.',
+    'Where the screen has no room for the Build check at the side, a button at the bottom right follows the page with what is pending, and opens the list.',
+    'Ability Improvement shows the score each ability has and the one it gets, and stops at 20.',
+    '"Report a problem", at the top: your words, the version and the build that is open, as one text to send.',
+    '"To check" is now "How the test works", a page of the Damage test.',
+    'The spellcasting ability of an enemy whose wiki page gives none now comes from the game\'s own data. Numbers that changed: Minthara (Hold Person DC 12), Black Gauntlet (back to DC 17), Steel Watcher Titan, Thisobald Thorm, Death Shepherd.',
+    'Raphael: his Soul Pillars count. Each one standing gives Armour Class, Fire damage on his attacks and, in Honour mode, a Legendary Action a round; how many stand is set in the Damage test.',
+    'Lorroakan: his Elemental Retort follows which myrmidons are alive, and answers once more a round for each. A fourth kind of helper can be added to a fight.']],
+  ['4.8', '2026-10-07', 'The Build check at the side, and a clearer start', [
+    'On a wide screen the Build check stays at the right of the build and follows the page, so what is still pending is always in view. On a narrower screen it stays where it was.',
+    'With no build selected, the page offers the three ways to get one: a new build step by step, a new blank build and, under the two, the ready-made builds.',
+    'Each level of the progression says its class and the level of that class in large type ("Ranger Level 5", "Rogue Level 1").',
+    'The swap of a known spell at a level up says plainly that it is optional.',
+    'Ability Improvement hands out its two points with a − and a + beside each ability, so both can go to the same one.',
+    'The enemy and the difficulty are chosen in the Damage test only; the Final numbers of a build just say whom they are measured against.',
+    'A level can be removed, with the levels after it, from the × under its number, even when it is still shut. Removing levels, and "same class below", can be undone.']],
   ['4.7', '2026-10-06', 'Enemies closer to the wiki, and nothing left to check', [
     'Attack bonuses and save DCs of enemies: the spellcasting ability comes from the creature\'s page; when the page gives none, from a page of the same creature, from its class, or from what the game falls back on. Some numbers changed with it: Owlbear Mate, the Myrmidons, Steel Watcher Titan, Black Gauntlet, Minotaur, Goblin Booyahg, Vengeful Cambion.',
     'Tactician hit points are worked out (Balanced × 1.3) for the few pages that give none; the Damage test marks them with an asterisk.',

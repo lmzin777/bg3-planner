@@ -333,6 +333,7 @@
     eq(parts('Martial Adept')[0].options.length, 14);
     eq(parts('Elemental Adept')[0].options.map((o) => o[0]), ['Acid', 'Cold', 'Fire', 'Lightning', 'Thunder']);
     const asi = parts('Ability Improvement');
+    eq([asi[0].cap, Object.keys(asi[0].base), asi[0].points], [20, ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'], 2], 'two points, the score of each ability before the feat, and the 20 no feat goes past');
     asi[0].chosen = ['DEX'];
     eq(featText('Ability Improvement', '', asi), 'Feat: Ability Improvement (+2 DEX)');
     wm[0].chosen = ['STR'];
@@ -940,7 +941,7 @@
     eq([castsText(st, 0), castsText(st, 1), castsText(st, 3)], ['at will', '9 per Long Rest', '2 per Long Rest'], 'slots 4 / 3 / 2: a level 1 spell can use any of the nine');
     eq([round(bestTurn(st, 'caster', plain).total), bestTurn(st, 'caster', plain).cantrip.name], [6.6, 'Fire Bolt'], 'with no weapon, the cantrip is the turn');
     const raphael = enemy('Raphael');
-    eq([raphael.ac, raphael.saves.dex, raphael.saves.cha, raphael.res.Fire], [21, 3, 8, 'i'], 'Dexterity 16, not proficient; Charisma 19 + 4');
+    eq([raphael.ac, raphael.saves.dex, raphael.saves.cha, raphael.res.Fire], [27, 9, 8, 'i'], 'with his four Soul Pillars standing, Armour Class 27 and Dexterity 28, not proficient; Charisma 19 + 4');
     eq(spells(wiz, raphael), [['Magic Missile', 10.5]], 'immune to Fire: only the Force damage is left');
 
     // A higher slot, more than one enemy in an area, and the spells that roll an attack and then ask a save.
@@ -1253,7 +1254,7 @@
     // The list of what the planner worked out: nothing is left to tick, and each point says where it comes from.
     const review = reviewItems();
     const told = (key) => review.find((x) => x.key === key).info;
-    ok(review.length > 40 && !review.some((x) => x.ask.length) && reviewLeft() === 0 && told('enemy:The Netherbrain').some((p) => /20~200/.test(p))
+    ok(review.length > 40 && !review.some((x) => x.ask.length) && told('enemy:The Netherbrain').some((p) => /20~200/.test(p))
       && told('enemy:Sarevok Anchev').some((p) => /Sword of Chaos/.test(p)) && told('rule:initiative').length > 1,
       'what the planner worked out is told (Sarevok\'s sword; a damage read from a range, the Netherbrain\'s orb), with nothing left to check');
     eq([told('rule:numbers').length > 10, told('rule:numbers').some((p) => /^Owlbear Mate: .*Crushing Flight DC 6 \(8 \+ Proficiency 2 \+ INT -4\).*page of Owlbear/.test(p)),
@@ -1263,10 +1264,13 @@
     // The spellcasting ability, when a page gives none: the page of its kind, its class, the game's fallback, its best.
     const cast = (n) => ENEMIES.find((e) => e.n === n).ca;
     eq([cast('Owlbear Mate'), cast('Black Gauntlet'), cast('Fire Myrmidon'), cast('Auntie Ethel'), cast('Lorroakan'), cast('Owlbear')],
-      [['int', 'kin', 'Owlbear'], ['wis', 'class', 'Cleric'], ['int', 'default', 'Elemental'], ['cha', 'best', ''], ['int', 'class', 'Wizard'], undefined]);
+      [['int', 'kin', 'Owlbear'], ['cha', 'game', 'Human_Cultist_Bane_BlackGauntlet'], ['int', 'default', 'Elemental'], ['cha', 'game', 'HAG_AuntieEthel'], ['int', 'game', 'Human_Caster'], undefined],
+      'the game\'s own data first; then the page of its kind, the game\'s fallback; a page that names it needs none of this');
+    eq([cast('Minthara'), cast('Death Shepherd'), cast('Thisobald Thorm')], [['wis', 'game', 'GOB_DrowCommander'], ['int', 'game', '_Base'], ['str', 'game', 'Brewer']],
+      'Minthara casts by Wisdom; an entry with none of its own has the one it is built on, down to the base of them all');
     const number = (n, a) => { const x = ENEMIES.find((e) => e.n === n).acts.find((y) => y.n.startsWith(a)); return x.k === 'a' ? x.b : x.dc; };
-    eq([number('Fire Myrmidon', 'Cinderous Swipe'), number('Minotaur', 'Charge'), number('Goblin Booyahg', 'Topple'), number('Steel Watcher Titan', 'Launch Protocol: Bola'), number('Black Gauntlet', 'Blight')], [11, 6, 1, 2, 14],
-      'DC 11 as the wiki works it out for a myrmidon (8 + 4 − 1); a charge by Strength; a staff by Strength; a construct by Intelligence; a cleric by Wisdom');
+    eq([number('Fire Myrmidon', 'Cinderous Swipe'), number('Minotaur', 'Charge'), number('Goblin Booyahg', 'Topple'), number('Steel Watcher Titan', 'Launch Protocol: Bola'), number('Black Gauntlet', 'Blight'), number('Minthara', 'Hold Person')], [11, 6, 1, 10, 17, 12],
+      'DC 11 as the wiki works it out for a myrmidon (8 + 4 − 1); a charge by Strength; a staff by Strength; the Titan and the Black Gauntlet by what the game gives them (Strength, Charisma); Minthara by Wisdom');
     // Hit points: Tactician worked out where a page gives none, and armour that is hit points.
     eq(['Mud Mephit', 'Fire Myrmidon', 'Owlbear Mate', 'Gerringothe Thorm', 'Bulette'].map((n) => { const e = ENEMIES.find((x) => x.n === n); return [e.hp.b, e.hp.t, !!e.hpw]; }),
       [[18, 23, true], [123, 159, true], [118, 153, true], [606, 607, false], [125, 162, false]]);
@@ -1461,7 +1465,7 @@
     // An enemy answers a hit once a round: Yurgir's Legendary Action of Honour mode, which may leave the build Blinded.
     const yurgir = ENEMIES.find((e) => e.n === 'Yurgir');
     eq([['balanced', 'honour'].map((m) => { state.ui.mode = m; return foeAnswers(yurgir).map((a) => a.label); }), foeAnswers(yurgir).find((a) => a.melee).cd], [[[], ['Blinding Ambush (ranged)', 'Blinding Ambush']],
-      { name: 'Blinded', turns: 2, sv: 'con', dc: 17 }], 'only in Honour mode; the save DC of its page + 2');
+      { name: 'Blinded', turns: 2, sv: 'con', dc: 16 }], 'only in Honour mode; the save DC worked out from the game data (8 + 4 + Intelligence 2) + 2');
     const hunted = sword();
     hunted.foe = Object.assign(foeOf({ attacks: 0 }), { rx: foeAnswers(yurgir) });
     [fight, turns] = fightOf(hunted, 1);
@@ -1627,6 +1631,35 @@
     eq([toll.gone, answersOf(round, 'Sublimation'), answersOf(round, 'Left Coin Whip'), toll.dealt < 200 ? answersOf(round, 'Right Coin Whip') : 1], [1, 1, 0, 1],
       'the first piece falls: Sublimation answers it, and the whip she has left is the right one');
     eq(inMode('balanced', () => { const tg = easy('Gerringothe Thorm'); return [enemyHp(by('Gerringothe Thorm')), simFoe(tg, true).rx.length]; }), [606, 0], 'no Sublimation outside Honour mode');
+    // Raphael: each Soul Pillar left standing gives Dexterity (and the Armour Class with it), a die of Fire on each hit
+    // of his attacks and, in Honour mode, one Legendary Action a round. How many stand is set on the page.
+    const raph = (n) => {
+      if (n == null) delete state.ui.foePillars; else state.ui.foePillars = n;
+      const tg = Object.assign(enemyTarget(by('Raphael')), { ac: 5 });
+      const seen = enemyTarget(by('Raphael'));
+      const mv = simFoe(tg, true);
+      const multi = mv.smart.find((a) => a.label.indexOf('Multiattack') === 0);
+      const foe = foeState(mv, tg, 5000);
+      const r = encRound(newEncounter([tank()], [foe], { first: 'party' }));
+      delete state.ui.foePillars;
+      return [seen.ac, seen.ab.dex, seen.saves.dex, multi.hits[0].map((c) => c[0] + ' ' + c[2]).join(' + '), answersOf(r, 'Beguiling Rebuke'), hitsOn(r).length > 1];
+    };
+    const [all4, one, none] = [raph(null), raph(1), raph(0)];
+    eq([all4.slice(0, 4), one.slice(0, 4), none.slice(0, 4)], [[27, 28, 9, '2d12 Slashing + 4d12 Fire'], [22, 19, 4, '2d12 Slashing + 1d12 Fire'], [21, 16, 3, '2d12 Slashing']],
+      'with all four as the fight starts: Armour Class 27 and 4d12 Fire on a hit; with none, what his page gives');
+    eq([all4[5], all4[4] > 1 && all4[4] <= 4, one[4], none[4]], [true, true, 1, 0], 'a Legendary Action for each pillar standing, and none without them');
+    // Lorroakan's Elemental Retort: a part for each myrmidon alive, and one more answer a round for each of them. With
+    // none of them in the fight it is played as the fight starts, with all four.
+    const lorFoe = () => { const tg = Object.assign(enemyTarget(by('Lorroakan')), { ac: 5 }); return foeState(simFoe(tg, true), tg, 5000); };
+    const myrmidon = (n, dead) => { const tg = enemyTarget(by(n)); return Object.assign(foeState(simFoe(tg, true), tg, 5000), dead ? { dead: 1 } : {}); };
+    const retorts = (r) => r.entries.flatMap((x) => x.lines).filter((l) => l.kind === 'foe' && l.how.indexOf('Elemental Retort') === 0).map((l) => ['Lightning', 'Poison', 'Fire', 'Cold'].filter((k) => l.text.includes(k)).join('+'));
+    const attacksOf = (r) => r.entries[0].lines.filter((l) => l.kind === 'attack').length;
+    round = encRound(newEncounter([tank()], [lorFoe()], { first: 'party', focus: 'main' }));
+    eq([retorts(round).length, [...new Set(retorts(round))]], [Math.min(5, attacksOf(round)), ['Lightning+Poison+Fire+Cold']], 'alone, as he starts: every part, and up to five answers a round');
+    round = encRound(newEncounter([tank()], [lorFoe(), myrmidon('Air Myrmidon'), myrmidon('Earth Myrmidon', true)], { first: 'party', focus: 'main' }));
+    eq([retorts(round).length, [...new Set(retorts(round))]], [Math.min(2, attacksOf(round)), ['Lightning']], 'with the Air Myrmidon alive and the Earth one dead: its part only, and one more answer');
+    round = encRound(newEncounter([tank()], [lorFoe(), myrmidon('Fire Myrmidon', true)], { first: 'party', focus: 'main' }));
+    eq(retorts(round).length, 0, 'with every myrmidon of the fight dead, no retort');
     // What a poison leaves lasts until the save is passed, rolled again at the end of each turn of whoever has it.
     const sick = { conds: [] };
     Object.assign(addCond(sick, 'Poisoned', 99, null, { key: 'con', dc: 11 }), { rep: true });
@@ -2035,7 +2068,19 @@
     await open(3, 'feat-open');
     await pick('Ability Improvement');
     ok(dialogOpen() && /Ability Improvement/.test(q('#dialog-box h2').textContent), "the feat's own choices follow at once");
-    await pick('STR'); await pick('CON');
+    // two points, each ability with its − and +: never under 0, never more than the two
+    const step = (n, d) => q(`#dlg-list [data-act="choose-step"][data-n="${n}"][data-d="${d}"]`);
+    const shown = () => all('#dlg-list .pts-row').map((r) => q('.stepper b', r).textContent).join(' ');
+    eq([all('#dlg-list .pts-row').length, shown(), step('STR', -1).disabled, q('#choose-ok').disabled], [6, '0 0 0 0 0 0', true, true], 'all at 0, nothing to take back, nothing to confirm yet');
+    const scoreOf = (n) => q(`#dlg-list .pts-row[data-n="${n}"] .pts-now`).textContent;
+    const strNow = Number(scoreOf('STR'));
+    ok(strNow >= 8 && strNow <= 20, 'each ability shows the score it has: ' + scoreOf('STR'));
+    await click(step('STR', 1), 'STR +'); await click(step('STR', 1), 'STR + again');
+    eq([shown(), step('CON', 1).disabled, step('STR', 1).disabled, q('#choose-ok').disabled, q('#dlg-list [data-count]').textContent], ['+2 0 0 0 0 0', true, true, false, t('{n} of {max}', { n: 2, max: 2 })],
+      'the same ability twice: both points on it, and no more to give');
+    eq(scoreOf('STR'), strNow + ' → ' + (strNow + 2), 'and the score it gets');
+    await click(step('STR', -1), 'STR −'); await click(step('CON', 1), 'CON +');
+    eq(shown(), '+1 0 +1 0 0 0');
     await confirm();
     await open(4, 'expertise-open');
     await pick('Stealth'); await pick('Athletics');
@@ -2145,10 +2190,12 @@
     ok(base > 0 && /AC 16/.test(q('.turn').textContent));
     await click(all('[data-act="toggle-active"]').find((x) => /Action Surge/.test(x.textContent)), 'Action Surge');
     ok(Math.abs(shown() - base * 2) < 0.11, 'a second Attack action doubles the turn: ' + base + ' → ' + shown());
-    await click(q('.pslot[data-act="enemy-open"]'), 'enemy');
-    await pick('Raphael');
-    ok(/Raphael/.test(q('.turn').textContent) && /AC 21/.test(q('.enemy-line').textContent) && shown() < base * 2, 'the numbers are now against Raphael: harder to hit, and a common sword is resisted');
-    await click(q('[data-act="mode"][data-k="balanced"]'), 'difficulty');
+    // the enemy is chosen in the Damage test, not here: the build only says whom its numbers are against, and leads there
+    ok(!q('#sec-numbers [data-act="enemy-open"]') && !q('#sec-numbers [data-act="mode"]') && /AC 16/.test(q('.enemy-note').textContent) && q('.enemy-note [data-tab="damage"]'), 'no enemy to choose on the build page');
+    state.ui.target = 'Raphael';
+    render();
+    ok(/Raphael/.test(q('.turn').textContent) && /Raphael \(AC 27\)/.test(q('.enemy-note').textContent) && shown() < base * 2, 'the numbers are now against Raphael: harder to hit, and a common sword is resisted');
+    state.ui.mode = 'balanced';
     eq([state.ui.mode, honourMode()], ['balanced', false]);
     state.ui.mode = 'honour';
     // a caster: the slot its spells are cast with
@@ -2230,16 +2277,80 @@
     await click(q('.pslot[data-act="scene-open"]'), 'scenario');
     await pick('Fighter test');
     eq([state.ui.target, state.ui.help0, state.ui.simFirst], ['', undefined, 'party'], 'the scenario brings its enemy back');
+    // the swap of a known spell is optional: its level is complete without it, and its dialog says so
+    const ranger = show(build(['Ranger', 'Ranger', 'Ranger']));
+    ranger.levels[0].picks = levelChoices(levelInfo(ranger)[0]).map((c) => c.group.name + ': ' + c.group.options[0][0]);
+    const known = SPELLS.filter((s) => s.lv === 1 && (s.cl || []).includes('Ranger')).map((s) => s.n);
+    ranger.levels[1].picks = ['Fighting Style: Archery', 'Spell: ' + known[0], 'Spell: ' + known[1]];
+    ranger.levels[2].sub = 'Gloom Stalker';
+    writeSlot(ranger, 2, 'spell', [known[2]]);
+    render();
+    eq([levelPending(ranger, 2), !!q('[data-act="swap-open"][data-l="2"]')], [[], true], 'with no swap, the level has nothing left to choose');
+    await click(q('[data-act="swap-open"][data-l="2"]'), 'the swap');
+    eq([q('#choose-ok').disabled, q('#choose-ok').textContent, all('#dlg-list [data-count]').map((x) => x.textContent)], [false, t('Change nothing'), [t('optional'), t('optional')]]);
+    await click(q('#choose-ok'), 'Change nothing');
+    eq([q('#dialog').hidden, ranger.levels[2].picks], [true, ['Spell: ' + known[2]]]);
+    // a level can be taken back, with the ones after it; so can a fill of the levels below; and both can be undone
+    await click(all('.lvl')[2].querySelector('[data-act="fill-down"]'), 'same class below');
+    eq([ranger.levels.map((l) => l.cls).join(), /Undo/.test(q('#toast').textContent)], [Array(12).fill('Ranger').join(), true]);
+    await click(q('#toast [data-act="undo-levels"]'), 'Undo');
+    eq(ranger.levels.map((l) => l.cls).join(), 'Ranger,Ranger,Ranger,,,,,,,,,', 'the fill is undone');
+    await click(all('.lvl')[2].querySelector('[data-act="fill-down"]'), 'same class below, again');
+    ok(all('.lvl')[9].classList.contains('locked') && all('.lvl')[9].querySelector('.lvl-del'), 'a level that is shut can still be taken back');
+    await click(all('.lvl')[4].querySelector('.lvl-del'), 'remove level 5 and after');
+    eq([ranger.levels.map((l) => l.cls).join(), q('#modal').hidden !== false], ['Ranger,Ranger,Ranger,Ranger,,,,,,,,', true], 'nothing chosen in them: gone with no question');
+    await click(all('.lvl')[1].querySelector('.lvl-del'), 'remove level 2 and after');
+    ok(!q('#modal').hidden, 'levels with choices ask first');
+    await click(q('#modal-ok'), 'Remove');
+    eq([ranger.levels.map((l) => l.cls).join(), ranger.levels[1].picks], ['Ranger,,,,,,,,,,,', []]);
+    await click(q('#toast [data-act="undo-levels"]'), 'Undo');
+    eq([ranger.levels.map((l) => l.cls).join(), ranger.levels[1].picks.length, ranger.levels[2].sub], ['Ranger,Ranger,Ranger,Ranger,,,,,,,,', 3, 'Gloom Stalker'], 'and come back whole');
+    // any change to the build can be taken back, one after the other: a button, and Ctrl+Z
+    ok(!q('[data-act="build-undo"]').disabled, 'there is something to undo');
+    await click(q('[data-act="build-undo"]'), 'Undo');
+    eq(ranger.levels.map((l) => l.cls).join(), Array(12).fill('Ranger').join(), 'the removal of level 5 and after is taken back');
+    const title = q('.title-input');
+    title.value = 'Typed name';
+    title.dispatchEvent(new Event('input', { bubbles: true }));
+    title.value = 'Typed name, longer';
+    title.dispatchEvent(new Event('input', { bubbles: true }));
+    eq([ranger.name, q('[data-act="build-undo"]').disabled], ['Typed name, longer', false]);
+    title.blur();
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+    await wait(60);
+    ok(ranger.name !== 'Typed name, longer' && ranger.name !== 'Typed name', 'a run of typing is one step back: ' + ranger.name);
+    await click(q('[data-act="build-undo"]'), 'Undo again');
+    eq(ranger.levels.map((l) => l.cls).join(), 'Ranger,Ranger,Ranger,,,,,,,,,', 'and the fill before it');
+    // no build selected: the three ways to get one, the ready-made builds under the other two, in the middle
+    const kept = state.ui.buildId;
+    state.ui.buildId = '';
+    state.ui.tab = 'builds';
+    const mine = state.builds;
+    state.builds = [];
+    render();
+    const ways = all('.start-grid .start-card');
+    const box = (el) => el.getBoundingClientRect();
+    eq([ways.map((x) => x.dataset.act + (x.dataset.tab ? ':' + x.dataset.tab : '')), ways.every((x) => q('b', x).textContent && q('span', x).textContent)], [['wiz-new', 'build-new', 'tab:presets'], true]);
+    ok(Math.abs(box(ways[0]).top - box(ways[1]).top) < 2 && box(ways[2]).top > box(ways[0]).bottom && Math.abs((box(ways[2]).left + box(ways[2]).right) / 2 - (box(ways[0]).left + box(ways[1]).right) / 2) < 2,
+      'two side by side, the third centred under them');
+    state.builds = mine;
+    state.ui.buildId = kept;
+    render();
     // the page of updates: marked as new in the menu until it is opened
     delete state.ui.seenVersion;
     render();
     ok(q('#tabs [data-tab="updates"] .count.new'), 'new until seen');
     await click(q('#tabs [data-tab="updates"]'), 'Updates');
     eq([state.ui.tab, state.ui.seenVersion, !!q('#tabs [data-tab="updates"] .count'), all('.updates .upd').length], ['updates', APP_VERSION, false, UPDATES.length]);
-    // the list of things to check: nothing is left to tick, and what was worked out is laid open
-    await click(q('#tabs [data-tab="review"]'), 'To check');
-    eq([!!q('.review .okline'), all('.review-list > .review-item:not(.plain)').length, q('.review-rest').open, all('.review-rest .review-item.plain').length > 40, !!q('.review-note textarea')],
-      [true, 0, true, true, false], 'every point is settled: the list of what was worked out is open, with nothing to tick');
+    // how the test works: a page of the Damage test, with the rules and each enemy; not an entry of the menu
+    state.ui.tab = 'damage';
+    render();
+    ok(!q('#tabs [data-tab="review"]'), 'no "To check" in the menu any more');
+    await click(q('#app [data-act="tab"][data-tab="review"]'), 'How the test works');
+    eq([state.ui.tab, q('.review h1').textContent, all('.review .review-item.plain').length > 40, !!q('.review textarea'), q('#tabs .nav-top.on').dataset.tab], ['review', t('How the Damage test works'), true, false, 'damage'],
+      'the rules and the enemies, with nothing to tick; the Damage test stays lit in the menu');
+    await click(q('.review [data-tab="damage"]'), 'back to the Damage test');
+    eq(state.ui.tab, 'damage');
     ['scenes', 'scene', 'sceneName', 'reviewNotes', 'simFirst', 'simTab', 'help0'].forEach((k) => { delete state.ui[k]; });
     state.ui.target = '';
     state.ui.tab = 'builds';
@@ -2337,6 +2448,23 @@
     await click(all('.issues button.issue').find((x) => x.dataset.s === entry.dataset.s && x.dataset.l === entry.dataset.l), 'an entry of the check');
     ok(!state.ui.closed[entry.dataset.s] && q('#sec-' + entry.dataset.s) && q('.lit'), 'its section is opened and what it points at is lit');
     state.ui.closed = {};
+    // the check as a button that follows the page: how much is pending, the list at a click, and the way to each thing
+    const fab = () => q('#check-fab .check-fab-btn');
+    eq([Number(q('b', fab()).textContent) > 0, !!q('#check-fab .check-pop')], [true, false]);
+    await click(fab(), 'the Build check button');
+    ok(all('#check-fab .check-pop button.issue').length > 2, 'the list opens over the page');
+    const first = q('#check-fab .check-pop button.issue');
+    await click(first, 'an entry of the list');
+    ok(!q('#check-fab .check-pop') && q('.lit'), 'it leads to its place, and the list shuts');
+    // a report of a problem: the words, the version and the build, as one text that Import reads back
+    await click(q('[data-act="report-open"]'), 'Report a problem');
+    q('#dialog [data-dlg="what"]').value = 'the attack bonus did not change';
+    q('#dialog [data-dlg="what"]').dispatchEvent(new Event('input', { bubbles: true }));
+    const report = await reportText(dlg.what, true);
+    const back = await readShareCode(report);
+    ok(report.includes('the attack bonus did not change') && report.includes(APP_VERSION) && isShareCode(report) && back && normalizeBuild(back).name === b.name, 'the report carries the build');
+    ok(!isShareCode(await reportText('x', false)), 'and leaves it out when asked');
+    await click(q('#dialog [data-act="dialog-close"]'), 'Close');
   });
 
   flow('the party page: ticking an item as obtained', async () => {

@@ -7,7 +7,7 @@
 //   · rep the save repeated each turn to shake it off (same: the one that let it in) · wake 1: taking damage ends it
 //   · ally 1: the Advantage is only for the allies of whoever caused it · once 1: spent by the next attack
 //   · guard 1: melee attacks against it have Disadvantage · still 1: it cannot move
-window.BG3_CONDITIONS_DATE = "2026-10-06";
+window.BG3_CONDITIONS_DATE = "2026-10-07";
 window.BG3_CONDITIONS = {
   "Arms of Hadar":{"x":"Can't take Reactions.","f":{"nr":1,"tk":"start"}},
   "Banished":{"x":"Banished from this plane of existence.; Can't be targeted.; Can't move or take Actions, Bonus Actions, or Reactions","f":{"skip":1,"nr":1,"still":1}},

@@ -651,13 +651,15 @@ function statsCard(b) {
       <div><span class="lbl">${t('At level')}</span><div class="acts lvls">${Array.from({ length: charLevel(b) }, (x, i) => i + 1).map((n) =>
         `<button class="${(b.current && b.current < charLevel(b) ? b.current : charLevel(b)) === n ? 'on' : ''}" data-act="stat-level" data-n="${n}">${n}</button>`).join('')}</div></div>
       <div><span class="lbl">${t('With the gear of')}</span>${actTabs(state.ui.act, 'act')}</div>
-      ${targetTools()}
       ${elixirs.length ? `<div class="field"><span>${t('Elixir kept active')}</span>${slotButton('elixir-open', '', b.elixir,
         CONSUMABLE_BY_NAME.get(norm(b.elixir)) ? pic(CONSUMABLE_BY_NAME.get(norm(b.elixir)).i, 'pic small') : '', t('— none —'))}</div>` : ''}
     </div>
     ${b.elixir && CONSUMABLE_BY_NAME.get(norm(b.elixir)) ? `<p class="muted">${esc(CONSUMABLE_BY_NAME.get(norm(b.elixir)).x)}</p>` : ''}
     ${togglesRow(b)}
     <div id="stats-live">${statsLive(b)}</div>
+    ${(() => { const tg = targetOf(); // the enemy is a matter of the Damage test: here it is only named, with the way there
+      return `<p class="muted enemy-note">${t('The chances to hit and the damage of a turn are measured against {who}. The enemy and the difficulty are chosen in the Damage test.',
+        { who: tg.enemy ? esc(tg.enemy.n) + ' (AC ' + tg.ac + ')' : 'AC ' + tg.ac })} <button class="btn tiny" data-act="tab" data-tab="damage">${t('Open the Damage test')}</button></p>`; })()}
     <h3 class="group">${t('Other ability bonuses')}</h3>
     <p class="muted">${t('Only for what the planner does not read by itself. Gear in the slots and the elixir above are already counted.')}</p>
     <div class="extra-row">${ABILS.map(([ab, short]) => `<span>${short} ${stepper(Number(extra[ab]) || 0, `data-path="creation.extra.${ab}"`, -10, 20)}</span>`).join('')}</div>

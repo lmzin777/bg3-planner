@@ -205,3 +205,36 @@ Object.assign(actions, {
     return false;
   },
 });
+
+// ---------- a report of a problem ----------
+// What went wrong in the visitor's words, with what is needed to see the same thing: the version, the page, the
+// screen, and the build that is open as a share code. The page sends nothing: the text is copied, to be pasted in
+// a message. Pasted into Import, it gives the build back.
+async function reportText(what, withBuild) {
+  const b = curBuild();
+  const lines = ['BG3 Planner — ' + t('problem report'),
+    `${t('Version')}: ${APP_VERSION} · ${t('Page')}: ${state.ui.tab}${state.ui.tab === 'builds' && state.ui.wizard ? ' / ' + state.ui.wizard : ''}${state.ui.tab === 'damage' ? ' / ' + (state.ui.simTab || 'build') + ' · ' + (state.ui.target || 'AC ' + (state.ui.targetAc || 16)) + ' · ' + gameMode() : ''} · ${state.ui.lang} · ${window.innerWidth}×${window.innerHeight}`,
+    navigator.userAgent, '', t('What happened') + ':', String(what || '').trim() || '—'];
+  if (withBuild && b) lines.push('', `${t('Build')}: ${b.name} (${splitText(b)})`, await shareCode(b));
+  return lines.join('\n');
+}
+Object.assign(actions, {
+  'report-open'() {
+    const b = curBuild();
+    dlg = { what: '', withBuild: !!b };
+    openDialog(`<h2>${t('Report a problem')}</h2>
+      <p class="muted">${t('Say what happened and what you expected. "Copy the report" puts your words, the version of the planner and the build that is open into one text: paste it in a message to whoever looks after the planner. The page itself sends nothing.')}</p>
+      <label class="field"><span>${t('What happened, and what you expected')}</span><textarea data-dlg="what" rows="6" placeholder="${t('For example: at level 4 of the Ranger I chose Sharpshooter and the attack bonus did not change.')}"></textarea></label>
+      ${b ? `<label class="chk"><input type="checkbox" data-dlg="withBuild" checked> ${t('Include the build that is open: {name}', { name: esc(b.name) })}</label>` : ''}
+      <div class="modal-btns"><button class="btn" data-act="dialog-close">${t('Close')}</button>
+        <button class="btn primary" data-act="report-copy">${t('Copy the report')}</button></div>`);
+    return false;
+  },
+  async 'report-copy'() {
+    const text = await reportText(dlg.what, dlg.withBuild);
+    const done = await copyText(text);
+    if (done) closeDialog();
+    toast(done ? t('Report copied: paste it in a message') : t('Could not copy the report'));
+    return false;
+  },
+});

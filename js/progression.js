@@ -130,10 +130,13 @@ function levelRows(b, only) {
       { n: open + 1, x: esc(levelPending(b, open).join(' · ')) })}</p>` : '';
     const choices = levelChoicesBlock(b, i);
     return `${lockNote}<div class="lvl${locked ? ' locked' : ''}${l.sub.trim() ? ' has-sub' : ''}${current === i + 1 ? ' cur' : ''}${current && i + 1 > current ? ' later' : ''}">
-      <div class="lvl-n">${i + 1}${current === i + 1 ? `<small>${t('now')}</small>` : ''}</div>
+      <div class="lvl-n">${i + 1}${current === i + 1 ? `<small>${t('now')}</small>` : ''}${
+        // the way back from a level: it works on a level that is still shut, too
+        l.cls && only == null ? `<button class="icon x lvl-del" data-act="level-clear" data-l="${i}" title="${i < b.levels.length - 1 && b.levels[i + 1].cls
+          ? t('Remove level {n} and the levels after it', { n: i + 1 }) : t('Remove level {n}', { n: i + 1 })}">×</button>` : ''}</div>
       <div class="lvl-cls"${locked ? ' inert' : ''}>
+        ${l.cls ? `<strong class="lvl-title">${esc(l.cls)} <i>${t('Level {n}', { n: x.n })}</i></strong>` : ''}
         ${slotButton('class-open', `data-l="${i}"`, l.cls, '', t('— class —'))}
-        <small>${l.cls ? esc(l.cls) + ' ' + x.n : ''}</small>
         ${subSelect}
         ${fill}
       </div>

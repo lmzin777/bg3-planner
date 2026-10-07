@@ -342,12 +342,17 @@ function foeMove(act, e, slotWanted) {
     }
   }
   if (act.x) hits = Array.from({ length: 1 + (((e && e.ea) || [])[idx] || 0) }, () => act.hits[0]);
+  // what stands in its arena adds to each hit of its attacks (a die of Fire for each of Raphael's Soul Pillars)
+  const stands = pillarsLeft(e);
+  if (stands && e.pil.dice && act.k === 'a') { const [n, faces] = e.pil.dice.split('d').map(Number); hits = hits.map((h) => h.concat([[n * stands + 'd' + faces, 0, e.pil.type]])); }
   // the condition it leaves is kept when it is one the test plays, with the +2 of the mode on a save DC of its own
   const cd = act.cd && condFx(act.cd[0]) ? { name: act.cd[0], turns: act.cd[1] || 2, sv: act.cd[2] || '', dc: act.cd[3] ? act.cd[3] + (idx > 0 ? 2 : 0) : 0 } : null;
   return { label: act.n, kind: act.k, melee: !!act.m, bonus: (act.b || 0) + (act.k === 'a' ? up : 0), dc: (act.dc || 0) + (act.k === 's' ? up : 0), sv: act.sv || '', os: act.os == null ? 0 : act.os, hits,
     slot, spell: s ? s.lv : -1, uses: act.u || 0, parts: act.w || [], up, guess: act.g || '', waits: !!act.c, cd, om: act.om || 0, legend: !!act.lg, as: act.as || '', tr: act.tr || '',
     // gone once so much damage is dealt to it · an answer after so many hits · only while its temporary hit points last · to each piece of armour lost
     ud: act.ud || 0, after: act.af || 0, temp: !!act.wt, piece: !!act.ev,
+    // the ally each part of its damage needs alive, and one more answer a round for each of them alive
+    al: act.al || [], rr: !!act.rr,
     // it catches everyone in an area; its damage is a range of its page read as dice
     area: !!act.ar || !!(s && (s.ao || s.ar)), gr: act.gr || '' };
 }
@@ -741,14 +746,28 @@ function turnTools(enc, i, out) {
     // an answer that waits for so many hits (the Spectator's Paranoid Dreams): one for each that lands
     const waits = (f.move.rx || []).some((a) => a.after);
     if (waits) f.struck += lines.filter((l) => (l.kind === 'attack' && l.hit) || l.damage > 0).length;
-    if (free() && !f.reacted && (dmg > 0 || lines.some((l) => l.kind === 'attack'))) {
-      const rx = (f.move.rx || []).filter((a) => !a.piece && (!a.temp || f.temp > 0) && (!a.after || f.struck >= a.after) && (!a.uses || ((f.used || {})[a.label] || 0) < a.uses));
+    if (free() && (dmg > 0 || lines.some((l) => l.kind === 'attack'))) {
+      // the allies an answer is fed by (Lorroakan's myrmidons): which of them are alive. With none of them in the
+      // fight at all, it is played as the fight starts: with every one of them
+      const fed = (a) => {
+        if (!a.al || !a.al.length) return null;
+        const there = a.al.map((n) => enc.foes.filter((y) => y !== f && y.name.indexOf(n) === 0));
+        const any = there.some((l) => l.length);
+        return there.map((l) => !any || l.some((y) => !y.dead));
+      };
+      // how often it answers in a round: once; once more for each such ally alive; a Legendary Action of Raphael,
+      // once for each Soul Pillar left standing
+      const times = (a) => { const live = fed(a); return live && a.rr ? 1 + live.filter(Boolean).length : a.legend && f.target && f.target.pil && f.target.pil.lg ? f.target.pil.left : 1; };
+      const rx = (f.move.rx || []).filter((a) => !a.piece && (f.reacts || 0) < times(a) && (!fed(a) || fed(a).some(Boolean)) && (!a.temp || f.temp > 0) && (!a.after || f.struck >= a.after)
+        && (!a.uses || ((f.used || {})[a.label] || 0) < a.uses));
       const act = rx.find((a) => a.melee === !!near) || rx[0];
       if (act) {
+        f.reacts = (f.reacts || 0) + 1;
         f.reacted = true;
         if (act.after) f.struck = 0;
+        const live = fed(act);
         R.answering = true;
-        strike(act, 0, f, true);
+        strike(live ? Object.assign({}, act, { hits: [act.hits[0].filter((c, k) => live[k])] }) : act, 0, f, true);
         R.answering = false;
       }
     }
@@ -1556,7 +1575,7 @@ function endRound(enc, last) {
     fight.round.hurt = 0;
     fight.surprised = false;
   });
-  enc.foes.forEach((f) => { f.surprised = false; f.reacted = false; f.parried = false; });
+  enc.foes.forEach((f) => { f.surprised = false; f.reacted = false; f.reacts = 0; f.parried = false; });
 }
 // One round of a fight, in Initiative order: { n, entries: [turn], total }
 function encRound(enc) {

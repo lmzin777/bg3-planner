@@ -24,9 +24,8 @@ function navHtml() {
     + groups.map(([label, attrs, on, entries], i) => `<div class="nav-group${navShut === i + 1 ? ' shut' : ''}">
       <button class="nav-top${on ? ' on' : ''}" data-act="tab" ${attrs} aria-haspopup="true">${esc(label)}<i>▾</i></button>
       <div class="nav-menu">${entries.join('')}</div></div>`).join('')
-    + `<button class="nav-top${tab === 'damage' ? ' on' : ''}" data-act="tab" data-tab="damage">${t('Damage test')}</button>`
-    // temporary: the list of things to check by hand (js/review.js)
-    + `<button class="nav-top${tab === 'review' ? ' on' : ''}" data-act="tab" data-tab="review">${t('To check')}${reviewLeft() ? `<i class="count">${reviewLeft()}</i>` : ''}</button>`
+    // (how the test works, js/review.js, is a page of the Damage test)
+    + `<button class="nav-top${tab === 'damage' || tab === 'review' ? ' on' : ''}" data-act="tab" data-tab="damage">${t('Damage test')}</button>`
     // what changed in each version (js/updates.js): marked until it is opened in the version that is running
     + `<button class="nav-top${tab === 'updates' ? ' on' : ''}" data-act="tab" data-tab="updates">${t('Updates')}${state.ui.seenVersion !== APP_VERSION ? `<i class="count new">${t('new')}</i>` : ''}</button>`;
 }
@@ -80,6 +79,10 @@ function refreshDerived() {
   if (live) live.innerHTML = statsLive(b);
   const check = $('#check-live');
   if (check) check.innerHTML = checkLive(b);
+  const fab = $('#check-fab');
+  if (fab) fab.outerHTML = checkFab(b);
+  const undo = $('[data-act="build-undo"]');
+  if (undo) undo.disabled = !undoCount(b);
   const st = skillState(b);
   ALL_SKILLS.forEach((x) => set('sk-' + x, signed(skillBonus(b, st, x))));
   SKILLS.forEach(([ab]) => set('skab-' + ab, signed(abilityMod(b, ab.toLowerCase()))));

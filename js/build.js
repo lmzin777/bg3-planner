@@ -21,6 +21,7 @@ function renderBuilds() {
         <button class="btn wide" data-act="build-new">${t('+ New blank build')}</button>
         <button class="btn" data-act="build-dup"${dis}>${t('Duplicate')}</button>
         <button class="btn" data-act="export-open"${dis}>${t('Export')}</button>
+        <button class="btn wide" data-act="build-undo"${undoCount(b) ? '' : ' disabled'} title="${t('Take back the last change to this build (Ctrl+Z)')}">↶ ${t('Undo the last change')}</button>
         <button class="btn danger wide" data-act="build-del"${dis}>${t('Delete this build')}</button>
       </div>
       <h3>${t('My builds')}</h3>
@@ -33,10 +34,17 @@ function renderBuilds() {
   </div>`;
 }
 
-const emptyBuilds = () => `<section class="card empty"><h2>${t('No build selected')}</h2>
-  <p>${t('Create a blank build or start from a ready-made one.')}</p>
-  <div class="row-btns"><button class="btn primary" data-act="build-new">${t('+ New blank build')}</button>
-  <button class="btn" data-act="tab" data-tab="presets">${t('See ready-made builds')}</button></div></section>`;
+// No build to show: the three ways to get one, two side by side and the third under them, in the middle.
+const emptyBuilds = () => {
+  const way = (attrs, cls, title, text) => `<button class="start-card${cls}" ${attrs}><b>${title}</b><span>${text}</span></button>`;
+  return `<section class="card empty"><h2>${t('No build selected')}</h2>
+    <p>${t('Make one from scratch, or start from a ready-made one.')}</p>
+    <div class="start-grid">
+      ${way('data-act="wiz-new"', ' main', t('+ New build, step by step'), t('The creation of the character as in the game, one choice at a time.'))}
+      ${way('data-act="build-new"', '', t('+ New blank build'), t('Straight into the Build Planner, with everything still to choose.'))}
+      ${way('data-act="tab" data-tab="presets"', ' under', t('See ready-made builds'), t('{n} builds ready to copy and change as you like.', { n: PRESETS.length }))}
+    </div></section>`;
+};
 
 // The sections of the build page, in order: [key, title, short name for the menu]. The menu at the top jumps to them, and each can be folded.
 const SECTIONS = [['overview', 'Overview', 'Overview'], ['check', 'Build check', 'Check'], ['creation', 'Character creation', 'Creation'], ['levels', 'Level progression', 'Levels'],
@@ -77,6 +85,7 @@ function buildEditor(b) {
     </section>
 
     <div id="sec-check">${checkCard(b)}</div>
+    ${checkFab(b)}
 
     ${sec('creation', () => `<section class="card">
       <div class="check-head"><h2>${t('Character creation')}</h2><span></span>

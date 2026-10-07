@@ -194,11 +194,22 @@ function checkLive(b) {
       <ul>${list.map((x) => `<li class="${x.level}">${link(x, esc(x.text) + ' <i>→</i>', 'issue')}</li>`).join('')}</ul></div>`).join('')}</div>` : ''}`;
 }
 const checkCard = (b) => `<section class="card check" id="check-live">${checkLive(b)}</section>`;
+// On a screen with no room for the check at the side, a button that follows the page: how much is pending, and the
+// whole list at a click (kept open or shut for as long as the page is).
+let checkOpen = false;
+function checkFab(b) {
+  const warns = buildIssues(b).filter((x) => x.level === 'warn').length;
+  return `<div class="check-fab" id="check-fab">
+    ${checkOpen ? `<div class="check-pop card">${checkLive(b)}</div>` : ''}
+    <button class="check-fab-btn${warns ? '' : ' ok'}" data-act="check-fab" aria-expanded="${checkOpen}" title="${t('What is still to choose or to review in this build')}">${t('Build check')} <b>${warns || '✓'}</b></button></div>`;
+}
 
 Object.assign(actions, {
   // from an entry of the check to where it is settled: the section is opened, the gear is set to the act, and the
   // level (or the section) comes into view, lit for a moment
+  'check-fab'() { checkOpen = !checkOpen; },
   'check-go'(el) {
+    checkOpen = false;
     const key = el.dataset.s;
     (state.ui.closed || (state.ui.closed = {}))[key] = false;
     if (el.dataset.a) state.ui.act = el.dataset.a;

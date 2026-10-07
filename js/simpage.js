@@ -10,12 +10,12 @@ const SIM_FIGHTS = 300;
 const SIM_TABS = [['build', 'Who fights'], ['enemy', 'The enemy'], ['plan', 'Plan of turns'], ['result', 'Result']];
 // What a scenario keeps of the page (the plans and choices of each build are kept with it too).
 const SCENE_KEYS = ['act', 'simParty', 'target', 'targetAc', 'targetSave', 'mode', 'castLevel', 'targets', 'foeAct', 'foeAct2', 'foeSlot', 'foeAttacks', 'foeBonus', 'foeDamage', 'foeSteps',
-  'foeBroken', 'hasteNow', 'help0', 'help1', 'help2', 'helpN0', 'helpN1', 'helpN2', 'helpA0', 'helpA1', 'helpA2', 'simFirst', 'simSurprise', 'simAim', 'simFocus', 'simAlly', 'simLevel', 'foeReacts', 'simPotions', 'simB'];
+  'foeBroken', 'hasteNow', 'help0', 'help1', 'help2', 'help3', 'helpN0', 'helpN1', 'helpN2', 'helpN3', 'helpA0', 'helpA1', 'helpA2', 'helpA3', 'foePillars', 'simFirst', 'simSurprise', 'simAim', 'simFocus', 'simAlly', 'simLevel', 'foeReacts', 'simPotions', 'simB'];
 const simTab = () => (SIM_TABS.some(([k]) => k === state.ui.simTab) ? state.ui.simTab : 'build');
 const setHit = (b, patch) => { (state.ui.simHits || (state.ui.simHits = {}))[b.id] = Object.assign(simHits(b), patch); };
-// The enemies that stand with the main one: up to three kinds, some of each, each kind with the action chosen
+// The enemies that stand with the main one: up to four kinds, some of each, each kind with the action chosen
 // for it (what it usually does, when none is).
-const simHelpers = (target) => (target.enemy ? [0, 1, 2].map((i) => ({ i, e: ENEMY_BY_NAME.get(state.ui['help' + i]), n: Math.max(1, Math.min(6, Number(state.ui['helpN' + i]) || 1)), a: state.ui['helpA' + i] || '' })).filter((h) => h.e) : []);
+const simHelpers = (target) => (target.enemy ? [0, 1, 2, 3].map((i) => ({ i, e: ENEMY_BY_NAME.get(state.ui['help' + i]), n: Math.max(1, Math.min(6, Number(state.ui['helpN' + i]) || 1)), a: state.ui['helpA' + i] || '' })).filter((h) => h.e) : []);
 const helperFoe = (h) => simFoe(enemyTarget(h.e), h.a ? { foeAct: h.a } : true);
 // A fight of the page: the sides against the enemy chosen and its helpers, set up as the page says.
 function simEncounter(sides, target, hp, helpers) {
@@ -278,7 +278,7 @@ function simTabEnemy(ctx) {
   const howOf = (m) => (m.kind === 'a' ? t('Attack bonus {b}', { b: signed(m.bonus) }) : m.kind === 's' ? t('{ab} save against DC {dc}', { ab: m.sv.toUpperCase(), dc: m.dc }) + ', '
     + (m.os === 1 ? t('the damage lands either way') : m.os ? t('half on a passed save') : t('nothing on a passed save')) : t('No roll: it always lands'));
   const answers = target.enemy ? foeAnswers(target.enemy) : [];
-  const helpers = [0, 1, 2].map((i) => { const e = ENEMY_BY_NAME.get(state.ui['help' + i]); const n = Math.max(1, Math.min(6, Number(state.ui['helpN' + i]) || 1));
+  const helpers = [0, 1, 2, 3].map((i) => { const e = ENEMY_BY_NAME.get(state.ui['help' + i]); const n = Math.max(1, Math.min(6, Number(state.ui['helpN' + i]) || 1));
     return `<div class="field enemy-field"><span>${t('Helper {n}', { n: i + 1 })}</span>${slotButton('helper-open', `data-i="${i}"`, e ? e.n : '', '', t('— nobody —'))}</div>
       ${e ? `<div class="field ac-field"><span>${t('How many')}</span>${stepper(n, `data-ui="helpN${i}" data-v="1"`, 1, 6)}</div>
       <div class="field enemy-field"><span>${t('It uses')}</span>${slotButton('foe-act-open', `data-h="${i}"`, state.ui['helpA' + i] === 'none' ? '' : helperFoe({ e, a: state.ui['helpA' + i] || '' }).smart ? t('The strongest it can use') : helperFoe({ e, a: state.ui['helpA' + i] || '' }).label, '', t('Nothing: it only takes damage'))}</div>` : ''}`; }).join('');
@@ -463,7 +463,8 @@ function renderDamage() {
   const who = ctx ? (ctx.team.on ? esc(ctx.team.party.name || t('Unnamed')) + ' (' + ctx.sides.length + ')' : esc(ctx.side.name)) : '';
   const foe = ctx ? esc(targetLabel(ctx.target)) + ctx.helpers.map((h) => ' + ' + h.n + ' × ' + esc(h.e.n)).join('') : '';
   const head = `<section class="card hero"><h1>${t('Damage test')}</h1>
-    <p class="muted">${t('Rolls the dice of a fight against an enemy: every attack roll, saving throw and damage die, round after round, with the spell slots and the other resources running out as they are spent. Nothing rolled here is saved.')}</p>
+    <p class="muted">${t('Rolls the dice of a fight against an enemy: every attack roll, saving throw and damage die, round after round, with the spell slots and the other resources running out as they are spent. Nothing rolled here is saved.')}
+      <button class="btn tiny" data-act="tab" data-tab="review">${t('How the test works')} →</button></p>
     <div class="stat-tools scene-tools">
       <div class="field enemy-field"><span>${t('Scenario')}</span>${slotButton('scene-open', '', cur ? cur.name : '', '', scenes.length ? t('— choose —') : t('— none saved —'))}</div>
       <label class="field"><span>${t('Name to save it under')}</span><input type="text" data-sim="sceneName" value="${esc(state.ui.sceneName || '')}" placeholder="${esc(ctx ? ctx.side.name + ' × ' + targetLabel(ctx.target) : '')}"></label>

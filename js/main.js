@@ -4,6 +4,22 @@
 
 // ---------- actions ----------
 // An action returns false to skip the save + re-render, or { focus, top } hints for after it.
+// ---------- undo ----------
+// Every change to a build keeps the build as it was before, so that the last change can be taken back, one after
+// the other (kept while the page is open). A run of typing in one field is one step.
+const UNDO_MAX = 40;
+const undoStack = [];  // [{ id, json }], the latest last
+let undoTyping = '';   // the field being typed in
+const buildJson = (b) => (b ? JSON.stringify(b) : '');
+function undoPush(id, json) {
+  const last = undoStack[undoStack.length - 1];
+  if (!json || (last && last.id === id && last.json === json)) return;
+  undoStack.push({ id, json });
+  if (undoStack.length > UNDO_MAX) undoStack.shift();
+}
+const undoCount = (b) => (b ? undoStack.filter((x) => x.id === b.id).length : 0);
+const UNDO_ACTS = ['build-undo', 'undo-levels'];
+
 Object.assign(actions, {
   tab(el) {
     state.ui.tab = el.dataset.tab;
@@ -210,6 +226,34 @@ Object.assign(actions, {
     const b = curBuild();
     const i = +el.dataset.l;
     for (let k = i + 1; k < b.levels.length && !b.levels[k].cls; k++) b.levels[k].cls = b.levels[i].cls;
+    toast(t('{cls} for the empty levels below', { cls: b.levels[i].cls }), { label: t('Undo'), act: 'undo-levels' });
+  },
+  // a level is taken back, and the ones after it with it: levels go in order, and the level of a class counts the ones before
+  async 'level-clear'(el) {
+    const b = curBuild();
+    const i = +el.dataset.l;
+    const gone = b.levels.slice(i).filter((l) => l.cls);
+    const chosen = gone.some((l) => l.sub || l.picks.length || (l.notes || []).length);
+    if (chosen && !(await ask(gone.length > 1 ? t('Remove level {n} and the {m} level(s) after it, with what was chosen in them?', { n: i + 1, m: gone.length - 1 })
+      : t('Remove level {n}, with what was chosen in it?', { n: i + 1 }), t('Remove'), true))) return false;
+    const blank = blankBuild().levels[0];
+    for (let k = i; k < b.levels.length; k++) b.levels[k] = clone(blank);
+    if (b.current > i) b.current = 0;
+    toast(gone.length > 1 ? t('Levels {a} to {b} removed', { a: i + 1, b: i + gone.length }) : t('Level {n} removed', { n: i + 1 }), { label: t('Undo'), act: 'undo-levels' });
+  },
+  'undo-levels'() { return actions['build-undo'](); },
+  // the last change to the build that is open is taken back
+  'build-undo'() {
+    const b = curBuild();
+    if (!b) return false;
+    let k = undoStack.length - 1;
+    while (k >= 0 && undoStack[k].id !== b.id) k--;
+    if (k < 0) { toast(t('Nothing to undo')); return false; }
+    const was = JSON.parse(undoStack.splice(k, 1)[0].json);
+    Object.keys(b).forEach((key) => delete b[key]);
+    Object.assign(b, was);
+    undoTyping = '';
+    toast(t('Last change undone'));
   },
   skill(el) {
     const c = curBuild().creation;
@@ -321,7 +365,11 @@ document.addEventListener('click', async (e) => {
   if (!el || el.disabled || el.closest('[inert]')) return;  // a shut level row takes no action
   const fn = actions[el.dataset.act];
   if (!fn) return;
+  // (the build as it is before the action, kept for "Undo" when the action changes it)
+  const open = curBuild();
+  const before = buildJson(open);
   const res = await fn(el);
+  if (open && !UNDO_ACTS.includes(el.dataset.act) && buildById(open.id) === open && buildJson(open) !== before) { undoPush(open.id, before); undoTyping = ''; }
   if (res === false) return;
   save();
   render();
@@ -361,6 +409,12 @@ document.addEventListener('input', (e) => {
   if (!target) return;
   const value = el.type === 'checkbox' ? el.checked : el.type === 'number' ? (el.value === '' ? '' : Number(el.value)) : el.value;
   const before = getPath(target, el.dataset.path);
+  if (!inParty) {
+    // a run of typing in one field is one step to undo; a tick or a list is one each time
+    const key = /^(text|number|search|url)$/.test(el.type) || el.tagName === 'TEXTAREA' ? target.id + ':' + el.dataset.path : '';
+    if (!key || key !== undoTyping) undoPush(target.id, buildJson(target));
+    undoTyping = key;
+  }
   setPath(target, el.dataset.path, value);
   if (!inParty && el.dataset.path.startsWith('creation.')) creationChanged(target, el.dataset.path, before);
   save();
@@ -394,3 +448,11 @@ takeSnapshot();
 if (tidyAll()) save();
 render();
 importFromAddress();
+
+// Ctrl+Z takes the last change to the open build back, when nothing is being typed and no dialog is open
+document.addEventListener('keydown', (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.key.toLowerCase() !== 'z' || state.ui.tab !== 'builds') return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || $$('.modal').some((m) => !m.hidden)) return;
+  e.preventDefault();
+  if (actions['build-undo']() !== false) { save(); render(); }
+});
