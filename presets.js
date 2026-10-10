@@ -150,5 +150,120 @@
         'REMINDER\n' +
         'Enhance Leap and Longstrider are rituals: outside combat they cost no spell slot.',
     },
+    // Minthara as an Oathbreaker Paladin with two levels of Hexblade, after Hack The Minotaur's guide (read on 2026-10-10).
+    // Item rarities and locations are the ones of bg3.wiki (items.js), not the guide's wording.
+    {
+      presetId: 'minthara-oathbreaker',
+      name: 'Minthara · Oathbreaker / Hexblade',
+      role: 'Melee burst damage · frontline, auras and fear',
+      source: 'https://hacktheminotaur.com/baldurs-gate-3/ultimate-bg3-minthara-build/',
+      credit: 'Hack The Minotaur — Ultimate BG3 Minthara Build',
+      summary:
+        'Minthara as an Oathbreaker Paladin who fights with Charisma alone. Two levels of Hexblade Warlock, taken early, make Charisma the ability of her weapon, ' +
+        'so one score drives her attacks, her Divine Smites, both auras and her dialogue, and Strength can stay at 8. ' +
+        'A critical hit doubles the dice of Divine Smite: the build looks for sure critical hits and spends its best spell slot on them.',
+      elixir: 'Elixir of Bloodlust',
+      creation: {
+        origin: 'Custom',
+        race: 'Drow',
+        subrace: 'Lolth-Sworn Drow',
+        background: 'Noble',
+        skills: 'Intimidation, Athletics',
+        abilities: { str: 8, dex: 14, con: 15, int: 10, wis: 10, cha: 14 },
+        plus2: 'cha',
+        plus1: 'con',
+      },
+      levels: [
+        { cls: 'Paladin', sub: 'Oathbreaker', picks: [] },
+        { cls: 'Paladin', sub: '', picks: ['Fighting Style: Great Weapon Fighting'] },
+        { cls: 'Warlock', sub: 'The Hexblade', picks: ['Cantrip: Eldritch Blast', 'Cantrip: Booming Blade', 'Spell: Shield', 'Spell: Hex'] },
+        { cls: 'Warlock', sub: '', picks: ['Eldritch Invocation: Agonising Blast', "Eldritch Invocation: Devil's Sight", 'Spell: Hellish Rebuke'] },
+        { cls: 'Paladin', sub: '', picks: [] },
+        { cls: 'Paladin', sub: '', picks: ['Feat: Great Weapon Master'] },
+        { cls: 'Paladin', sub: '', picks: [] },
+        { cls: 'Paladin', sub: '', picks: [] },
+        { cls: 'Paladin', sub: '', picks: [] },
+        { cls: 'Paladin', sub: '', picks: ['Feat: Ability Improvement (+2 CHA)'] },
+        { cls: 'Paladin', sub: '', picks: [] },
+        { cls: 'Paladin', sub: '', picks: [] },
+      ],
+      prepared: {
+        Paladin: ['Command', 'Thunderous Smite', 'Wrathful Smite', 'Divine Favour', 'Cure Wounds', 'Searing Smite', 'Shield of Faith', 'Aid', 'Magic Weapon', 'Branding Smite',
+          'Lesser Restoration', 'Blinding Smite', 'Elemental Weapon', 'Warden of Vitality'],
+      },
+      gear: {
+        act1: {
+          slots: {
+            head: item('Helmet of Smiting', 'uncommon', 'Selûnite Outpost — inside a locked gilded chest south-west of the waypoint', 'Minthara only joins in Act 2: collect it for her'),
+            chest: item('Adamantine Scale Mail', 'veryrare', 'Adamantine Forge — forged from a Scale Mail Mould and Mithral Ore', 'Collect it for Act 2'),
+            gloves: item('Gloves of the Growling Underdog', 'uncommon', "Shattered Sanctum — in Dror Ragzlin's treasure crates behind the locked iron gate", 'Collect it for Act 2'),
+            boots: item('Disintegrating Night Walkers', 'common', 'Grymforge — worn by Nere', 'Collect it for Act 2'),
+          },
+          alts: [],
+        },
+        act2: {
+          slots: {
+            head: item('Helmet of Smiting', 'uncommon', 'Selûnite Outpost — inside a locked gilded chest south-west of the waypoint'),
+            cloak: item('Cloak of Protection', 'uncommon', 'Last Light Inn — sold by Talli near the Last Light Inn waypoint'),
+            chest: item('Adamantine Scale Mail', 'veryrare', 'Adamantine Forge — forged from a Scale Mail Mould and Mithral Ore'),
+            gloves: item('Gloves of the Growling Underdog', 'uncommon', "Shattered Sanctum — in Dror Ragzlin's treasure crates behind the locked iron gate"),
+            boots: item('Disintegrating Night Walkers', 'common', 'Grymforge — worn by Nere'),
+            amulet: item("Surgeon's Subjugation Amulet", 'rare', 'House of Healing — worn by Malus Thorm'),
+            ring1: item('Risky Ring', 'rare', 'Moonrise Towers — sold by Araj Oblodra on the main floor', 'Advantage on attack rolls, which makes up for the −5 of Great Weapon Master; Disadvantage on Saving Throws'),
+            ring2: item("Killer's Sweetheart", 'veryrare', 'Gauntlet of Shar — on the ground where the shadow copy is defeated in the Self-Same Trial', 'A sure critical hit after a kill: keep it for a Divine Smite'),
+            meleeMain: item('Halberd of Vigilance', 'veryrare', 'Moonrise Towers — sold by Lann Tarv on the main floor'),
+            rangedMain: item('Darkfire Shortbow', 'rare', 'Last Light Inn — sold by Dammon in Act Two'),
+          },
+          alts: [],
+        },
+        act3: {
+          slots: {
+            head: item('Birthright', 'veryrare', "Sorcerous Sundries — sold by Lorroakan's Projection or Rolan on the ground floor", '+2 Charisma, up to 22'),
+            cloak: item('Cloak of Protection', 'uncommon', 'Last Light Inn — sold by Talli near the Last Light Inn waypoint'),
+            chest: item('Bhaalist Armour', 'veryrare', 'Murder Tribunal — sold by Echo of Abazigal', 'Enemies near her are vulnerable to Piercing damage, which is what Nyrulna deals'),
+            gloves: item('Legacy of the Masters', 'veryrare', 'Forge of the Nine — sold by Dammon in Act Three'),
+            boots: item('Helldusk Boots', 'veryrare', "Wyrm's Rock Fortress — in a locked gilded chest on the top floor"),
+            amulet: item('Amulet of Greater Health', 'veryrare', 'House of Hope — on the left-most pedestal in the Archive'),
+            ring1: item("Killer's Sweetheart", 'veryrare', 'Gauntlet of Shar — on the ground where the shadow copy is defeated in the Self-Same Trial'),
+            ring2: item('Risky Ring', 'rare', 'Moonrise Towers — sold by Araj Oblodra on the main floor'),
+            meleeMain: item('Nyrulna', 'legendary', 'Circus of the Last Days — the jackpot of Akabi sends you to the Jungle, where it lies in a locked painted chest near the portal out'),
+            rangedMain: item('Hellrider Longbow', 'uncommon', 'Rivington — sold by Ferg Drogher near the Requisitioned Barn', '+3 to Initiative'),
+          },
+          alts: [
+            alt('chest', 'Helldusk Armour', 'House of Hope — carried by Raphael', "The guide's other choice for the chest"),
+          ],
+        },
+      },
+      setup: [
+        { name: 'Resonance Stone', note: 'Mind Flayer Colony (Act 2) — south-west of the Necrotic Laboratory. Everyone within 9 m, the party too, has Disadvantage on mental Saving Throws and takes double Psychic damage' },
+      ],
+      consumables: [
+        { name: 'Elixir of Bloodlust', note: 'One more action after a kill, once a turn' },
+        { name: 'Potion of Speed', note: 'One more action: more attacks and Divine Smites' },
+        { name: 'Diluted Oil of Sharpness', note: 'On the weapon before a big turn. The guide says "Oil of Sharpness"; the one found in the game is the Diluted one' },
+        { name: 'Potion of Healing', note: 'A few; Lay on Hands covers most emergencies' },
+      ],
+      variants:
+        '• Filled in by the planner, not in the guide: the point buy behind the scores (the guide gives 8 / 14 / 16 / 10 / 10 / 16; here 15 Constitution +1 and 14 Charisma +2), ' +
+        'and the list of prepared Paladin spells put together: the twelve the guide names along the levels and the two its section on spells adds (Searing Smite, Shield of Faith), ' +
+        'fourteen in all, which is what she can prepare at level 12.\n' +
+        '• Minthara is a companion, not an origin character: the build is entered as a custom Lolth-Sworn Drow with the Noble background, which is what she is. Respec her at Withers when she joins, in Act 2.\n' +
+        '• The planner has one subclass for each class, so she is an Oathbreaker from level 1. In the game she starts as Oath of Vengeance and breaks the oath, which the guide does at Paladin 3 (character level 5).\n' +
+        '• 11 Paladin / 1 Hexblade: keeps Hex Warrior and Hexblade\'s Curse, and reaches Improved Divine Smite.\n' +
+        '• 12 Oathbreaker Paladin: one more feat and Animate Dead, with no Charisma weapon.\n' +
+        '• Oath of Vengeance instead of breaking the oath: Vow of Enmity for Advantage, without Aura of Hate.\n' +
+        '• A greatsword for Great Weapon Master, or a one-handed weapon and a shield for defence.',
+      notes:
+        'ORDER OF THE LEVELS\n' +
+        'Paladin 2, then the two levels of Hexblade (character levels 3 and 4), then Paladin to 10. With Strength at 8 she only fights well once Hex Warrior is there. ' +
+        'The price: Extra Attack comes at character level 7 and Aura of Hate at 9.\n\n' +
+        'A TURN\n' +
+        'Bonus action: Hexblade\'s Curse on the main target. Action: two attacks, with Divine Smite on a hit, best on a critical hit. ' +
+        'Channel Oath has one charge between rests: Dreadful Aspect on the first turn to frighten a group, Control Undead against undead, Spiteful Suffering on a single strong target.\n\n' +
+        'BEFORE A FIGHT\n' +
+        'Bless or Shield of Faith, and stand so that Aura of Protection and Aura of Hate cover the party.\n\n' +
+        'ILLITHID POWERS (optional)\n' +
+        'Luck of the Far Realms for a sure critical hit, Fly, Favourable Beginnings, Cull the Weak.',
+    },
   ];
 })();

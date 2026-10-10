@@ -1559,6 +1559,10 @@ window.BG3_I18N = {
     '{name} standing': '{name} de pé',
     '← Back to the Damage test': '← Voltar ao Damage test',
 
+    // updates, 4.10
+    'A ready-made build for Minthara': 'Uma build pronta para a Minthara',
+    'Minthara as an Oathbreaker Paladin with two levels of Hexblade, after Hack The Minotaur\'s guide: levels, gear for Act 2 and Act 3, consumables and notes, in Ready-made builds.': 'Minthara como Oathbreaker Paladin com dois níveis de Hexblade, pelo guia do Hack The Minotaur: níveis, equipamento de Act 2 e Act 3, consumíveis e notas, em Ready-made builds.',
+
     // dialogs and toasts
     'Cancel': 'Cancelar',
     'Confirm': 'Confirmar',

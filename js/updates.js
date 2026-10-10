@@ -5,6 +5,8 @@
 
 // [version, date, what it was about, [what changed]]
 const UPDATES = [
+  ['4.10', '2026-10-10', 'A ready-made build for Minthara', [
+    'Minthara as an Oathbreaker Paladin with two levels of Hexblade, after Hack The Minotaur\'s guide: levels, gear for Act 2 and Act 3, consumables and notes, in Ready-made builds.']],
   ['4.9', '2026-10-07', 'Undo, a Build check that follows the page, and enemies read from the game\'s own data', [
     'Any change to a build can be taken back, one after the other: "Undo the last change" beside the build, or Ctrl+Z.',
     'Where the screen has no room for the Build check at the side, a button at the bottom right follows the page with what is pending, and opens the list.',
